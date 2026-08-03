@@ -62,8 +62,9 @@ v3 states Camp B once and deletes the residue.
 > *Entry fills should only be replenished when their corresponding exit has been filled.*
 
 This is the entry-side one-lot-per-rung. It was deleted (2026-08-01, "the cap is the
-bound") and restored one day later after hlETHs stacked rung 1,838 five times — nine entry
-fills, zero exit fills, 0 → 2.18 short in 12h. Its three generations (inferred `occupied`
+bound") and restored one day later after a live grid stacked one rung five times — nine
+entry fills, zero exit fills, a position built from flat in 12h with nothing
+round-tripping. Its three generations (inferred `occupied`
 → absent → observable arming-order prefix-skip) are catalogued in CONCEPTS.md §6.4. In v3
 this invariant belongs in the definition, not in a code comment.
 
@@ -149,7 +150,7 @@ point: one venue average, no per-rung history. The earned rules:
   the cap is measured against *held* while sellable is *held − floor* — conflating them
   cost a day of over-accumulation (the overnight cap failure; only the watchdog's per-bot
   position bound could have caught it).
-- The exit ladder must start within ~one rung of the mark (the hlETHs 2.99%-dead-band
+- The exit ladder must start within ~one rung of the mark (the ~3%-dead-band
   lesson, pinned in spec: "the dead band was never about entries — it was the exit ladder
   starting 2.99% away").
 - Over-cap adoption (position > full ladder): entries fully suppressed is correct;

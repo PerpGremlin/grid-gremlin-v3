@@ -113,8 +113,9 @@ outright. Known pinned trap: any exit band smaller than the mark-to-basis gap is
 ### 6.4 One lot per rung — three generations in three days
 1. `occupied` (→08-01): held rungs inferred as the n nearest the basis. Killed: blanked a
    2.99% stripe *across the mark* on an adopted position.
-2. Absence (08-01→08-02): cap-only bound. Killed: hlETHs mainnet, rung 1838 re-armed and
-   filled five times in 12h; nine entry fills, zero exit fills, 0 → 2.18 short.
+2. Absence (08-01→08-02): cap-only bound. Killed: on a live grid one rung re-armed and
+   filled five times in 12h; nine entry fills, zero exit fills, a position stacked from
+   flat with nothing round-tripping.
 3. `n_held` prefix-skip (current): arming-order anchored, entry-side only. Residuals: a rung
    can still hold >1 lot after partial fills; a grid over a pre-existing stack with no floor
    set suppresses its *entire* entry ladder (documented in-code); under `furthest` the outer
@@ -302,7 +303,7 @@ config errors name keys that do not exist (`rung_hysteresis`, `entry_fill`, `exi
 `max_inventory`, …), so the validator refuses the very key its error tells you to use. The
 README's headline JSON examples do not validate (`geo`, `flat`, `near`/`far`, `cell`,
 `investment`, the old trail keys). GRID-MATHS still teaches `investment` with the exact
-opposite of the current semantics — a factor-of-40 trap on the live HL grids. The audit
+opposite of the current semantics — a leverage-factor mis-sizing trap on any live grid. The audit
 header still says "PROPOSAL — nothing implemented". v2 is mid-migration, which is the worst
 vocabulary state a codebase can be in, and precisely the state v3's one-commit-per-rename
 rule (the `capital` pattern) exists to make impossible.

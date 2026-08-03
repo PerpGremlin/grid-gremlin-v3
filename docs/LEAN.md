@@ -22,7 +22,8 @@ Telegram.
 
 **Guards earned by live incidents (each has a date and a measurement):** cross guard ·
 one-lot-per-rung on the exit side (the truncation churn: backoffs 88/hr → 0) ·
-one-lot-per-rung on the entry side (rung 1838: 0 → 2.18 short in 12h) · split hysteresis
+one-lot-per-rung on the entry side (one rung re-armed five times: a position stacked from
+flat in 12h) · split hysteresis
 (ladder rewrites on sub-cent crossings) · flap cooldown · margin backoff (halts growth,
 never the bot) · paginated truth ("a partial read is worse than a failed one") ·
 truncation-tolerant diff.
