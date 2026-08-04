@@ -3,3 +3,10 @@ CLAUDE.md
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Owner working notes — never commit
+docs/PerpGremlinResponse.txt

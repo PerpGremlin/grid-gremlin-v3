@@ -12,9 +12,9 @@ to an exchange until slice 8; nothing trades unwatched, ever.
 
 ---
 
-- [ ] **0 — scaffold**
+- [x] **0 — scaffold** *(PR #7)*
       builds: T5 groundwork · package layout, spec runner, CI-green empty suite
-      done when: `tests/run.py` runs and reports zero specs, zero failures
+      done when: `tests/run.py` runs and reports zero specs, zero failures ✓
 
 - [ ] **1 — config doctrine**
       builds: C1–C7 (C6 decided: a bad row refuses the whole fleet)
