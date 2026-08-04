@@ -29,8 +29,14 @@ the 3Commas adoption made the martingale's cap/floor/naming questions moot, and 
 them safety orders" was the field's own answer. Decisions that remove concepts beat
 decisions that configure them.
 
-**Next.** Freeze the v2→v3 migration map (method step 2) from CONCEPTS + DECISIONS,
-then PLAN slice 0.
+**Also done, same day.** The migration map (`MIGRATION.md`) — method step 2 — frozen:
+every v2 name to exactly one fate (keep / rename / restructure / retire / new / defer),
+each row citing its authority, with the complete refusal table as the execution
+checklist. The owner pressed on adoption safety twice; the result is G13 ("no planned
+order is ever marketable") with sabotage tests for both adoption cases — a concern
+turned into a named invariant instead of a config knob.
+
+**Next.** PLAN slice 0 — the scaffold. Code begins.
 
 ## 2026-08-03 — dissection day
 
