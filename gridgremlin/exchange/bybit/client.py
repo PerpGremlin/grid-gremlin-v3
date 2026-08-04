@@ -216,3 +216,8 @@ class WriteClient(Client):
         except VenueError as e:
             if e.kind != 'not_modified':
                 raise
+
+    def place_market(self, category, symbol, side, qty, position_idx=0):
+        return self.post('/v5/order/create', {
+            'category': category, 'symbol': symbol, 'side': side,
+            'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx})

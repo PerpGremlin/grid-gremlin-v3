@@ -75,11 +75,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       done when: the flap-inverse-to-volatility fixture is quiet with the band on,
       churning with it off; 0 ≡ unset pinned ✓ (132 specs)
 
-- [ ] **11 — start states**
+- [x] **11 — start states** *(PR #18)*
       builds: S1–S8 (the matrix, one spec row per cell; seed per D9, involuntary flat
       per D1, emergent suppression per D6)
       done when: every non-collapsing matrix cell has a green spec; restart-reset list
-      written and asserted
+      written and asserted ✓ (148 specs)
 
 - [ ] **12 — the martingale round**
       builds: M3, M4, M6 (TP from average entry)

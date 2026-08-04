@@ -89,7 +89,11 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None):
         read_wallet(client.wallet_balance())          # E8: fail loudly, early
         for bot in bots:
             counts = bot.cycle()
-            print(f"cycle {n} {bot.botid}: {counts}", flush=True)
+            if counts is not None:
+                print(f"cycle {n} {bot.botid}: {counts}", flush=True)
+        if not any(b.alive for b in bots):
+            print('all bots dead — fleet exits', flush=True)
+            return 0
         n += 1
         if cycles is None or n < cycles:
             time.sleep(poll)
