@@ -1,12 +1,4 @@
-# Contract maths (SPEC A1-A6). Pure — no I/O, no network, no clock.
-#
-# An adapter is built from a spec dict the venue reported (A1); config never
-# declares instrument facts. Quantity rounding always FLOORS — never place more
-# than intended (A2). One placeable predicate folds the venue minimums (A3).
-# Inverse PnL is base-coin and is never summed with quote PnL (A4) — v1 once
-# booked +$396k on a $100 position by getting this wrong. positionIdx derives
-# jointly from (order side, reduce_only) (A5). The registry is the venue seam:
-# a second venue adds a spec-fetcher, not a fork (A6).
+# Contract maths (SPEC A1-A6). Pure. The why lives in docs/SPEC.md.
 
 from decimal import Decimal, ROUND_DOWN, ROUND_HALF_UP
 

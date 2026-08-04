@@ -1,13 +1,5 @@
-# Config doctrine (SPEC C1-C7).
-#
-# One refusal implementation, one exception type, one difflib cutoff (C1).
-# Old names are refused with the migration stated, never aliased (C2) — the
-# RENAMED and RETIRED tables below ARE docs/MIGRATION.md's refusal column, all
-# of it. Every numeric goes through one bounds helper (C3). Derived values are
-# written back once; supplying one is refused, not ignored (C4). A config that
-# cannot place a single order refuses at load (C5, via check_placeable). A bad
-# row refuses the whole fleet (C6). Error messages name only keys that exist
-# (C7, pinned by spec).
+# Config doctrine (SPEC C1-C7). The RENAMED/RETIRED tables are
+# docs/MIGRATION.md's refusal column, all of it. The why lives in docs/SPEC.md.
 
 import difflib
 
