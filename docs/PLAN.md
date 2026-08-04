@@ -46,10 +46,10 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       series-total refusal states the number; deviation-step schedule specced
       ✓ (81 specs total)
 
-- [ ] **6 — truth: Bybit** (D19)
+- [x] **6 — truth: Bybit** (D19) *(PR #13)*
       builds: V1–V5, E5, E8, I4
       done when: schema-validated truth from live demo; pagination sabotage spec green;
-      a failed startup read refuses to trade
+      a failed startup read refuses to trade ✓ (94 specs; live demo check passed)
 
 - [ ] **7 — diff, apply, identity** (no live writes yet — fake venue)
       builds: E2, E6, E7, I1–I3
