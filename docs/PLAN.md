@@ -175,6 +175,14 @@ start-conditions, profit reinvest, cooldown tuning.
       hardcoded paths (repo-relative, CLAUDE_BIN from .env).
       done when: a dry run on the box produces a correct diagnosis ✓
 
+- [x] **24 — the relay** *(PR #40)*
+      v2's inbound-Telegram half carried whole (`ops/relay.py`): owner-only
+      fail-closed, addressed-to-us only, persist-before-ack, single
+      getUpdates consumer, workstation routing with /vc override, answers
+      via the same read-only settings cage as triage. Takeover from v2's
+      relay: stop its timer → seed the offset → start v3's.
+      done when: v3's timer owns the channel and a --once pass runs clean ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

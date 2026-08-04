@@ -1,0 +1,13 @@
+[Unit]
+Description=Grid Gremlin v3 relay — inbound Telegram, every minute
+
+[Timer]
+# The relay is a convenience; the watchdogs are the safety layer. Offset so a
+# relay poll never queues ahead of a watchdog tick on a small box (v3
+# watchdogs hold *:4/5 and *:1/5).
+OnCalendar=*:0/1
+AccuracySec=15s
+RandomizedDelaySec=5
+
+[Install]
+WantedBy=timers.target
