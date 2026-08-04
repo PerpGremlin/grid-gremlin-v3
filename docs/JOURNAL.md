@@ -5,6 +5,40 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-08-04 — phase 2 opens: the readout finds its first bug, and a venue moves the ground
+
+**Done.** `BACKLOG.md` (the ledger of what v3 doesn't do; items leave only via
+building PR or killing decision), then slices 18-22: the **readout**
+(`python3 -m gridgremlin.report`, SPEC R1-R5 — venue fills, average-cost ledger,
+grid profit vs total P&L per D8, read-only by construction); **market-order
+identity** (SPEC I5); **ops templates** (`ops/`); **spot live** (SPEC V6 — the
+wallet holding synthesized as the position, spot-safe bodies,
+`marketUnit=baseCoin`; an LTC grid joined the demo fleet and rested its ladder
+first try, cross guard catching the rung at the ask); **the soak doctrine**
+(`SOAK.md`, the experiment registry). Basis precedence pinned after the owner's
+correction: the config field exists BECAUSE demo/spot venues keep no basis
+(v2 design); truth overrules it where reported — two specs. Margin spot
+recorded in BACKLOG as a decision-first item. Suite 232.
+
+**Broke / caught.** (1) The failure alarm paged once per 30s retry through a
+venue outage — OnFailure re-fires on every failed start under
+StartLimitIntervalSec=0; alerts now stamp-file rate-limited (one page/30min),
+captured in the templates. (2) The readout's unowned bucket immediately
+exposed that seed/base/flatten orders carried no identity — slice 19 within
+the hour; the tool found the bug it was built to find, on day one. (3) The
+venue outage ended with the ground moved: **HL removed XRP from its testnet
+universe mid-soak** — the build crashed as a bare StopIteration; now a named
+refusal (C7 spec), and AVAX took the martingale row. On restart the four HL
+grids re-adopted their pre-outage ladders with zero churn, and **D21's live
+proof completed**: base at market, rung-0 reduce-only TP resting venue-side,
+1.5× safety ladder below — all identity-linked.
+
+**Next.** Triage-on-failure (v2's fourth layer), the relay, backtest kline
+fetch; the doctrine's minimum samples now govern when the A/B questions get
+called.
+
+---
+
 ## 2026-08-04 — the VPS: pipeline and the watch
 
 **Done.** v3 cloned onto the VPS beside the parked v2 (which stays untouched at its
