@@ -13,3 +13,4 @@ docs/PerpGremlinResponse.txt
 
 # Secrets — never commit
 .env
+logs/

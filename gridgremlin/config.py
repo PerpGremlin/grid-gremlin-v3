@@ -26,7 +26,8 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
 STOP_KEYS = ('watch', 'level', 'server_side')
-FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit', 'notify_orders')
+FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit',
+              'notify_orders', 'watchdog')
 
 # C2 — renames. old key -> (new key, message).
 RENAMED = {
@@ -358,6 +359,7 @@ def validate_fleet(data, where='fleet'):
     if not isinstance(bots, list) or not bots:
         _refuse(f"{where}: 'bots' must be a non-empty list")
     fleet = {
+        'watchdog': data.get('watchdog'),
         'poll_seconds': _num(data, 'poll_seconds', where, least=0.0,
                              least_open=True) or 5.0,
         'cancel_orders_on_exit': _flag(data, 'cancel_orders_on_exit'),
