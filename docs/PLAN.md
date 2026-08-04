@@ -81,10 +81,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       done when: every non-collapsing matrix cell has a green spec; restart-reset list
       written and asserted ✓ (148 specs)
 
-- [ ] **12 — the martingale round**
+- [x] **12 — the martingale round** *(PR #19)*
       builds: M3, M4, M6 (TP from average entry)
       done when: TP-set-before-rest, tp-through-market, repeat-from-flat-only, and
-      restart-adoption specs green on demo
+      restart-adoption specs green on demo ✓ (155 specs; live round opened on demo:
+      base at market -> venue TP at avg x 1.01 -> doubled safeties resting)
 
 - [ ] **13 — stops**
       builds: X1–X6 (flatten-and-kill per D1; grid-inventory scope per D2; watch

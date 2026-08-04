@@ -16,7 +16,7 @@ def _cfg(**over):
            'leverage': 10, 'base_order_size': 1000.0,
            'safety_order_size': 1000.0, 'order_size_multiplier': 2.0,
            'deviation_pct': 0.01, 'deviation_step_multiplier': 2.0,
-           'max_averaging_orders': 3}
+           'max_averaging_orders': 3, 'take_profit_avg_pct': 0.01}
     row.update(over)
     return validate_config(row)
 
@@ -56,7 +56,8 @@ def spec_M2_series_total_refusal_states_the_numbers():
                     'symbol': 'BTCUSDT', 'side': 'long', 'capital': 1000.0,
                     'leverage': 10, 'base_order_size': 1000.0,
                     'safety_order_size': 1000.0, 'order_size_multiplier': 2.0,
-                    'deviation_pct': 0.01, 'max_averaging_orders': 4},
+                    'deviation_pct': 0.01, 'max_averaging_orders': 4,
+                    'take_profit_avg_pct': 0.01},
                    '16000', '1600', 'capital is 1000')
     assert 'max_averaging_orders' in msg          # the message says what to lower
 
@@ -73,7 +74,7 @@ def _row_dict():
             'symbol': 'BTCUSDT', 'side': 'long', 'capital': 1000.0,
             'leverage': 10, 'base_order_size': 100.0,
             'safety_order_size': 100.0, 'deviation_pct': 0.01,
-            'max_averaging_orders': 3}
+            'max_averaging_orders': 3, 'take_profit_avg_pct': 0.01}
 
 
 # --- M8: no range bounds -----------------------------------------------------

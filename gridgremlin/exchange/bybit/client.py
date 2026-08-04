@@ -123,7 +123,7 @@ class Client:
                          'limit': limit}, signed=True)
 
 
-NOT_MODIFIED_CODES = {110025, 110043, 34040}
+NOT_MODIFIED_CODES = {110025, 110043, 34040, 110075}
 CANNOT_MODIFY_CODES = {110024, 110028}
 RO_CAPACITY_CODES = {110017}
 MARGIN_CODES = {110004, 110006, 110007, 110012, 110044, 110045, 110052, 170131}
@@ -169,12 +169,19 @@ class WriteClient(Client):
                          kind=_post_kind(code))
 
     def place_order(self, category, symbol, side, qty, price, link_id,
-                    position_idx=0, reduce_only=False):
+                    position_idx=0, reduce_only=False, post_only=True):
         return self.post('/v5/order/create', {
             'category': category, 'symbol': symbol, 'side': side,
-            'orderType': 'Limit', 'timeInForce': 'PostOnly', 'qty': qty,
+            'orderType': 'Limit',
+            'timeInForce': 'PostOnly' if post_only else 'GTC', 'qty': qty,
             'price': price, 'orderLinkId': link_id,
             'positionIdx': position_idx, 'reduceOnly': reduce_only})
+
+    def set_trading_stop(self, category, symbol, take_profit, position_idx):
+        self.post('/v5/position/trading-stop', {
+            'category': category, 'symbol': symbol,
+            'takeProfit': take_profit, 'tpslMode': 'Full',
+            'tpTriggerBy': 'MarkPrice', 'positionIdx': position_idx})
 
     def cancel_order(self, category, symbol, order_id):
         return self.post('/v5/order/cancel', {'category': category,
