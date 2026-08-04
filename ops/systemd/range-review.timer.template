@@ -1,0 +1,12 @@
+[Unit]
+Description=Grid Gremlin v3 range review — daily
+
+[Timer]
+# Once a day, off the hour, clear of every watchdog slot; a missed day is
+# made up on boot.
+OnCalendar=*-*-* 08:37:00 UTC
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

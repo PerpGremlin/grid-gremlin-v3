@@ -23,7 +23,14 @@ real ones.
    crash or an undelivered page fails the unit and fires its own alert.
 4. Per-fleet timer slots (`*:4/5`, `*:1/5`, …) so ticks never queue behind
    each other on a small box.
-5. **The relay** (`ops/relay.py`, every-minute timer) — the inbound half:
+5. **The range review** (`ops/range_review.py`, daily timer) — D10's closing
+   note: a read-only "are the bounds still sane" page. A stdlib-only
+   collector computes each grid's mark-vs-bounds facts from public
+   endpoints; the triage cage judges KEEP / WATCH / REVIEW BOUNDS; no
+   Claude → the fact sheet pages as-is. It never acts — a bounds edit is a
+   workstation task through the normal config diff. Test:
+   `RANGE_DRY=1 python3 ops/range_review.py configs/fleet.demo.json ...`
+6. **The relay** (`ops/relay.py`, every-minute timer) — the inbound half:
    the owner replies to a bot message (or sends a /command) on Telegram and
    gets a read-only answer from the box, in the same settings cage as
    triage. Owner-only (`TELEGRAM_OWNER_ID`, fail closed), persist-before-ack

@@ -183,6 +183,16 @@ start-conditions, profit reinvest, cooldown tuning.
       relay: stop its timer → seed the offset → start v3's.
       done when: v3's timer owns the channel and a --once pass runs clean ✓
 
+- [x] **25 — the range review** *(PR #41)*
+      D10's closing note made real: a daily read-only "are the bounds still
+      sane" — deterministic collector (stdlib only, public endpoints, no
+      keys, no engine import) + a judgment from the triage cage; degrades
+      to paging the fact sheet. Never acts: a bounds edit stays a
+      workstation task through the normal config diff. Martingales skipped
+      (no range, D13). With this, the ops tier of the backlog is EMPTY —
+      v3's ops layer now exceeds v2's.
+      done when: a dry run pages a correct review of all 11 grids ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing
