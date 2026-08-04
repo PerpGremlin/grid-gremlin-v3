@@ -40,10 +40,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       cases: in-profit emits no sell below ref, underwater emits no order between
       mark and basis ✓ (68 specs total)
 
-- [ ] **5 — the martingale as data** (pure)
+- [x] **5 — the martingale as data** (pure) *(PR #12)*
       builds: M1, M2, M5, M8 (3Commas vocabulary per D11; no range bounds)
       done when: martingale ladders reproduce grid math through the shared functions;
       series-total refusal states the number; deviation-step schedule specced
+      ✓ (81 specs total)
 
 - [ ] **6 — truth: Bybit** (D19)
       builds: V1–V5, E5, E8, I4

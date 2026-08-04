@@ -21,6 +21,10 @@ GRID_KEYS = COMMON_KEYS + (
     'rung_weights', 'place_within_pct', 'split_hysteresis_rungs',
     'assumed_avg_entry', 'min_position_base', 'max_position_base',
     'spot_borrow', 'spot_leverage', 'seed')
+MARTINGALE_KEYS = COMMON_KEYS + (
+    'base_order_size', 'safety_order_size', 'order_size_multiplier',
+    'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
+    'repeat')
 STOP_KEYS = ('watch', 'level')
 FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit', 'notify_orders')
 
@@ -255,21 +259,68 @@ def validate_grid(row, where='row'):
     return cfg
 
 
+def validate_martingale(row, where='row'):
+    _reject_unknown(row, MARTINGALE_KEYS, where)
+    cfg = {k: v for k, v in row.items() if not k.startswith('_')}
+
+    cfg['venue'] = _enum(cfg, 'venue', where, VENUES, default='bybit')
+    cfg['market_type'] = _enum(cfg, 'market_type', where, ('linear',),
+                               default='linear')
+    if not isinstance(cfg.get('symbol'), str) or not cfg.get('symbol'):
+        _refuse(f"{where}: 'symbol' must be a non-empty string")
+    cfg['side'] = _enum(cfg, 'side', where, SIDES)
+    cfg['strategy'] = 'martingale'
+
+    capital = _num(cfg, 'capital', where, least=0.0, least_open=True, required=True)
+    leverage = _num(cfg, 'leverage', where, least=1.0, most=125.0) or 1.0
+    cfg['capital'], cfg['leverage'] = capital, leverage
+    cfg['ladder_notional'] = capital * leverage
+
+    cfg['base_order_size'] = _num(cfg, 'base_order_size', where, least=0.0,
+                                  least_open=True, required=True)
+    cfg['safety_order_size'] = _num(cfg, 'safety_order_size', where, least=0.0,
+                                    least_open=True, required=True)
+    cfg['order_size_multiplier'] = _num(cfg, 'order_size_multiplier', where,
+                                        least=1.0, most=10.0) or 1.0
+    cfg['deviation_pct'] = _fraction(cfg, 'deviation_pct', where)
+    if cfg['deviation_pct'] is None:
+        _refuse(f"{where}: 'deviation_pct' is required")
+    cfg['deviation_step_multiplier'] = _num(cfg, 'deviation_step_multiplier',
+                                            where, least=1.0, most=10.0) or 1.0
+    cfg['max_averaging_orders'] = _num(cfg, 'max_averaging_orders', where,
+                                       least=1, most=50, required=True,
+                                       integer=True)
+    cfg['repeat'] = _flag(cfg, 'repeat')
+    cfg['stop'] = _validate_stop(cfg.get('stop'), where)
+
+    # M2: expand the series; refuse a ladder the capital cannot carry.
+    k, n = cfg['order_size_multiplier'], cfg['max_averaging_orders']
+    total = cfg['base_order_size'] + sum(
+        cfg['safety_order_size'] * k ** i for i in range(n))
+    if total > cfg['ladder_notional'] + 1e-9:
+        margin = total / leverage
+        _refuse(f"{where}: the full ladder needs {total:.10g} notional "
+                f"({margin:.10g} margin at {leverage:g}x) but capital is "
+                f"{capital:.10g} — lower 'max_averaging_orders', "
+                "'order_size_multiplier' or the order sizes")
+    cfg['ladder_total_notional'] = total
+    return cfg
+
+
 def validate_config(row, where='row'):
     strategy = row.get('strategy', 'grid')
     if strategy not in STRATEGIES:
         _refuse(f"{where}: 'strategy' must be one of {STRATEGIES}")
     if strategy == 'martingale':
-        # Build order, not policy: the 3Commas restructure lands at PLAN slice 5.
-        # The RETIRED table above already refuses every old martingale key with
-        # its migration message.
-        _refuse(f'{where}: martingale rows land at PLAN slice 5 — not built yet')
+        return validate_martingale(row, where)
     return validate_grid(row, where)
 
 
 def check_placeable(cfg, adapter, where='row'):
     """C5: a config that cannot place a single order refuses at load, with the
-    reason and the numbers. `adapter` supplies contract maths (PLAN slice 2)."""
+    reason and the numbers. Martingale needs a live base price -> slice 12."""
+    if cfg['strategy'] == 'martingale':
+        return cfg
     weights = cfg.get('rung_weights') or [1.0] * cfg['rungs']
     smallest = cfg['ladder_notional'] * min(weights) / sum(weights)
     qty = adapter.qty_from_notional(smallest, cfg['upper'])
