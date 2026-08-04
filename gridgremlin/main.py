@@ -108,6 +108,9 @@ def build_fleet(fleet_path, notifier):
                                    int(cfg['leverage']))
         bots.append(bot)
     check_fleet_unique(identities)
+    if not fleet.get('watchdog'):
+        raise ConfigError("the fleet has no 'watchdog' config — nothing "
+                          'trades unwatched (F1)')
     if fleet.get('watchdog'):
         wd = validate_watchdog(json.loads(Path(fleet['watchdog']).read_text()))
         caps = [(b.botid,
