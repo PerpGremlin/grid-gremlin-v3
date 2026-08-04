@@ -167,6 +167,14 @@ start-conditions, profit reinvest, cooldown tuning.
       is the experiment registry.
       done when: every running A/B has a written call condition ✓
 
+- [x] **23 — triage-on-failure** *(PR #39)*
+      v2's fourth deploy layer carried: after the rate-limited alert, a
+      READ-ONLY Claude diagnosis (`ops/triage.sh <fleet>`, enforced by
+      `ops/triage-settings.json`, never by trust) pages the cause. Degrades
+      to "triage unavailable", never silence; own 30-min stamp; no
+      hardcoded paths (repo-relative, CLAUDE_BIN from .env).
+      done when: a dry run on the box produces a correct diagnosis ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

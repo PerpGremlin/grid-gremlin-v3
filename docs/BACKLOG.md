@@ -35,8 +35,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 - **The relay** — inbound Telegram: ask the fleet a question, get a read-only
   answer. v2's relay still runs and serves during the transition.
-- **Triage-on-failure** — v2's fourth deploy layer: a read-only headless
-  diagnosis attached to the failure alarm, so a page arrives with a cause.
 - **Agentic range-review** — routine "is this range still sane" as an ops
   health-check task, not engine code (D10's closing note).
 
