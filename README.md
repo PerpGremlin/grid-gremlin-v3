@@ -198,9 +198,9 @@ Pulls fill history from the venue (never a local guess — R1), attributes each
 fill to its bot by order link, and prints per bot: **realized** (matched
 profit, average-cost), **fees**, the open remainder at its average cost,
 **unreal** (mark-to-average), and **total**. *Grid profit = realized − fees*
-(D8). Fills no bot owns — manual trades, and today the engine's own market
-orders (seed, martingale base, flatten) — appear in an `unowned` bucket per
-symbol rather than disappearing (R3). Read-only: safe to run any time,
+(D8). Fills no bot owns — manual trades, or engine market orders placed before
+market-order identity landed (I5) — appear in an `unowned` bucket per symbol
+rather than disappearing (R3). Read-only: safe to run any time,
 anywhere, alongside a live fleet (R4). A venue that cannot be reached is
 skipped with a warning; unknown marks print `—`, never a guess (R5).
 

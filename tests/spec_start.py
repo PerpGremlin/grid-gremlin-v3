@@ -33,8 +33,11 @@ class SeedVenue(FakeVenue):
         super().__init__(mark)
         self.market_orders = []
 
-    def place_market(self, category, symbol, side, qty, position_idx=0):
+    def place_market(self, category, symbol, side, qty, position_idx=0,
+                     reduce_only=False, link_id=None):
         self.market_orders.append((side, float(qty)))
+        self.market_links = getattr(self, 'market_links', [])
+        self.market_links.append(link_id)
         self.position = {'positionIdx': 1, 'side': side, 'size': qty,
                          'avgPrice': str(self.mark), 'leverage': '10',
                          'unrealisedPnl': '0'}
@@ -210,3 +213,13 @@ def spec_S7_our_own_exit_filling_is_not_a_kill():
     bot.cycle()
     assert bot.alive is True                    # a sell-out, not an execution
     assert any(' exit ' in ln for ln in lines)
+
+
+# --- I5: the seed order carries our identity ---------------------------------
+
+def spec_I5_the_seed_order_carries_an_owned_link():
+    from gridgremlin.apply import rung_of
+    venue, lines = SeedVenue(), []
+    bot = _bot(venue, lines, seed=True)
+    assert bot.cycle() == {'seeded': True}
+    assert rung_of(venue.market_links[0], bot.botid) == 0

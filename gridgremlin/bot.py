@@ -98,12 +98,13 @@ class Bot:
         cfg, adapter = self.cfg, self.adapter
         qty = self._flatten_scope(held)
         if qty > 0:
+            self._gen += 1
             try:
                 self.client.place_market(
                     cfg['market_type'], cfg['symbol'], self._exit_side,
                     adapter.fmt_qty(qty),
                     adapter.position_idx(self._exit_side, True) or 0,
-                    reduce_only=True)
+                    reduce_only=True, link_id=self._make_link(0))
             except VenueError as e:
                 self.notify.event('warn', self.botid, f'flatten: {e}')
         floor = abs(held) - qty
@@ -180,8 +181,10 @@ class Bot:
             if qty <= 0 or not adapter.meets_minimum(qty, truth['mark']):
                 self.notify.event('warn', self.botid, 'base order below minimum')
                 return {'round': 'unplaceable'}
+            self._gen += 1
             self.client.place_market(cfg['market_type'], cfg['symbol'],
-                                     self._entry_side, adapter.fmt_qty(qty), idx)
+                                     self._entry_side, adapter.fmt_qty(qty),
+                                     idx, link_id=self._make_link(0))
             self._anchor = truth['mark']
             self.notify.event('start', self.botid,
                               f'round {self._round + 1}: base '
@@ -260,9 +263,10 @@ class Bot:
         if qty <= 0 or not self.adapter.meets_minimum(qty, ref):
             return False
         idx = self.adapter.position_idx(self._entry_side, False) or 0
+        self._gen += 1
         self.client.place_market(self.cfg['market_type'], self.cfg['symbol'],
                                  self._entry_side, self.adapter.fmt_qty(qty),
-                                 idx)
+                                 idx, link_id=self._make_link(0))
         self.notify.event('seed', self.botid,
                           f'{self._entry_side} {qty:.10g} at market for '
                           f'{len(exit_rungs)} exit rungs')

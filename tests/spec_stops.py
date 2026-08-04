@@ -176,3 +176,17 @@ def spec_X6_martingale_stop_flattens_the_whole_round():
     bot = Bot(mcfg, ADAPTER, venue, Notifier(sink=lines.append), gen_seed=1)
     bot.cycle()
     assert not bot.alive and venue.position is None
+
+
+# --- I5: the flatten order carries our identity ------------------------------
+
+def spec_I5_the_flatten_order_carries_an_owned_link():
+    from gridgremlin.apply import rung_of
+    venue, lines = FakeVenue(mark=61000.0), []
+    _holding(venue)
+    bot = _bot(venue, lines, stop={'watch': 'mark_price', 'level': 58000})
+    bot.cycle()
+    venue.mark = 57000.0
+    bot.cycle()
+    assert not bot.alive
+    assert rung_of(venue.market_links[-1], bot.botid) == 0

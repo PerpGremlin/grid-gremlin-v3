@@ -176,6 +176,9 @@ eventually pin (T1).
 - **I3** The id fits every venue's link limit, checked at build with a refusal — never a
   silent row skip.
 - **I4** Fills deduplicate by venue execution id, across reconnects and restarts.
+- **I5** Market-path orders (seed, martingale base, stop-flatten) carry an owned link
+  like every other order — I1 has no exceptions; an unattributable own-fill is a
+  defect. *(found by R3's unowned bucket, first live readout)*
 
 ## V — venue and truth
 

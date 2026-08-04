@@ -138,6 +138,14 @@ start-conditions, profit reinvest, cooldown tuning.
       link id and land in the unowned bucket — market-order identity is the
       next slice
 
+- [x] **19 — market-order identity** *(same PR)*
+      seed, martingale base, and stop-flatten mint `{botid}-0-{gen}` links
+      (market orders never rest, so D21's rung-0 reservation — resting
+      reduce-only — is untouched). SPEC I5, one spec per path.
+      done when: a fresh seed/base/flatten fill attributes to its bot in the
+      readout; fills from before this slice stay in the unowned bucket
+      honestly ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

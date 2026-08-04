@@ -259,11 +259,13 @@ class WriteClient(Client):
                 raise
 
     def place_market(self, category, symbol, side, qty, position_idx=0,
-                     reduce_only=False):
-        return self.post('/v5/order/create', {
-            'category': category, 'symbol': symbol, 'side': side,
-            'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
-            'reduceOnly': reduce_only})
+                     reduce_only=False, link_id=None):
+        body = {'category': category, 'symbol': symbol, 'side': side,
+                'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
+                'reduceOnly': reduce_only}
+        if link_id:
+            body['orderLinkId'] = link_id
+        return self.post('/v5/order/create', body)
 
 
     def read_wallet(self):

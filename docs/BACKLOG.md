@@ -26,10 +26,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 3. Reporting and measurement
 
-- **Market-order identity** — the readout (PR #36, SPEC R1-R5) surfaced that
-  seed, martingale-base, and stop-flatten orders carry no link id, so their
-  fills land in the unowned bucket. Every order we place should carry our
-  identity (I1's spirit).
 - **Soak readout doctrine** — define what the A/B fleets must show, and for how
   long, before a parameter question is called. Measure before theorising.
 
