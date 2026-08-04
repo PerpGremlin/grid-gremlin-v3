@@ -115,3 +115,17 @@ def spec_V4_the_contract_is_one_module_for_both_venues():
     from gridgremlin.exchange import truth as shared
     assert bb.validate_truth is shared.validate_truth
     assert hl.validate_truth is shared.validate_truth
+
+
+def spec_F5_hl_mainnet_is_refused_this_phase():
+    # the owner manages real positions on HL mainnet; v3 may not even look
+    # without an explicit future decision. Testnet-only, structurally.
+    from gridgremlin.exchange.errors import VenueError
+    from gridgremlin.exchange.hyperliquid.client import InfoClient
+    try:
+        InfoClient(env='mainnet')
+    except VenueError as e:
+        assert 'testnet-only' in str(e)
+    else:
+        raise AssertionError('HL mainnet client was constructible')
+    assert InfoClient(env='testnet').base.startswith('https://api.hyperliquid-t')

@@ -18,6 +18,9 @@ def detect_env():
 class InfoClient:
     def __init__(self, env=None, address=None, transport=None):
         self.env = env or detect_env()
+        if self.env == 'mainnet':
+            raise VenueError("v3's HL phase is testnet-only — the owner's live "
+                             'account stays untouched (F5, owner 2026-08-04)')
         self.base = BASE_URLS[self.env]
         self.address = address or os.environ.get('HL_ACCOUNT_ADDRESS', '')
         self._transport = transport or self._http
