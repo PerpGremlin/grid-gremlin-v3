@@ -51,10 +51,10 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       done when: schema-validated truth from live demo; pagination sabotage spec green;
       a failed startup read refuses to trade ✓ (94 specs; live demo check passed)
 
-- [ ] **7 — diff, apply, identity** (no live writes yet — fake venue)
+- [x] **7 — diff, apply, identity** (no live writes yet — fake venue) *(PR #14)*
       builds: E2, E6, E7, I1–I3
       done when: keep/cancel/create/amend decisions green on fixtures incl. truncation
-      tolerance and foreign-order immunity; error-kind matrix specced
+      tolerance and foreign-order immunity; error-kind matrix specced ✓ (109 specs)
 
 - [ ] **8 — the loop, the window, events** (first demo trade)
       builds: E3, W1–W3, plus the event vocabulary
