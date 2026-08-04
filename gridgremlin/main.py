@@ -83,8 +83,9 @@ def build_fleet(fleet_path, notifier):
                 refuse_mainnet(clients[venue])
         client = clients[venue]
         if venue == 'hyperliquid':
-            entry = next(e for e in client.meta()['universe']
-                         if e['name'] == cfg['symbol'])
+            # _entry refuses BY NAME — a coin the venue removed must say so
+            # (the XRP testnet delisting crashed the build as StopIteration)
+            _, entry = client._entry(cfg['symbol'])
             from .exchange.hyperliquid.truth import parse_instrument as hl_pi
             spec = hl_pi(entry)
             from .exchange.hyperliquid.adapters import HLPerpAdapter

@@ -193,10 +193,11 @@ eventually pin (T1).
 - **V5** Trigger/conditional orders are excluded from order truth on every venue,
   stated in the schema.
 - **V6** Spot's position is the wallet's base-coin holding, synthesized into the one
-  position shape — the position endpoint is never called for spot. No basis: adoption
-  runs G6's no-basis arm unless `assumed_avg_entry` says otherwise. Spot write bodies
-  carry no positionIdx/reduceOnly, and market orders pin `marketUnit=baseCoin` so qty
-  is base-denominated on both sides.
+  position shape — the position endpoint is never called for spot. Where a venue
+  keeps no basis (spot; v2's demo lesson — the reason the field exists),
+  `assumed_avg_entry` serves; a venue-reported basis always overrules the config.
+  Spot write bodies carry no positionIdx/reduceOnly, and market orders pin
+  `marketUnit=baseCoin` so qty is base-denominated on both sides.
 
 ## C — config doctrine
 

@@ -17,6 +17,13 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 2. Engine — deferred, not yet decided
 
+- **Margin spot** — the owner trades Bybit margin spot often; the facility must
+  not be forgotten. The vocabulary already validates (`spot_borrow`,
+  `spot_leverage`, spot-only keys) but no write path sends the venue's
+  `isLeverage` flag, nothing sizes against borrowed collateral, and borrow
+  makes a spot *short* possible — today refused unconditionally. Needs a
+  decision pass before code.
+
 - **WS wake** — v2 woke on fill events in ~1s; v3 polls on `--interval`. Costs
   nothing at 5s for wide grids; tight grids and martingale safety-order bursts
   would feel it. Needs a decision on whether the added moving part pays.
