@@ -1,5 +1,4 @@
 {
-  "_note": "demo watchdog. Ceilings are cap x 1.2 (F2: a breach means the cap itself failed).",
   "tag": "v3-demo",
   "snapshot": "logs/snapshots-demo.jsonl",
   "state": "logs/watchdog-demo.state.json",
@@ -17,6 +16,30 @@
     "linETHUSDTs": {
       "min": 0,
       "max": 2248
+    },
+    "linBTCUSDTs": {
+      "min": 0,
+      "max": 2.82
+    },
+    "linETHUSDTl": {
+      "min": 0,
+      "max": 96.4
+    },
+    "linSOLUSDTl": {
+      "min": 0,
+      "max": 490
+    },
+    "linXRPUSDTs": {
+      "min": 0,
+      "max": 33456
+    },
+    "linSOLUSDTs": {
+      "min": 0,
+      "max": 120
+    },
+    "linDOGEUSDTl": {
+      "min": 0,
+      "max": 72000
     }
   }
 }
