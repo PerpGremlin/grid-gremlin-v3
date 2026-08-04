@@ -8,7 +8,9 @@ from .apply import bot_identity, check_fleet_unique, check_link_fits
 from .adapters import adapter_for
 from .bot import Bot
 from .config import ConfigError, check_placeable, validate_fleet
-from .events import Notifier
+import os
+
+from .events import Notifier, TelegramNotifier
 from .exchange.bybit.client import WriteClient
 from .exchange.bybit.truth import parse_instrument, read_wallet
 from .exchange.env import load_env
@@ -134,9 +136,18 @@ def _project_margin(client, cfgs, notifier):
                    f'IM {im / equity:.1%}')
 
 
+def make_notifier():
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
+    if token and chat:
+        return TelegramNotifier(token, chat)
+    return Notifier()
+
+
 def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         snapshot=None, snapshot_every=60, lock_path=None):
-    notifier = Notifier()
+    load_env()
+    notifier = make_notifier()
     fleet, client, bots = build_fleet(fleet_path, notifier)
     lock = acquire_fleet_lock(lock_path
                               or f'/tmp/gridgremlin.{client.env}.lock')
@@ -163,4 +174,6 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
                 time.sleep(poll)
         return 0
     finally:
+        if hasattr(notifier, 'close'):
+            notifier.close()
         lock.close()

@@ -170,3 +170,46 @@ def spec_order_events_log_and_everything_else_ships():
     assert lines[-1].startswith('[ship]')
     n.event('warn', 'x', 'y')
     assert lines[-1].startswith('[ship]')
+
+
+# --- the Telegram sink -------------------------------------------------------
+
+def spec_telegram_coalesces_and_respects_the_interval():
+    from gridgremlin.events import TelegramNotifier
+    sent, t = [], [1000.0]
+    n = TelegramNotifier('tok', 'chat', transport=sent.append,
+                         clock=lambda: t[0], sink=lambda line: None)
+    n.event('warn', 'botA', 'one')
+    assert sent == ['warn botA: one']
+    n.event('warn', 'botA', 'two')            # inside the interval: buffered
+    n.event('fill', 'botA', 'three')
+    assert len(sent) == 1
+    t[0] += 4.0
+    n.event('kill', 'botA', 'four')           # interval passed: one batch
+    assert len(sent) == 2 and sent[1].count('\n') == 2
+
+
+def spec_telegram_order_mechanics_stay_off_the_phone():
+    from gridgremlin.events import TelegramNotifier
+    sent, lines = [], []
+    n = TelegramNotifier('tok', 'chat', transport=sent.append,
+                         clock=lambda: 0.0, sink=lines.append)
+    n.event('placed', 'botA', 'Buy@59000')
+    assert sent == [] and lines[0].startswith('[log]')   # logged, not shipped
+
+
+def spec_telegram_close_flushes_and_failure_keeps_the_buffer():
+    from gridgremlin.events import TelegramNotifier
+    sent, t = [], [10.0]
+    n = TelegramNotifier('tok', 'chat', transport=sent.append,
+                         clock=lambda: t[0], sink=lambda line: None)
+    n.event('warn', 'a', 'x')                 # sent (interval clear)
+    n.event('warn', 'a', 'y')                 # buffered
+    n.close()
+    assert len(sent) == 2                     # close forces the flush
+    def broken(text):
+        raise OSError('down')
+    m = TelegramNotifier('tok', 'chat', transport=broken,
+                         clock=lambda: 0.0, sink=lambda line: None)
+    m.event('warn', 'a', 'z')
+    assert m._buffer                          # kept for the next attempt
