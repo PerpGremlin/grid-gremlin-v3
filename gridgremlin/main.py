@@ -34,12 +34,48 @@ def build_fleet(fleet_path, notifier):
         identities.append((bot.botid, bot_identity(cfg, adapter)))
         if cfg['market_type'] == 'linear':
             client.ensure_hedge_mode(cfg['market_type'], cfg['symbol'])
+            _ensure_capacity(client, cfg, adapter, notifier)
         bots.append(bot)
     check_fleet_unique(identities)
     notifier.event('fleet', 'fleet',
                    f"{len(bots)} bot(s) on {client.env}: "
                    + ', '.join(b.botid for b in bots))
+    _project_margin(client, fleet['bots'], notifier)
     return fleet, client, bots
+
+
+def _ensure_capacity(client, cfg, adapter, notifier):
+    """Risk-limit tier to fit the full ladder; symbol leverage to the config's,
+    clamped to the tier's max. The worst case is typed before trading."""
+    tiers = client.risk_limit_tiers(cfg['market_type'], cfg['symbol'])
+    need = cfg['ladder_notional']
+    tier = next((t for t in tiers if need <= t['limit']), tiers[-1])
+    idx = adapter.position_idx('Buy' if cfg['side'] == 'long' else 'Sell', False)
+    try:
+        client.set_risk_limit(cfg['market_type'], cfg['symbol'],
+                              tier['id'], idx or 0)
+    except Exception as e:
+        notifier.event('warn', cfg['symbol'], f'risk limit: {e}')
+    lev = min(cfg['leverage'], tier['max_leverage'] or cfg['leverage'])
+    if lev != cfg['leverage']:
+        notifier.event('warn', cfg['symbol'],
+                       f"leverage clamped {cfg['leverage']:g} -> {lev:g} "
+                       f"(tier max at {need:,.0f} notional)")
+        cfg['leverage'] = lev
+    client.set_leverage(cfg['market_type'], cfg['symbol'], lev)
+    cfg['_tier_mm_rate'] = tier['mm_rate']
+
+
+def _project_margin(client, cfgs, notifier):
+    equity = read_wallet(client.wallet_balance())['equity']
+    if not equity:
+        return
+    mm = sum(c['ladder_notional'] * c.get('_tier_mm_rate', 0.005)
+             for c in cfgs if c['market_type'] != 'spot')
+    im = sum(c['capital'] for c in cfgs)
+    notifier.event('fleet', 'fleet',
+                   f'projected full-deployment: MM {mm / equity:.1%} of equity, '
+                   f'IM {im / equity:.1%}')
 
 
 def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None):

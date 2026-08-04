@@ -193,3 +193,26 @@ class WriteClient(Client):
         except VenueError as e:
             if e.kind not in ('not_modified', 'cannot_modify'):
                 raise
+
+    def risk_limit_tiers(self, category, symbol):
+        r = self.get('/v5/market/risk-limit',
+                     {'category': category, 'symbol': symbol})
+        return [{'id': int(t['id']), 'limit': float(t['riskLimitValue']),
+                 'mm_rate': float(t['maintenanceMargin']),
+                 'max_leverage': float(t.get('maxLeverage', 0))}
+                for t in r['list']]
+
+    def set_risk_limit(self, category, symbol, risk_id, position_idx):
+        self.post('/v5/position/set-risk-limit',
+                  {'category': category, 'symbol': symbol, 'riskId': risk_id,
+                   'positionIdx': position_idx})
+
+    def set_leverage(self, category, symbol, leverage):
+        try:
+            self.post('/v5/position/set-leverage',
+                      {'category': category, 'symbol': symbol,
+                       'buyLeverage': str(leverage),
+                       'sellLeverage': str(leverage)})
+        except VenueError as e:
+            if e.kind != 'not_modified':
+                raise
