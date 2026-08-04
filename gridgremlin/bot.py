@@ -2,7 +2,6 @@
 import time
 
 from .apply import diff, make_botid, make_link, pair_amends, rung_of
-from .exchange.bybit.truth import read_symbol_truth
 from .exchange.errors import VenueError
 from .ladder import (grid_rungs, guard_band, lot, min_gap, plan_grid,
                      plan_martingale, sellable_base, split)
@@ -197,7 +196,7 @@ class Bot:
                    else truth['mark'] <= target)
         if venue_tp is None and through:
             self._gen += 1
-            link = make_link(self.botid, 0, self._gen)
+            link = self._make_link(0)
             self.client.place_order(
                 cfg['market_type'], cfg['symbol'], self._exit_side,
                 adapter.fmt_qty(abs(held)), adapter.fmt_price(target), link,
@@ -242,6 +241,11 @@ class Bot:
                           f'{self._entry_side} {qty:.10g} at market for '
                           f'{len(exit_rungs)} exit rungs')
         return True
+
+    def _make_link(self, rung):
+        mk = getattr(self.client, 'make_link', None)
+        return mk(self.botid, rung, self._gen) if mk \
+            else make_link(self.botid, rung, self._gen)
 
     def _sticky(self, ref):
         """B2: the split ref moves only past the band, then snaps to current.
@@ -308,8 +312,9 @@ class Bot:
         if not self.alive:
             return None
         cfg, adapter, now = self.cfg, self.adapter, self._now()
-        truth = read_symbol_truth(self.client, cfg['market_type'], cfg['symbol'],
-                                  cfg.get('funding_interval_minutes', 480.0))
+        truth = self.client.read_symbol_truth(
+            cfg['market_type'], cfg['symbol'],
+            cfg.get('funding_interval_minutes', 480.0))
         held, basis = self._held(truth)
         if held is None:                           # S4: halt and alert
             if not self._anomaly_warned:
@@ -398,7 +403,7 @@ class Bot:
                 skipped += 1
                 continue
             self._gen += 1
-            link = make_link(self.botid, want['rung'], self._gen)
+            link = self._make_link(want['rung'])
             idx = adapter.position_idx(want['side'], want['reduce_only']) or 0
             try:
                 self.client.place_order(

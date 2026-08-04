@@ -239,3 +239,12 @@ class WriteClient(Client):
             'category': category, 'symbol': symbol, 'side': side,
             'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
             'reduceOnly': reduce_only})
+
+
+    def read_wallet(self):
+        from . import truth as _t
+        return _t.read_wallet(self.wallet_balance())
+
+    def read_symbol_truth(self, market_type, symbol, funding_interval=480.0):
+        from . import truth as _t
+        return _t.read_symbol_truth(self, market_type, symbol, funding_interval)

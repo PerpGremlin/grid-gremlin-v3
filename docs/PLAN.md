@@ -115,6 +115,12 @@ to an exchange until slice 8; nothing trades unwatched, ever.
 
 ---
 
+- [x] **17 (post-plan) — HL writes, testnet** *(PR #24)*
+      v2's earned signing stack carried (SDK golden vectors bit-for-bit), the
+      venue facade behind the Bot's surface, the bot/main venue seam closed
+      (bot.py imports no venue at all), martingale + server-side stops refused
+      on HL this phase. Live smoke on testnet: placed, rested, cancelled. ✓
+
 **Deferred by decision (D10, D15)** — not slices, listed so they aren't re-invented:
 trail/SMA machinery (range edits do it), partial TPs, trailing TP, signal
 start-conditions, profit reinvest, cooldown tuning.

@@ -29,6 +29,28 @@ scheduled cure, and now have a live fixture to verify against.
 
 **Next.** Slice 9 — the earned guards.
 
+## 2026-08-04 — postscript: comms and the HL write path
+
+**Done.** Telegram keys ported and the sink built (coalesced, >=3s, order mechanics
+stay in the log — the July-30 channel lesson); first live message delivered. HL flipped
+to testnet-only structurally (mainnet unconstructible — the owner manages real
+positions there; the mainnet agent key was deliberately never copied). Then the owner
+provided a testnet agent key and the write path landed: v2's earned signing stack
+carried verbatim (SDK golden vectors pass bit-for-bit), the write client ported with
+v3 error kinds, a venue facade behind the Bot's unchanged surface — and the last
+venue coupling left the engine: bot.py now imports no venue at all. Live smoke on
+testnet: an order placed, rested, and cancelled by id. Then the faucet claim: the mock
+USDC surfaced in the SPOT clearinghouse — HL's unified account mode — and v2's
+mode-aware wallet arithmetic (with its measured no-double-count rule) was ported and
+specced. The sized-like-real-life fleet launched: 400 of 999 USDC at 5x, stop below
+the range, watchdog required. **A real bug on the first run**: the HL truth read
+returned raw cloid hex as link_id — the diff could not recognise its own orders and
+re-placed the ladder every cycle. The guards contained it (flap cooldown + margin
+ceiling capped the bleed at 19 duplicates), the book was cleaned, the missing
+cloid_to_link decode ported from v2, and the incident pinned in the venue-contract
+spec. Re-run: nine placed, then empty steady-state diffs; watchdog ok. 'skip' joined
+the order-mechanics kinds so the guard-band rung stops paging the phone.
+
 ## 2026-08-04 — the build completes: slices 9-16
 
 **Done.** The second half of the checklist in one continuous run, each slice a merged

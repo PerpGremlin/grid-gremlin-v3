@@ -68,10 +68,15 @@ class FakeHL:
                     'coin': 'SOL', 'szi': '1.3', 'entryPx': '73.7',
                     'leverage': {'value': 5}, 'unrealizedPnl': '-0.3'}}]}
 
+    def user_abstraction(self):
+        return 'disabled'
+
     def open_orders(self, coin=None):
+        from gridgremlin.exchange.hyperliquid.signing import link_to_cloid
         return [{'coin': 'SOL', 'oid': 77, 'side': 'B', 'limitPx': '73.0',
                  'sz': '1.0', 'origSz': '1.3', 'reduceOnly': False,
-                 'isTrigger': False, 'timestamp': 1700000000000},
+                 'isTrigger': False, 'timestamp': 1700000000000,
+                 'cloid': link_to_cloid('linSOLl-3-ab12')},
                 {'coin': 'SOL', 'oid': 78, 'side': 'A', 'limitPx': '80.0',
                  'sz': '1', 'origSz': '1', 'isTrigger': True}]       # V5: out
 
@@ -94,6 +99,9 @@ def spec_V5_hl_trigger_orders_are_excluded():
     o = t['orders'][0]
     assert o['qty'] == 1.3                         # origSz, not the remainder
     assert abs(o['cum_exec_qty'] - 0.3) < 1e-12    # derived
+    assert o['link_id'] == 'linSOLl-3-ab12'        # the cloid DECODES back —
+    # without this the diff cannot see its own orders and re-places them every
+    # cycle: the live testnet duplicate incident, 2026-08-04, pinned
 
 
 def spec_V1_hl_positions_are_one_shape_with_every_key():
@@ -105,13 +113,49 @@ def spec_V1_hl_positions_are_one_shape_with_every_key():
 
 
 def spec_V1_hl_wallet_passes_the_shared_schema_with_computed_rates():
-    w = hl.read_wallet(FakeHL().clearinghouse_state())
+    w = hl.read_wallet(FakeHL())
     validate_wallet(w)
     assert w['mm_rate'] == 25.0 / 5000.0           # computed, never venue-sent
     assert w['im_rate'] == 250.0 / 5000.0
+
+
+def spec_V1_hl_unified_mode_sums_without_double_counting():
+    # v2's live measurement: perp margin mirrors as a spot hold — the honest
+    # sum is perp accountValue + (spot total - hold)
+    class Unified(FakeHL):
+        def user_abstraction(self):
+            return 'unifiedAccount'
+
+        def clearinghouse_state(self):
+            st = dict(FakeHL.clearinghouse_state(self))
+            st['marginSummary'] = {'accountValue': '33.47',
+                                   'totalMarginUsed': '33.47'}
+            return st
+
+        def spot_clearinghouse_state(self):
+            return {'balances': [{'coin': 'USDC', 'total': '999.0',
+                                  'hold': '33.47'}]}
+    w = hl.read_wallet(Unified())
+    assert abs(w['equity'] - (33.47 + (999.0 - 33.47))) < 1e-9   # = 999
+    assert w['coins']['USDC']['perp'] == 33.47
+    assert w['coins']['USDC']['spot'] == 999.0
 
 
 def spec_V4_the_contract_is_one_module_for_both_venues():
     from gridgremlin.exchange import truth as shared
     assert bb.validate_truth is shared.validate_truth
     assert hl.validate_truth is shared.validate_truth
+
+
+def spec_F5_hl_mainnet_is_refused_this_phase():
+    # the owner manages real positions on HL mainnet; v3 may not even look
+    # without an explicit future decision. Testnet-only, structurally.
+    from gridgremlin.exchange.errors import VenueError
+    from gridgremlin.exchange.hyperliquid.client import InfoClient
+    try:
+        InfoClient(env='mainnet')
+    except VenueError as e:
+        assert 'testnet-only' in str(e)
+    else:
+        raise AssertionError('HL mainnet client was constructible')
+    assert InfoClient(env='testnet').base.startswith('https://api.hyperliquid-t')
