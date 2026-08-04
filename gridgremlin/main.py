@@ -86,9 +86,9 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None):
     poll = poll_seconds or fleet['poll_seconds']
     n = 0
     while cycles is None or n < cycles:
-        read_wallet(client.wallet_balance())          # E8: fail loudly, early
+        equity = read_wallet(client.wallet_balance())['equity']   # E8
         for bot in bots:
-            counts = bot.cycle()
+            counts = bot.cycle(equity=equity)
             if counts is not None:
                 print(f"cycle {n} {bot.botid}: {counts}", flush=True)
         if not any(b.alive for b in bots):

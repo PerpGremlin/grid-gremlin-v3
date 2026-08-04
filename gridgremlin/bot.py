@@ -5,7 +5,7 @@ from .apply import diff, make_botid, make_link, pair_amends, rung_of
 from .exchange.bybit.truth import read_symbol_truth
 from .exchange.errors import VenueError
 from .ladder import (grid_rungs, guard_band, lot, min_gap, plan_grid,
-                     plan_martingale, split)
+                     plan_martingale, sellable_base, split)
 from .window import window
 
 FLAP_LIMIT = 3          # B5: strikes before a (rung, side) cools
@@ -64,6 +64,92 @@ class Bot:
         self.notify.event('kill', self.botid,
                           f'{reason} — cancelled {n} owned orders; nothing '
                           'owned rests; position flat')
+
+    def _stop_hit(self, truth, equity):
+        """X2: the rule names what it watches. Absence is never a breach."""
+        stop = self.cfg.get('stop')
+        mark = truth['mark']
+        if not stop or mark is None:
+            return None
+        watch, long = stop['watch'], self.cfg['side'] == 'long'
+        if watch == 'mark_price':
+            hit = mark <= stop['level'] if long else mark >= stop['level']
+            return f"mark_price {stop['level']:.10g}" if hit else None
+        if watch == 'account_equity':
+            if equity is not None and equity <= stop['level']:
+                return f"account_equity {stop['level']:.10g}"
+            return None
+        idx = self.adapter.position_idx(self._entry_side, False) or 0
+        sl = truth['positions'].get(idx, {}).get('stop_loss')
+        if not sl:
+            return None
+        hit = mark <= sl if long else mark >= sl
+        return f'position_sl {sl:.10g} (yours, on the venue)' if hit else None
+
+    def _flatten_scope(self, held):
+        """X6 (D2): grid inventory only — the floor core survives. A
+        martingale has no floor; its scope is the whole position."""
+        if self.cfg['strategy'] == 'martingale':
+            return abs(held)
+        return sellable_base(self.cfg, self.adapter, held)
+
+    def _execute_stop(self, truth, held, reason):
+        """X1 (D1): flatten, cancel, kill, never restart. X4: the event
+        states what still rests. X5: owned orders only, from paginated truth."""
+        cfg, adapter = self.cfg, self.adapter
+        qty = self._flatten_scope(held)
+        if qty > 0:
+            try:
+                self.client.place_market(
+                    cfg['market_type'], cfg['symbol'], self._exit_side,
+                    adapter.fmt_qty(qty),
+                    adapter.position_idx(self._exit_side, True) or 0,
+                    reduce_only=True)
+            except VenueError as e:
+                self.notify.event('warn', self.botid, f'flatten: {e}')
+        floor = abs(held) - qty
+        residue = (f'floor core {floor:.10g} REMAINS, unprotected'
+                   if floor > 1e-12 else 'position flat')
+        n = 0
+        for o in truth['orders']:
+            if rung_of(o['link_id'], self.botid) is not None:
+                try:
+                    self.client.cancel_order(cfg['market_type'], cfg['symbol'],
+                                             o['order_id'])
+                    n += 1
+                except VenueError:
+                    pass
+        self.alive = False
+        self.notify.event('kill', self.botid,
+                          f'stop fired ({reason}): flattened {qty:.10g} at '
+                          f'market; cancelled {n} owned orders; nothing owned '
+                          f'rests; {residue}')
+
+    def _maintain_server_stop(self, truth, held):
+        """X3: the venue holds the stop, sized to the grid's inventory —
+        level-triggered every cycle, so growth re-sizes it."""
+        stop = self.cfg.get('stop')
+        if not (stop and stop.get('server_side') and held and abs(held) > 0):
+            return
+        qty = self._flatten_scope(held)
+        if qty <= 0:
+            return
+        idx = self.adapter.position_idx(self._entry_side, False) or 0
+        venue_sl = truth['positions'].get(idx, {}).get('stop_loss')
+        want = self.adapter.round_price(stop['level'])
+        if venue_sl is not None and abs(venue_sl - want) < 1e-9:
+            return                                    # the venue already agrees
+        try:
+            partial = self._flatten_scope(held) < abs(held)
+            self.client.set_trading_stop(
+                self.cfg['market_type'], self.cfg['symbol'], idx,
+                stop_loss=self.adapter.fmt_price(want),
+                sl_size=self.adapter.fmt_qty(qty) if partial else None)
+            self.notify.event('tp', self.botid,
+                              f'server-side stop resting at {want:.10g} '
+                              f'for {qty:.10g} — survives this process')
+        except VenueError as e:
+            self.notify.event('warn', self.botid, f'server stop: {e}')
 
     def _round_target(self, basis):
         """M4: from average entry, recomputed as fills deepen."""
@@ -125,7 +211,8 @@ class Bot:
         if venue_tp is None or grew:
             try:
                 self.client.set_trading_stop(cfg['market_type'], cfg['symbol'],
-                                             adapter.fmt_price(target), idx)
+                                             idx,
+                                             take_profit=adapter.fmt_price(target))
                 if venue_tp is None:
                     self.notify.event('tp', self.botid,
                                       f'round TP set: {target:.10g}')
@@ -217,7 +304,7 @@ class Bot:
                                   f'rung {key[0]} {key[1]} flapping: '
                                   f'cooling {FLAP_COOLDOWN:.0f}s')
 
-    def cycle(self):
+    def cycle(self, equity=None):
         if not self.alive:
             return None
         cfg, adapter, now = self.cfg, self.adapter, self._now()
@@ -233,6 +320,13 @@ class Bot:
             return {'anomaly': True}
         if basis is None:
             basis = cfg.get('assumed_avg_entry')
+
+        reason = self._stop_hit(truth, equity)          # X1: before everything
+        if reason:
+            self._execute_stop(truth, held, reason)
+            return None
+        self._maintain_server_stop(truth, held)
+
         pos_stable = self._last_pos is not None and held == self._last_pos
 
         if self._maybe_seed(truth, held, truth['split_ref']):

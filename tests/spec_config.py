@@ -219,7 +219,7 @@ def spec_stop_position_sl_takes_no_level():
     _refused(_row(stop={'watch': 'position_sl', 'level': 48000}),
              "'level' does not apply")
     cfg = validate_config(_row(stop={'watch': 'position_sl'}))
-    assert cfg['stop'] == {'watch': 'position_sl'}
+    assert cfg['stop'] == {'watch': 'position_sl', 'server_side': False}
 
 
 def spec_stop_account_equity_level_floor():
