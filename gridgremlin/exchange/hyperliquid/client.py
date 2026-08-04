@@ -63,6 +63,14 @@ class InfoClient:
         return self._transport({'type': 'frontendOpenOrders',
                                 'user': self._user()})
 
+    def user_abstraction(self):
+        return self._transport({'type': 'userAbstraction',
+                                'user': self._user()})
+
+    def spot_clearinghouse_state(self):
+        return self._transport({'type': 'spotClearinghouseState',
+                                'user': self._user()})
+
     def _post(self, path, body, retry_429=True):
         """The write transport (stub point for specs)."""
         data = json.dumps(body).encode()

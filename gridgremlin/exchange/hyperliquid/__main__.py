@@ -20,7 +20,7 @@ def main(argv):
     print(f"truth: mark {t['mark']} bid {t['bid']} ask {t['ask']} "
           f"split_ref {t['split_ref']} funding/h {t['funding_rate_hourly']:.3e}")
     print(f"orders: {len(t['orders'])} resting; positions: {sorted(t['positions'])}")
-    read_wallet(client.clearinghouse_state())
+    read_wallet(client)
     print('wallet: schema OK')
     print('truth: schema OK')
     return 0

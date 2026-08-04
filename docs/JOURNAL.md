@@ -39,8 +39,17 @@ provided a testnet agent key and the write path landed: v2's earned signing stac
 carried verbatim (SDK golden vectors pass bit-for-bit), the write client ported with
 v3 error kinds, a venue facade behind the Bot's unchanged surface — and the last
 venue coupling left the engine: bot.py now imports no venue at all. Live smoke on
-testnet: an order placed, rested, and cancelled by id. Faucet not yet claimed
-(equity 0) — the sized like-real-life testnet fleet waits on mock USDC.
+testnet: an order placed, rested, and cancelled by id. Then the faucet claim: the mock
+USDC surfaced in the SPOT clearinghouse — HL's unified account mode — and v2's
+mode-aware wallet arithmetic (with its measured no-double-count rule) was ported and
+specced. The sized-like-real-life fleet launched: 400 of 999 USDC at 5x, stop below
+the range, watchdog required. **A real bug on the first run**: the HL truth read
+returned raw cloid hex as link_id — the diff could not recognise its own orders and
+re-placed the ladder every cycle. The guards contained it (flap cooldown + margin
+ceiling capped the bleed at 19 duplicates), the book was cleaned, the missing
+cloid_to_link decode ported from v2, and the incident pinned in the venue-contract
+spec. Re-run: nine placed, then empty steady-state diffs; watchdog ok. 'skip' joined
+the order-mechanics kinds so the guard-band rung stops paging the phone.
 
 ## 2026-08-04 — the build completes: slices 9-16
 

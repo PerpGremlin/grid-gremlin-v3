@@ -1,0 +1,17 @@
+{
+  "tag": "v3-hl-testnet",
+  "snapshot": "logs/snapshots-hl-testnet.jsonl",
+  "state": "logs/watchdog-hl-testnet.state.json",
+  "staleness_seconds": 1000,
+  "mm_rate_max": 0.5,
+  "equity_min": 500,
+  "equity_drawdown_max": 0.25,
+  "re_alert_seconds": 1800,
+  "assumes_sole_actor": true,
+  "positions": {
+    "linBTCl": {
+      "min": 0,
+      "max": 0.0375
+    }
+  }
+}

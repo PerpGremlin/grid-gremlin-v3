@@ -1,7 +1,7 @@
 # The event vocabulary. Order mechanics are logged, not shipped, unless asked.
 EVENT_KINDS = ('fleet', 'start', 'seed', 'skip', 'placed', 'cancel', 'amend', 'fill',
                'exit', 'tp', 'repeat', 'funding', 'margin', 'backoff', 'warn', 'kill', 'dryrun')
-ORDER_KINDS = ('placed', 'cancel', 'amend')
+ORDER_KINDS = ('placed', 'cancel', 'amend', 'skip')
 
 
 class Notifier:

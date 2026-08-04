@@ -49,7 +49,7 @@ class HLVenueClient(ExchangeClient):
         return link
 
     def read_wallet(self):
-        return hl_truth.read_wallet(self.clearinghouse_state())
+        return hl_truth.read_wallet(self)
 
     def read_symbol_truth(self, market_type, symbol, funding_interval=60.0):
         return hl_truth.read_symbol_truth(self, symbol)

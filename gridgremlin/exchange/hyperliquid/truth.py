@@ -3,6 +3,7 @@
 # the unit trap between venues (exchange study M16) dies in the field name.
 from ..errors import VenueError
 from ..truth import _f, validate_truth, validate_wallet
+from .signing import cloid_to_link
 
 FUNDING_INTERVAL_MINUTES = 60.0
 
@@ -20,19 +21,40 @@ def parse_instrument(entry):
             'funding_interval_minutes': FUNDING_INTERVAL_MINUTES}
 
 
-def read_wallet(state):
+UNIFIED_MODES = ('unifiedAccount', 'portfolioMargin')
+
+
+def read_wallet(client):
+    """Abstraction-mode-aware (v2, measured live 2026-07-27): unified accounts
+    keep collateral in the SPOT clearinghouse and MIRROR perp margin as a spot
+    hold — the non-double-counting sum is perp accountValue + free spot."""
+    state = client.clearinghouse_state()
     summary = state.get('marginSummary', {})
-    equity = _f(summary.get('accountValue'), 0.0)
+    perp_value = _f(summary.get('accountValue'), 0.0)
     maint = _f(state.get('crossMaintenanceMarginUsed'), 0.0)
     used = _f(summary.get('totalMarginUsed'), 0.0)
+    perp_avail = _f(state.get('withdrawable'), 0.0)
+    mode = client.user_abstraction()
+    spot_total = 0.0
+    equity, avail = perp_value, perp_avail
+    if mode in UNIFIED_MODES:
+        sp = client.spot_clearinghouse_state()
+        usdc = next((b for b in sp.get('balances', [])
+                     if b.get('coin') == 'USDC'), {})
+        spot_total = _f(usdc.get('total'), 0.0)
+        spot_free = spot_total - _f(usdc.get('hold'), 0.0)
+        equity = perp_value + spot_free
+        avail = perp_avail + spot_free
     return validate_wallet({
         'equity': equity,
-        'available': _f(state.get('withdrawable'), 0.0),
-        'mm_rate': maint / equity if equity else None,      # computed, not sent
+        'available': avail,
+        'mm_rate': maint / equity if equity else None,
         'im_rate': used / equity if equity else None,
         'maint_margin': maint,
+        'mode': mode,
         'coins': {'USDC': {'wallet_balance': equity, 'equity': equity,
-                           'available': _f(state.get('withdrawable'), 0.0)}}})
+                           'available': avail, 'perp': perp_value,
+                           'spot': spot_total}}})
 
 
 def read_positions(state, coin):
@@ -68,7 +90,8 @@ def read_orders(raw, coin):
         orig = _f(o.get('origSz'), 0.0)
         left = _f(o.get('sz'), 0.0)
         out.append({'order_id': str(o.get('oid')),
-                    'link_id': o.get('cloid') or '',
+                    'link_id': cloid_to_link(o.get('cloid'))
+                    or (o.get('cloid') or ''),
                     'side': 'Buy' if o.get('side') == 'B' else 'Sell',
                     'price': _f(o.get('limitPx')),
                     'qty': orig,
