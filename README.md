@@ -208,6 +208,7 @@ locally either way; the terminal is the audit trail.
 | [docs/MIGRATION.md](docs/MIGRATION.md) | every v2 name → its v3 fate |
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | the dissection of v2 that started it all |
 | [docs/PLAN.md](docs/PLAN.md) | the sixteen build slices, all ticked |
+| [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
 | [docs/research/](docs/research/) | the evidence trail |
 
 *This repo is public and deliberately carries no account figures, no live position
