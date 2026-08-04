@@ -21,10 +21,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       done when: refusal specs green incl. nested objects and near-miss hints; a
       cannot-place config refuses with the reason ✓ (25 specs)
 
-- [ ] **2 — contract maths**
+- [x] **2 — contract maths** *(PR #9)*
       builds: A1–A6
       done when: golden fixtures for linear/inverse/spot rounding, minimums,
       qty-from-notional, position_idx all green; no network anywhere in the module
+      ✓ (38 specs total)
 
 - [ ] **3 — the lattice, the lot, the split** (pure)
       builds: G1–G6, B8, E1, E4
