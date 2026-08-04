@@ -10,7 +10,8 @@
       "leverage": 75,
       "lower": 62000,
       "upper": 66000,
-      "rungs": 41
+      "rungs": 41,
+      "split_hysteresis_rungs": 0.3
     },
     {
       "market_type": "linear",
@@ -20,7 +21,8 @@
       "leverage": 55,
       "lower": 1780,
       "upper": 1960,
-      "rungs": 41
+      "rungs": 41,
+      "split_hysteresis_rungs": 0.3
     }
   ]
 }

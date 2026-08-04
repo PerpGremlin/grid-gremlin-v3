@@ -70,10 +70,10 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       ✓ (126 specs; live fleet steady under guards)
       NOT here: split hysteresis
 
-- [ ] **10 — split hysteresis**
+- [x] **10 — split hysteresis** *(PR #17)*
       builds: B2, B1's naming
       done when: the flap-inverse-to-volatility fixture is quiet with the band on,
-      churning with it off; 0 ≡ unset pinned
+      churning with it off; 0 ≡ unset pinned ✓ (132 specs)
 
 - [ ] **11 — start states**
       builds: S1–S8 (the matrix, one spec row per cell; seed per D9, involuntary flat
