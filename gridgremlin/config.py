@@ -24,7 +24,7 @@ GRID_KEYS = COMMON_KEYS + (
 MARTINGALE_KEYS = COMMON_KEYS + (
     'base_order_size', 'safety_order_size', 'order_size_multiplier',
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
-    'repeat')
+    'take_profit_avg_pct', 'repeat', 'place_within_pct')
 STOP_KEYS = ('watch', 'level')
 FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit', 'notify_orders')
 
@@ -290,6 +290,12 @@ def validate_martingale(row, where='row'):
     cfg['max_averaging_orders'] = _num(cfg, 'max_averaging_orders', where,
                                        least=1, most=50, required=True,
                                        integer=True)
+    cfg['take_profit_avg_pct'] = _fraction(cfg, 'take_profit_avg_pct', where)
+    if cfg['take_profit_avg_pct'] is None:
+        _refuse(f"{where}: 'take_profit_avg_pct' is required — a round is "
+                'never without an exit (M3)')
+    w = _fraction(cfg, 'place_within_pct', where)
+    cfg['place_within_pct'] = 0.05 if w is None else w
     cfg['repeat'] = _flag(cfg, 'repeat')
     cfg['stop'] = _validate_stop(cfg.get('stop'), where)
 

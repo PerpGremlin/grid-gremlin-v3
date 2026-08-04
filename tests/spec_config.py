@@ -236,7 +236,8 @@ def spec_martingale_rows_validate_with_their_own_keyset():
                            'symbol': 'ETHUSDT', 'side': 'short',
                            'capital': 500.0, 'leverage': 5,
                            'base_order_size': 200.0, 'safety_order_size': 200.0,
-                           'deviation_pct': 0.02, 'max_averaging_orders': 3})
+                           'deviation_pct': 0.02, 'max_averaging_orders': 3,
+                           'take_profit_avg_pct': 0.015})
     assert cfg['strategy'] == 'martingale'
     assert cfg['ladder_total_notional'] == 800.0
     _refused({'strategy': 'martingale', 'symbol': 'ETHUSDT'})  # side etc. required

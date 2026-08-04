@@ -48,7 +48,7 @@ class FakeVenue:
 
     # writes
     def place_order(self, category, symbol, side, qty, price, link_id,
-                    position_idx=0, reduce_only=False):
+                    position_idx=0, reduce_only=False, post_only=True):
         self._oid += 1
         self.orders.append({'order_id': f'o{self._oid}', 'link_id': link_id,
                             'side': side, 'price': float(price), 'qty': qty,
@@ -62,6 +62,17 @@ class FakeVenue:
         for o in self.orders:
             if o['order_id'] == order_id:
                 o['qty'] = qty
+
+    def place_market(self, category, symbol, side, qty, position_idx=0):
+        self.position = {'positionIdx': position_idx, 'side': side,
+                         'size': qty, 'avgPrice': str(self.mark),
+                         'leverage': '10', 'unrealisedPnl': '0'}
+
+    def set_trading_stop(self, category, symbol, take_profit, position_idx):
+        self.tp_calls = getattr(self, 'tp_calls', [])
+        self.tp_calls.append(float(take_profit))
+        if self.position:
+            self.position['takeProfit'] = take_profit
 
     def fill(self, order_id, avg):
         """Simulate a taker sweep: order gone, position appears."""

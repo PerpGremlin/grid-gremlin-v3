@@ -4,7 +4,8 @@ import time
 from .apply import diff, make_botid, make_link, pair_amends, rung_of
 from .exchange.bybit.truth import read_symbol_truth
 from .exchange.errors import VenueError
-from .ladder import grid_rungs, guard_band, lot, min_gap, plan_grid, split
+from .ladder import (grid_rungs, guard_band, lot, min_gap, plan_grid,
+                     plan_martingale, split)
 from .window import window
 
 FLAP_LIMIT = 3          # B5: strikes before a (rung, side) cools
@@ -38,11 +39,14 @@ class Bot:
         self._entry_side = 'Buy' if cfg['side'] == 'long' else 'Sell'
         self._exit_side = 'Sell' if cfg['side'] == 'long' else 'Buy'
         self._held_ref = None          # B2
-        self._min_gap = min_gap(grid_rungs(cfg, adapter))
+        self._min_gap = (min_gap(grid_rungs(cfg, adapter))
+                         if cfg['strategy'] == 'grid' else 0.0)   # M8: no lattice
         self.alive = True
         self._exit_links_last = set()  # S7: the ownership discriminator
         self._uncovered_warned = False
         self._anomaly_warned = False
+        self._anchor = None            # M: the round's base price
+        self._round = 0
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
@@ -60,6 +64,74 @@ class Bot:
         self.notify.event('kill', self.botid,
                           f'{reason} — cancelled {n} owned orders; nothing '
                           'owned rests; position flat')
+
+    def _round_target(self, basis):
+        """M4: from average entry, recomputed as fills deepen."""
+        pct = self.cfg['take_profit_avg_pct']
+        raw = basis * (1.0 + pct) if self.cfg['side'] == 'long' \
+            else basis * (1.0 - pct)
+        return self.adapter.round_price(raw)
+
+    def _martingale_round(self, truth, held, basis):
+        """M3/M5/M6. Returns a dict to end the cycle early, None to continue
+        to the ladder plan."""
+        cfg, adapter = self.cfg, self.adapter
+        idx = adapter.position_idx(self._entry_side, False) or 0
+        if held == 0:
+            completed = ((self._last_pos and abs(self._last_pos) > 0)
+                         or (self._last_pos is None and truth['orders']
+                             and any(rung_of(o['link_id'], self.botid)
+                                     is not None for o in truth['orders'])))
+            if completed:
+                if not cfg['repeat']:
+                    self._kill(truth, 'round complete (TP hit), repeat off')
+                    return {'round': 'complete'}
+                self._round += 1
+                self._anchor = None
+                self.notify.event('repeat', self.botid,
+                                  f'round {self._round + 1} re-anchors at '
+                                  'market (M5: from flat only)')
+            qty = adapter.round_qty(cfg['base_order_size'] / truth['mark'])
+            if qty <= 0 or not adapter.meets_minimum(qty, truth['mark']):
+                self.notify.event('warn', self.botid, 'base order below minimum')
+                return {'round': 'unplaceable'}
+            self.client.place_market(cfg['market_type'], cfg['symbol'],
+                                     self._entry_side, adapter.fmt_qty(qty), idx)
+            self._anchor = truth['mark']
+            self.notify.event('start', self.botid,
+                              f'round {self._round + 1}: base '
+                              f'{self._entry_side} {qty:.10g} at market')
+            self._last_pos = 0.0
+            return {'round_started': self._round + 1}
+
+        # holding: the round is never without an exit (M3)
+        target = self._round_target(basis)
+        venue_tp = truth['positions'].get(idx, {}).get('take_profit')
+        through = (truth['mark'] >= target if cfg['side'] == 'long'
+                   else truth['mark'] <= target)
+        if venue_tp is None and through:
+            self._gen += 1
+            link = make_link(self.botid, 0, self._gen)
+            self.client.place_order(
+                cfg['market_type'], cfg['symbol'], self._exit_side,
+                adapter.fmt_qty(abs(held)), adapter.fmt_price(target), link,
+                adapter.position_idx(self._exit_side, True) or 0,
+                reduce_only=True, post_only=False)     # marketable: target or better
+            self.notify.event('tp', self.botid,
+                              f'target {target:.10g} already met — closing the '
+                              'round at target or better')
+            return {'round': 'closing'}
+        grew = self._last_pos is not None and abs(held) > abs(self._last_pos)
+        if venue_tp is None or grew:
+            try:
+                self.client.set_trading_stop(cfg['market_type'], cfg['symbol'],
+                                             adapter.fmt_price(target), idx)
+                if venue_tp is None:
+                    self.notify.event('tp', self.botid,
+                                      f'round TP set: {target:.10g}')
+            except VenueError as e:
+                self.notify.event('warn', self.botid, f'tp: {e}')
+        return None
 
     def _maybe_seed(self, truth, held, ref):
         """D9/S2/S3: first cycle, flat, no owned orders resting — market-buy
@@ -172,7 +244,11 @@ class Bot:
             self.notify.event('fill' if grew else 'exit', self.botid,
                               f'position {self._last_pos:.10g} -> {held:.10g}')
 
-        if (self._last_pos and abs(self._last_pos) > 0 and held == 0):
+        if cfg['strategy'] == 'martingale':
+            early = self._martingale_round(truth, held, basis)
+            if early is not None:
+                return early
+        elif (self._last_pos and abs(self._last_pos) > 0 and held == 0):
             links_now = {o['link_id'] for o in truth['orders']}
             if not (self._exit_links_last - links_now):      # no exit of ours
                 self._kill(truth, 'position closed externally (D1)')
@@ -184,8 +260,12 @@ class Bot:
                          for o in truth['orders']
                          if o['side'] == self._exit_side
                          and rung_of(o['link_id'], self.botid) is not None}
-        desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
-                            resting_exits)
+        if cfg['strategy'] == 'martingale':
+            desired = plan_martingale(cfg, adapter, self._anchor or basis or ref,
+                                      ref, held)
+        else:
+            desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
+                                resting_exits)
         live = window(desired, ref, cfg['place_within_pct'])          # W1
         to_cancel, _ = diff(desired, truth['orders'], self.botid)     # full
         _, to_create = diff(live, truth['orders'], self.botid)        # windowed
@@ -245,7 +325,7 @@ class Bot:
                 if e.kind not in ('ro_capacity', 'post_only_reject'):
                     self.notify.event('warn', self.botid, f'place: {e}')
 
-        sellable = held and abs(held) > 0
+        sellable = held and abs(held) > 0 and cfg['strategy'] == 'grid'
         has_exits = any(o['side'] == self._exit_side for o in desired)
         if sellable and not has_exits:             # S5: state, warned once
             if not self._uncovered_warned:
