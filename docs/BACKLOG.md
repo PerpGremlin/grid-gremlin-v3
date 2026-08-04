@@ -31,12 +31,7 @@ both cited here when they happen. Nothing on this list blocks the current soak.
   fixture-fed; a kline-fetch convenience would let it run on fresh venue data
   from the CLI.
 
-## 3. Reporting and measurement
-
-- **Soak readout doctrine** — define what the A/B fleets must show, and for how
-  long, before a parameter question is called. Measure before theorising.
-
-## 4. Ops layer (v2 had these; v3 does not yet)
+## 3. Ops layer (v2 had these; v3 does not yet)
 
 - **The relay** — inbound Telegram: ask the fleet a question, get a read-only
   answer. v2's relay still runs and serves during the transition.
@@ -45,17 +40,14 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 - **Agentic range-review** — routine "is this range still sane" as an ops
   health-check task, not engine code (D10's closing note).
 
-## 5. Built but not yet exercised live
+## 4. Built but not yet exercised live
 
 - **Inverse** — the adapter and specs exist; no soak bot has traded an
   inverse contract live. (Spot closed by the LTC grid, PR #37 / SPEC V6.)
 - **`watch: position_sl` and server-side partial SL** (X2/X3) — specced and
   shipped; no soak bot has yet fired one live end-to-end.
-- **D21 on Hyperliquid, live proof** — the venue-resting martingale exit is in
-  the testnet fleet; the round opens when the venue's current testnet outage
-  ends. In flight, not done.
 
-## 6. Owner-gated — not buildable, only decidable
+## 5. Owner-gated — not buildable, only decidable
 
 - **Promotion criteria** — what the soak must show (duration, finding-rate
   decay, incident-free watchdog record) before v3 touches real funds. Worth

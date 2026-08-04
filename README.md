@@ -225,6 +225,7 @@ skipped with a warning; unknown marks print `—`, never a guess (R5).
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | the dissection of v2 that started it all |
 | [docs/PLAN.md](docs/PLAN.md) | the sixteen build slices, all ticked |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
+| [docs/SOAK.md](docs/SOAK.md) | the experiment registry and its call conditions |
 | [docs/research/](docs/research/) | the evidence trail |
 
 *This repo is public and deliberately carries no account figures, no live position

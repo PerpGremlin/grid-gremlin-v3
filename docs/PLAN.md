@@ -161,6 +161,12 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: the spot bot rests a ladder on the venue and the readout
       attributes its fills ✓
 
+- [x] **22 — the soak readout doctrine** *(docs/SOAK.md)*
+      metrics, instruments, minimum samples, and call conditions for every
+      experiment on the board; no mid-experiment config edits; the doctrine
+      is the experiment registry.
+      done when: every running A/B has a written call condition ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing
