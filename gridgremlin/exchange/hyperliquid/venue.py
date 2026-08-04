@@ -24,6 +24,7 @@ def _b36(n):
 
 class HLVenueClient(ExchangeClient):
     env_label = 'hyperliquid'
+    hosts_position_tp = False    # D21: the round exit is a resting order here
 
     def __init__(self, **kw):
         super().__init__(**kw)

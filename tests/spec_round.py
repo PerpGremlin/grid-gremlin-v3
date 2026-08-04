@@ -130,3 +130,77 @@ def spec_M5_repeat_off_round_complete_kills():
     assert bot.alive is False
     assert venue.orders == []                         # stale safeties cancelled
     assert any('round complete' in ln for ln in lines)
+
+
+# --- D21: the venue-resting exit (HL-style, hosts_position_tp=False) ---------
+
+class FakeHLRound(FakeVenue):
+    hosts_position_tp = False
+
+    def set_trading_stop(self, *a, **kw):
+        raise AssertionError('a capability-less venue must never be asked')
+
+
+def _hl_bot(venue, lines, **over):
+    from gridgremlin.apply import make_botid
+    cfg = _cfg(venue='hyperliquid', **over)
+    return Bot(cfg, ADAPTER, venue, Notifier(sink=lines.append), gen_seed=1)
+
+
+def spec_D21_round_exit_rests_as_reduce_only_order():
+    venue, lines = FakeHLRound(), []
+    bot = _hl_bot(venue, lines)
+    bot.cycle()                                        # base at market
+    bot.cycle()                                        # TP + ladder
+    tps = [o for o in venue.orders
+           if o['reduce_only'] and o['side'] == 'Sell']
+    assert len(tps) == 1
+    assert abs(tps[0]['price'] - 60000.0 * 1.01) < 0.11
+    assert tps[0]['link_id'].startswith('linBTCUSDTl-0-')   # rung 0 reserved
+    assert any('TP resting' in ln for ln in lines)
+
+
+def spec_D21_the_diff_never_cancels_the_round_exit():
+    venue, lines = FakeHLRound(), []
+    bot = _hl_bot(venue, lines)
+    bot.cycle()
+    bot.cycle()
+    counts = bot.cycle()                               # steady state
+    assert counts['cancels'] == 0
+    assert sum(1 for o in venue.orders
+               if o['reduce_only'] and o['side'] == 'Sell') == 1
+
+
+def spec_D21_restart_adopts_the_resting_exit_by_identity():
+    venue, lines = FakeHLRound(), []
+    _hl_bot(venue, lines).cycle() or _hl_bot(venue, lines)
+    first = _hl_bot(venue, lines)
+    first.cycle()
+    first.cycle()
+    n_orders = len(venue.orders)
+    fresh = _hl_bot(venue, lines)                      # a new process
+    fresh.cycle()
+    tps = [o for o in venue.orders
+           if o['reduce_only'] and o['side'] == 'Sell']
+    assert len(tps) == 1 and len(venue.orders) == n_orders   # M6: believed
+
+
+def spec_D21_deepening_fill_refreshes_the_resting_exit():
+    venue, lines = FakeHLRound(), []
+    bot = _hl_bot(venue, lines)
+    bot.cycle()
+    bot.cycle()
+    s1 = next(o for o in venue.orders
+              if o['side'] == 'Buy' and not o['reduce_only'])
+    old_size = float(venue.position['size'])
+    add = float(s1['qty'])
+    new_avg = (60000.0 * old_size + s1['price'] * add) / (old_size + add)
+    venue.orders = [o for o in venue.orders if o is not s1]
+    venue.position = dict(venue.position, size=str(old_size + add),
+                          avgPrice=str(new_avg))
+    bot.cycle()
+    tps = [o for o in venue.orders
+           if o['reduce_only'] and o['side'] == 'Sell']
+    assert len(tps) == 1
+    assert abs(tps[0]['price'] - ADAPTER.round_price(new_avg * 1.01)) < 0.11
+    assert abs(float(tps[0]['qty']) - (old_size + add)) < 1e-9

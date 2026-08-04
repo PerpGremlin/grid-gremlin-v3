@@ -189,9 +189,18 @@ class Bot:
             self._last_pos = 0.0
             return {'round_started': self._round + 1}
 
-        # holding: the round is never without an exit (M3)
+        # holding: the round is never without a venue-resting exit (M3/D21)
         target = self._round_target(basis)
-        venue_tp = truth['positions'].get(idx, {}).get('take_profit')
+        hosted = getattr(self.client, 'hosts_position_tp', True)
+        tp_order = None
+        if hosted:
+            venue_tp = truth['positions'].get(idx, {}).get('take_profit')
+        else:
+            tp_order = next(
+                (o for o in truth['orders']
+                 if o['reduce_only'] and o['side'] == self._exit_side
+                 and rung_of(o['link_id'], self.botid) == 0), None)
+            venue_tp = tp_order['price'] if tp_order else None
         through = (truth['mark'] >= target if cfg['side'] == 'long'
                    else truth['mark'] <= target)
         if venue_tp is None and through:
@@ -209,12 +218,29 @@ class Bot:
         grew = self._last_pos is not None and abs(held) > abs(self._last_pos)
         if venue_tp is None or grew:
             try:
-                self.client.set_trading_stop(cfg['market_type'], cfg['symbol'],
-                                             idx,
-                                             take_profit=adapter.fmt_price(target))
+                if hosted:
+                    self.client.set_trading_stop(
+                        cfg['market_type'], cfg['symbol'], idx,
+                        take_profit=adapter.fmt_price(target))
+                else:                        # D21: the venue-resting exit
+                    if tp_order is not None:
+                        try:
+                            self.client.cancel_order(cfg['market_type'],
+                                                     cfg['symbol'],
+                                                     tp_order['order_id'])
+                        except VenueError as e:
+                            if e.kind != 'gone':
+                                raise
+                    self._gen += 1
+                    self.client.place_order(
+                        cfg['market_type'], cfg['symbol'], self._exit_side,
+                        adapter.fmt_qty(abs(held)), adapter.fmt_price(target),
+                        self._make_link(0),
+                        adapter.position_idx(self._exit_side, True) or 0,
+                        reduce_only=True, post_only=False)
                 if venue_tp is None:
                     self.notify.event('tp', self.botid,
-                                      f'round TP set: {target:.10g}')
+                                      f'round TP resting: {target:.10g}')
             except VenueError as e:
                 self.notify.event('warn', self.botid, f'tp: {e}')
         return None
@@ -359,6 +385,13 @@ class Bot:
                          for o in truth['orders']
                          if o['side'] == self._exit_side
                          and rung_of(o['link_id'], self.botid) is not None}
+        orders_view = truth['orders']
+        if (cfg['strategy'] == 'martingale'
+                and not getattr(self.client, 'hosts_position_tp', True)):
+            orders_view = [o for o in orders_view       # D21: rung 0 is the
+                           if not (o['reduce_only']      # round exit — shielded
+                                   and o['side'] == self._exit_side
+                                   and rung_of(o['link_id'], self.botid) == 0)]
         if cfg['strategy'] == 'martingale':
             desired = plan_martingale(cfg, adapter, self._anchor or basis or ref,
                                       ref, held)
@@ -366,8 +399,8 @@ class Bot:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
                                 resting_exits)
         live = window(desired, ref, cfg['place_within_pct'])          # W1
-        to_cancel, _ = diff(desired, truth['orders'], self.botid)     # full
-        _, to_create = diff(live, truth['orders'], self.botid)        # windowed
+        to_cancel, _ = diff(desired, orders_view, self.botid)         # full
+        _, to_create = diff(live, orders_view, self.botid)            # windowed
         amends, cancels, creates = pair_amends(to_cancel, to_create, self.botid)
 
         for order, want in amends:

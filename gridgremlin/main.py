@@ -102,11 +102,11 @@ def build_fleet(fleet_path, notifier):
         identities.append((bot.botid, bot_identity(cfg, adapter)))
         if venue == 'bybit' and cfg['market_type'] == 'linear':
             client.ensure_hedge_mode(cfg['market_type'], cfg['symbol'])
-            _ensure_capacity(client, cfg, adapter, notifier)
         elif venue == 'hyperliquid':
             client.update_leverage(client._entry(cfg['symbol'])[0],
                                    int(cfg['leverage']))
         bots.append(bot)
+    _ensure_symbol_capacity(clients, bots, notifier)
     check_fleet_unique(identities)
     if not fleet.get('watchdog'):
         raise ConfigError("the fleet has no 'watchdog' config — nothing "
@@ -126,26 +126,39 @@ def build_fleet(fleet_path, notifier):
     return fleet, clients, bots
 
 
-def _ensure_capacity(client, cfg, adapter, notifier):
-    """Risk-limit tier to fit the full ladder; symbol leverage to the config's,
-    clamped to the tier's max. The worst case is typed before trading."""
-    tiers = client.risk_limit_tiers(cfg['market_type'], cfg['symbol'])
-    need = cfg['ladder_notional']
-    tier = next((t for t in tiers if need <= t['limit']), tiers[-1])
-    idx = adapter.position_idx('Buy' if cfg['side'] == 'long' else 'Sell', False)
-    try:
-        client.set_risk_limit(cfg['market_type'], cfg['symbol'],
-                              tier['id'], idx or 0)
-    except Exception as e:
-        notifier.event('warn', cfg['symbol'], f'risk limit: {e}')
-    lev = min(cfg['leverage'], tier['max_leverage'] or cfg['leverage'])
-    if lev != cfg['leverage']:
-        notifier.event('warn', cfg['symbol'],
-                       f"leverage clamped {cfg['leverage']:g} -> {lev:g} "
-                       f"(tier max at {need:,.0f} notional)")
-        cfg['leverage'] = lev
-    client.set_leverage(cfg['market_type'], cfg['symbol'], lev)
-    cfg['_tier_mm_rate'] = tier['mm_rate']
+def _ensure_symbol_capacity(clients, bots, notifier):
+    """Hedge-aware, ONCE per (venue, symbol): the risk tier fits the SUM of
+    both legs' ladders (a small hedge leg must never downgrade the big one —
+    the 110048 incident), and buy/sell leverage are set per leg."""
+    groups = {}
+    for b in bots:
+        if b.cfg['venue'] == 'bybit' and b.cfg['market_type'] == 'linear':
+            groups.setdefault(b.cfg['symbol'], []).append(b)
+    for symbol, legs in groups.items():
+        client = legs[0].client
+        need = sum(b.cfg['ladder_notional'] for b in legs)
+        tiers = client.risk_limit_tiers('linear', symbol)
+        tier = next((t for t in tiers if need <= t['limit']), tiers[-1])
+        for idx in {legs and 1, 2} & {1, 2}:
+            try:
+                client.set_risk_limit('linear', symbol, tier['id'], idx)
+            except Exception as e:
+                notifier.event('warn', symbol, f'risk limit: {e}')
+        buy = sell = None
+        for b in legs:
+            lev = min(b.cfg['leverage'], tier['max_leverage'] or b.cfg['leverage'])
+            if lev != b.cfg['leverage']:
+                notifier.event('warn', symbol,
+                               f"{b.botid}: leverage clamped "
+                               f"{b.cfg['leverage']:g} -> {lev:g} (tier max at "
+                               f'{need:,.0f} symbol notional)')
+                b.cfg['leverage'] = lev
+            if b.cfg['side'] == 'long':
+                buy = lev
+            else:
+                sell = lev
+            b.cfg['_tier_mm_rate'] = tier['mm_rate']
+        client.set_leverage('linear', symbol, buy or sell, sell or buy)
 
 
 def _project_margin(clients, cfgs, notifier):

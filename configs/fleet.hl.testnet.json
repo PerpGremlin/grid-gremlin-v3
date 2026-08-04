@@ -1,5 +1,5 @@
 {
-  "_note": "HL TESTNET fleet: long+short grids across coins (HL is one-way, so hedging happens across symbols). Sized against the ~999 mock USDC like real capital. Martingale refused on HL this phase (M3).",
+  "_note": "HL TESTNET fleet: long+short grids across coins (HL is one-way, so hedging happens across symbols). Sized against the ~999 mock USDC like real capital. Martingale runs here via the venue-resting exit (D21).",
   "watchdog": "configs/watchdog.hl.testnet.json",
   "poll_seconds": 5,
   "bots": [
@@ -66,6 +66,21 @@
         "watch": "mark_price",
         "level": 0.077
       }
+    },
+    {
+      "venue": "hyperliquid",
+      "strategy": "martingale",
+      "market_type": "linear",
+      "symbol": "XRP",
+      "side": "long",
+      "capital": 80,
+      "leverage": 3,
+      "base_order_size": 35,
+      "safety_order_size": 35,
+      "order_size_multiplier": 1.5,
+      "deviation_pct": 0.01,
+      "max_averaging_orders": 2,
+      "take_profit_avg_pct": 0.01
     }
   ]
 }
