@@ -33,12 +33,12 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       spacing/guard check fires on the true minimum gap ✓ (53 specs total)
       NOT here: exits, caps, martingale
 
-- [ ] **4 — the exit ladder, the caps, the entry guard** (pure)
+- [x] **4 — the exit ladder, the caps, the entry guard** (pure) *(PR #11)*
       builds: G7–G10, G12, G13's plan-level half (G4 decided: ref-priced lot)
       done when: the start-matrix rows for flat and simple-adopt fixtures green;
       sabotage specs (T1) prove G7, G9 and G13 can fail — incl. the two adoption
       cases: in-profit emits no sell below ref, underwater emits no order between
-      mark and basis
+      mark and basis ✓ (68 specs total)
 
 - [ ] **5 — the martingale as data** (pure)
       builds: M1, M2, M5, M8 (3Commas vocabulary per D11; no range bounds)

@@ -6,6 +6,7 @@
 # a function of config alone: price never moves it (G1, E4).
 
 import math
+from decimal import Decimal
 
 FEE_FLOOR_PCT = 0.001    # G6: an exit must clear costs; a constant, not a knob
 CROSS_GUARD_BPS = 5.0    # B3/B8: one definition; the placer imports THIS one
@@ -95,3 +96,119 @@ def spacing_clears_guard(rungs, bid, ask):
     put the numbers in the warning."""
     gap, guard = min_gap(rungs), guard_band(bid, ask)
     return gap >= SPACING_GUARD_MULTIPLE * guard, gap, guard
+
+
+# --- the plan level: caps, the exit ladder, the entry guard (G7-G13) ---------
+
+UNBOUNDED = 'unbounded'
+
+
+def sellable_base(cfg, adapter, held_base):
+    """G9: what the exit ladder may cover — held minus the floor. NEVER the
+    same variable as held: conflating them once made a live ceiling cap+floor."""
+    return adapter.round_qty(max(0.0, abs(held_base) - cfg['min_position_base']))
+
+
+def position_cap(cfg, adapter, rungs):
+    """G10: the ceiling in base units. 'unbounded' -> None; absent -> the full
+    ladder (the position if every rung filled once)."""
+    cap = cfg.get('max_position_base')
+    if cap == UNBOUNDED:
+        return None
+    if cap is not None:
+        return float(cap)
+    notionals = rung_notionals(cfg)
+    return sum(adapter.qty_from_notional(nt, p) for nt, p in zip(notionals, rungs))
+
+
+def lots_free(cap, held_base, lot_qty):
+    """G10: whole lots of headroom under the cap, measured against HELD."""
+    if cap is None or lot_qty <= 0:
+        return None                                # unbounded
+    return max(0, int((cap - abs(held_base)) / lot_qty + 1e-9))
+
+
+def lots_held(sellable, lot_qty):
+    """G7's count: lots believed armed-and-filled, measured against SELLABLE —
+    grid inventory only, so a floored stack cannot suppress the entry ladder."""
+    if lot_qty <= 0:
+        return 0
+    return int(round(sellable / lot_qty))
+
+
+def exit_ladder(exits, sellable, lot_qty, adapter):
+    """G8: pour the sellable inventory one lot per eligible exit rung,
+    nearest-first; the last rung absorbs a 0.5-1.5 lot remainder rather than
+    minting a sub-lot dust rung; a share below the venue minimum walks outward
+    to the first placeable rung (long exits get cheaper to place going up, so
+    inventory is never silently dropped). Returns [(i, price, qty)].
+
+    The pour runs in INTEGER qty-steps: float subtraction plus flooring eats a
+    step per iteration — measured while writing this function's own spec."""
+    step = adapter.qty_step
+    if sellable <= 0 or not exits or lot_qty <= 0 or step <= 0:
+        return []
+    total = int(round(sellable / step))
+    lot_steps = max(1, int(round(lot_qty / step)))
+    if total <= 0:
+        return []
+
+    def qty(steps):
+        return float(Decimal(str(step)) * steps)
+
+    kept, remaining = [], total
+    for n, (i, price) in enumerate(exits):
+        if remaining <= 0:
+            break
+        dump = remaining * 2 <= lot_steps * 3 or n == len(exits) - 1
+        share = remaining if dump else lot_steps
+        if adapter.meets_minimum(qty(share), price):
+            kept.append([i, price, share])
+        elif kept:
+            kept[-1][2] += share
+        else:
+            continue        # sub-minimum with nothing kept yet: walk outward
+        remaining -= share
+        if dump:
+            break
+    if remaining > 0 and kept:
+        kept[-1][2] += remaining
+    return [(i, price, qty(s)) for i, price, s in kept]
+
+
+def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None):
+    """G12: the netted plan — a pure function of (config, ref, position,
+    basis). Entries below the ref beyond the suppressed prefix (G7), exits
+    covering the sellable inventory beyond the basis floor (G5/G6/G8), the cap
+    bounding accumulation (G10). No order it emits is marketable (G13's
+    plan-level half): entries only on the entry side of the ref, exits only
+    beyond the floor — both inherited from split().
+
+    Returns order dicts: {rung, side, price, qty, reduce_only}."""
+    rungs = grid_rungs(cfg, adapter)
+    parts = split(cfg['side'], rungs, split_ref, basis)
+    lot_qty = lot(cfg, adapter, split_ref)
+    sellable = sellable_base(cfg, adapter, held_base)
+    notionals = rung_notionals(cfg)
+
+    entry_side, exit_side = ('Buy', 'Sell') if cfg['side'] == 'long' else ('Sell', 'Buy')
+    exits_ro = cfg['market_type'] != 'spot'
+    orders = []
+
+    for i, price, qty in exit_ladder(parts['exits'], sellable, lot_qty, adapter):
+        orders.append({'rung': i, 'side': exit_side, 'price': price, 'qty': qty,
+                       'reduce_only': exits_ro})
+
+    free = lots_free(position_cap(cfg, adapter, rungs), held_base, lot_qty)
+    suppressed = lots_held(sellable, lot_qty)      # G7: the arming-order prefix
+    for i, price in parts['entries'][suppressed:]:
+        if free is not None and free <= 0:
+            break
+        qty = adapter.round_qty(adapter.qty_from_notional(notionals[i], price))
+        if qty <= 0 or not adapter.meets_minimum(qty, price):
+            continue
+        orders.append({'rung': i, 'side': entry_side, 'price': price, 'qty': qty,
+                       'reduce_only': False})
+        if free is not None:
+            free -= 1
+    return orders
