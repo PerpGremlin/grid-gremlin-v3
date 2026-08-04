@@ -13,6 +13,7 @@ import os
 from .events import Notifier, TelegramNotifier
 from .exchange.bybit.client import WriteClient
 from .exchange.bybit.truth import parse_instrument, read_wallet
+from .exchange.errors import VenueError
 from .exchange.env import load_env
 from .ladder import grid_rungs, position_cap
 from .watchdog import validate_watchdog
@@ -103,8 +104,12 @@ def build_fleet(fleet_path, notifier):
         if venue == 'bybit' and cfg['market_type'] == 'linear':
             client.ensure_hedge_mode(cfg['market_type'], cfg['symbol'])
         elif venue == 'hyperliquid':
-            client.update_leverage(client._entry(cfg['symbol'])[0],
-                                   int(cfg['leverage']))
+            try:
+                client.update_leverage(client._entry(cfg['symbol'])[0],
+                                       int(cfg['leverage']))
+            except VenueError as e:
+                notifier.event('warn', cfg['symbol'],
+                               f'leverage assert deferred (venue hiccup): {e}')
         bots.append(bot)
     _ensure_symbol_capacity(clients, bots, notifier)
     check_fleet_unique(identities)
