@@ -99,11 +99,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       snapshots; mainnet flag unreachable from the demo unit ✓ (180 specs; live
       watchdog run: ok, 0 breaches)
 
-- [ ] **15 — backtest parity and the v2 diff**
+- [x] **15 — backtest parity and the v2 diff** *(PR #22)*
       builds: T3, T4
       done when: trade-through fills + funding modelled; v3 `plan()` output diffed
       against v2 on shared fixtures with every divergence either intended-and-cited or
-      fixed
+      fixed ✓ (189 specs; v2 match exact on all fixtures, one cited D5 divergence)
 
 - [ ] **16 — the second venue: Hyperliquid** (D19)
       builds: A6's payoff, V-contract reuse
