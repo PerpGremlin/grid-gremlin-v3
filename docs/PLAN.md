@@ -105,9 +105,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       against v2 on shared fixtures with every divergence either intended-and-cited or
       fixed ✓ (189 specs; v2 match exact on all fixtures, one cited D5 divergence)
 
-- [ ] **16 — the second venue: Hyperliquid** (D19)
+- [x] **16 — the second venue: Hyperliquid** (D19) *(PR #23)*
       builds: A6's payoff, V-contract reuse
       done when: the venue spec suite passes against the second adapter unchanged
+      ✓ (199 specs; zero strategy files touched — the seam held; reads only,
+      writes and the HL key wait for promotion)
       NOT here: any strategy change — if one is needed, the seam failed and that's the
       finding
 

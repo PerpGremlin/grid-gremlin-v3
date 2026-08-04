@@ -29,6 +29,37 @@ scheduled cure, and now have a live fixture to verify against.
 
 **Next.** Slice 9 — the earned guards.
 
+## 2026-08-04 — the build completes: slices 9-16
+
+**Done.** The second half of the checklist in one continuous run, each slice a merged
+PR, the suite growing 115 -> 199 specs: the earned guards (each with its incident as a
+sabotage spec), split hysteresis (the slice-8 live churn, cured and pinned), the start
+matrix (seed built; involuntary flat decided into existence), the martingale round
+(TP-as-venue-truth — the restart-rewrites-a-round bug class deleted by architecture),
+stops (flatten-and-kill, the floor core provably surviving; server-side partial SL —
+the liquidation study's #1 TAKE, finally real), fleet and watchdog (validated, coverage
+both ways, one-process lock, the dead visible), backtest parity (trade-through, funding,
+the honesty case), and the finale: Hyperliquid across the seam.
+
+**The two proofs that close the project's argument.** T4: v3's planner diffed against
+v2's actual code on shared fixtures — exact match everywhere except the single divergence
+a decision ordered (D5), cited by number. A6: the second venue landed without touching
+one strategy file, pinned by a source scan; the HL adapter inherits the linear maths as
+the SAME function objects. The vocabulary held; the seams held.
+
+**Safety note.** The HL package is read-only by construction — no signing code exists in
+v3 and the private key was never copied; the owner manages real positions on that
+account, and v3 can only look.
+
+**Caught this half.** The exit-link tracker that would have killed a bot on a fast
+harvest; the pour's float-floor step loss; JSON stringifying position keys so the v2
+diff harness saw no position (partial truth in miniature); and a steady drumbeat of my
+own spec arithmetic corrected by the code it was testing.
+
+**Next.** The engine is feature-complete against SPEC. What remains before promotion is
+operational: soak time on demo, the deferred list (D15), HL writes when the owner says
+so, and the owner's own reading of all twenty-three PRs.
+
 ## 2026-08-04 — decisions day
 
 **Done.** The owner read the full pre-build surface and answered every open call —
