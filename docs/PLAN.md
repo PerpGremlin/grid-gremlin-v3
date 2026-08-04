@@ -27,10 +27,10 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       qty-from-notional, position_idx all green; no network anywhere in the module
       ✓ (38 specs total)
 
-- [ ] **3 — the lattice, the lot, the split** (pure)
+- [x] **3 — the lattice, the lot, the split** (pure) *(PR #10)*
       builds: G1–G6, B8, E1, E4
       done when: hand-computed golden ladders match; prefix-stability spec green;
-      spacing/guard check fires on the true minimum gap
+      spacing/guard check fires on the true minimum gap ✓ (53 specs total)
       NOT here: exits, caps, martingale
 
 - [ ] **4 — the exit ladder, the caps, the entry guard** (pure)
