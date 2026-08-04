@@ -1,6 +1,8 @@
 # Alignment — what a grid is, what a martingale is, and every way one starts
 
-**Status: discussion draft, 2026-08-03. Nothing here is decided until the owner marks it.**
+**Status: superseded 2026-08-04 — every ⚠ DECIDE below is resolved in `DECISIONS.md`,
+and where this draft conflicts with it (notably "the bot never closes a position",
+overturned by D1), DECISIONS and `SPEC.md` win. Kept for the reasoning trail.**
 Written from the full v2 reading: the code dissection (`CONCEPTS.md`, PR #1), the design
 docs (BOTS, DESIGN, GRID-MATHS, OPERATING), the research corpus (PRIOR_ART + five studies),
 the testing logs, and the changelog/commit history. Where a claim has a source it is cited

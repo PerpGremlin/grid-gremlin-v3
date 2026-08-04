@@ -5,6 +5,33 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-08-04 — decisions day
+
+**Done.** The owner read the full pre-build surface and answered every open call —
+first in a written response, then a four-question follow-up for the two items that
+needed explanation (the lot's anchor, the bad-row policy) and the two conflicts worth
+surfacing (stop scope vs the floor core, deadband knob vs emergent behaviour). All
+twenty decisions recorded in `DECISIONS.md`; every ⚠ DECIDE in SPEC resolved in place;
+all sixteen PLAN slices unblocked, venue order fixed (Bybit → Hyperliquid).
+
+**Decided — the headlines.** A stop is now the off button: flatten grid inventory (the
+floor core survives), cancel, kill, never restart — deliberately overturning v2's
+"the bot never closes a position." The deadband ships as zero keys: the dissolving
+suppression the owner described is exactly what the replenish invariant plus the floor
+already produce. The martingale adopts 3Commas vocabulary wholesale and loses its range
+bounds (depth derives from the deviation schedule; risk stated as required capital).
+Trail is deleted. Seeding is a flat-start toggle, market-order, sized by where the mark
+sits in the range. A bad fleet row refuses the whole fleet.
+
+**Noticed.** Three of the owner's answers dissolved questions rather than picking
+options: the deadband description turned out to be the entry-guard invariant restated,
+the 3Commas adoption made the martingale's cap/floor/naming questions moot, and "call
+them safety orders" was the field's own answer. Decisions that remove concepts beat
+decisions that configure them.
+
+**Next.** Freeze the v2→v3 migration map (method step 2) from CONCEPTS + DECISIONS,
+then PLAN slice 0.
+
 ## 2026-08-03 — dissection day
 
 **Done.**
