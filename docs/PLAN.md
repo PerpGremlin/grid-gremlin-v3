@@ -93,10 +93,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       done when: each stop path's on-venue residue is specced; server-side refuses
       where unsupported; the floor core provably survives a stop ✓ (166 specs)
 
-- [ ] **14 — fleet and watchdog**
+- [x] **14 — fleet and watchdog** *(PR #21)*
       builds: F1–F6, E3's snapshot half
       done when: both-ways bot/watchdog coverage spec green; dead bots visible in
-      snapshots; mainnet flag unreachable from the demo unit
+      snapshots; mainnet flag unreachable from the demo unit ✓ (180 specs; live
+      watchdog run: ok, 0 breaches)
 
 - [ ] **15 — backtest parity and the v2 diff**
       builds: T3, T4

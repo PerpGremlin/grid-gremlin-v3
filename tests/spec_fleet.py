@@ -1,0 +1,162 @@
+# Specs for SPEC F1-F6 — coverage both ways, the lock, snapshots incl. the
+# dead, the mainnet absence, the watchdog's own validator and transitions.
+
+import tempfile
+
+from gridgremlin.config import ConfigError
+from gridgremlin.main import (acquire_fleet_lock, check_watchdog_coverage,
+                              refuse_mainnet, snapshot_row)
+from gridgremlin.watchdog import (decide, evaluate, peak_equity,
+                                  validate_watchdog)
+
+WD = {'tag': 't', 'snapshot': 's.jsonl', 'state': 'st.json',
+      'staleness_seconds': 1000, 'mm_rate_max': 0.5, 'equity_min': 1000,
+      'equity_drawdown_max': 0.25, 're_alert_seconds': 1800,
+      'assumes_sole_actor': True,
+      'positions': {'botA': {'min': 0, 'max': 12.0}}}
+
+
+def _wd(**over):
+    d = dict(WD)
+    d.update(over)
+    return validate_watchdog(d)
+
+
+def _refused(fn, *args, frag=''):
+    try:
+        fn(*args)
+    except ConfigError as e:
+        assert frag in str(e), str(e)
+        return
+    raise AssertionError(f'accepted, expected refusal with {frag!r}')
+
+
+# --- F1: coverage, both ways -------------------------------------------------
+
+def spec_F1_an_unwatched_bot_refuses_the_fleet():
+    _refused(check_watchdog_coverage, [('botB', 10.0)], _wd(),
+             frag='nothing trades unwatched')
+
+
+def spec_F1_a_stale_watchdog_entry_also_refuses():
+    _refused(check_watchdog_coverage, [], _wd(), frag='stale entry')
+
+
+# --- F2: ceilings pinned near the cap ----------------------------------------
+
+def spec_F2_a_decorative_ceiling_refuses():
+    _refused(check_watchdog_coverage, [('botA', 2.0)], _wd(),
+             frag='cap itself failed')       # 12.0 vs cap 2.0: decorative
+    _refused(check_watchdog_coverage, [('botA', 20.0)], _wd(),
+             frag='cap itself failed')       # 12.0 below cap 20.0: absurd
+    check_watchdog_coverage([('botA', 10.0)], _wd())   # 12.0 in [10, 15]: fine
+
+
+def spec_F2_martingales_skip_the_cap_check_but_not_coverage():
+    check_watchdog_coverage([('botA', None)], _wd())
+
+
+# --- F3: one fleet process per account ---------------------------------------
+
+def spec_F3_the_second_process_refuses():
+    with tempfile.NamedTemporaryFile() as f:
+        first = acquire_fleet_lock(f.name)
+        _refused(acquire_fleet_lock, f.name, frag='one fleet per account')
+        first.close()
+        acquire_fleet_lock(f.name).close()   # released -> acquirable again
+
+
+# --- F4: the dead are visible ------------------------------------------------
+
+class _DeadBot:
+    botid, alive, _last_pos = 'botA', False, 0.0
+
+
+class _LiveBot:
+    botid, alive, _last_pos = 'botB', True, 0.021
+
+
+def spec_F4_snapshots_include_dead_bots():
+    row = snapshot_row([_DeadBot(), _LiveBot()],
+                       {'equity': 5000.0, 'mm_rate': 0.01}, now=123.0)
+    assert row['bots']['botA'] == {'alive': False, 'position': 0.0}
+    assert row['bots']['botB']['alive'] is True
+
+
+def spec_F4_dead_but_present_is_not_missing():
+    cfg = _wd()
+    row = {'t': 100.0, 'equity': 5000.0, 'mm_rate': 0.01,
+           'bots': {'botA': {'alive': False, 'position': 0.0}}}
+    assert 'missing:botA' not in evaluate(cfg, row, now=100.0, peak=5000.0)
+    gone = dict(row, bots={})
+    assert 'missing:botA' in evaluate(cfg, gone, now=100.0, peak=5000.0)
+
+
+# --- F5: mainnet is an absence -----------------------------------------------
+
+def spec_F5_mainnet_refuses_at_build():
+    class _Client:
+        env = 'mainnet'
+    _refused(refuse_mainnet, _Client(), frag='no mainnet path')
+
+
+# --- F6 and the watchdog's own validator -------------------------------------
+
+def spec_F6_the_assumption_set_is_typed_not_prose():
+    bare = dict(WD)
+    del bare['assumes_sole_actor']
+    _refused(validate_watchdog, bare, frag='assumes_sole_actor')
+
+
+def spec_watchdog_config_is_refused_like_everything_else():
+    _refused(validate_watchdog, dict(WD, staleness_secondss=5),
+             frag='unknown key')
+    _refused(validate_watchdog, dict(WD, positions={}), frag='positions')
+
+
+# --- evaluate: the breach set ------------------------------------------------
+
+def _row(**over):
+    row = {'t': 1000.0, 'equity': 5000.0, 'mm_rate': 0.1,
+           'bots': {'botA': {'alive': True, 'position': 5.0}}}
+    row.update(over)
+    return row
+
+
+def spec_evaluate_stale_mmr_equity_and_bounds():
+    cfg = _wd()
+    assert evaluate(cfg, None, 0, None) == {'nosnap': 'no readable snapshot row'}
+    assert 'stale' in evaluate(cfg, _row(), now=2500.0, peak=5000.0)
+    assert 'mmr' in evaluate(cfg, _row(mm_rate=0.6), 1000.0, 5000.0)
+    assert 'equity' in evaluate(cfg, _row(equity=900.0), 1000.0, 5000.0)
+    bots = {'botA': {'alive': True, 'position': 13.0}}
+    assert 'pos:botA' in evaluate(cfg, _row(bots=bots), 1000.0, 5000.0)
+    assert evaluate(cfg, _row(), 1000.0, 5000.0) == {}
+
+
+def spec_evaluate_drawdown_measures_from_the_peak():
+    cfg = _wd()
+    assert 'drawdown' in evaluate(cfg, _row(equity=3000.0), 1000.0, peak=5000.0)
+    assert 'drawdown' not in evaluate(cfg, _row(equity=4000.0), 1000.0, 5000.0)
+
+
+def spec_peak_equity_none_is_unknown_never_zero():
+    # v2's falsy sentinel silently disabled the drawdown check (M30)
+    assert peak_equity(None, None) is None
+    assert peak_equity(None, 5000.0) == 5000.0
+    assert peak_equity(5000.0, None) == 5000.0
+    assert peak_equity(5000.0, 6000.0) == 6000.0
+    assert peak_equity(6000.0, 5000.0) == 6000.0       # monotone
+
+
+# --- decide: page, remind, recover -------------------------------------------
+
+def spec_decide_pages_new_reminds_on_interval_announces_recovery():
+    pages, state = decide({}, {'mmr': 'x'}, now=0.0, re_alert_seconds=1800)
+    assert pages == ['mmr: x']
+    pages, state = decide(state, {'mmr': 'x'}, now=60.0, re_alert_seconds=1800)
+    assert pages == []                                  # inside the interval
+    pages, state = decide(state, {'mmr': 'x'}, now=1900.0, re_alert_seconds=1800)
+    assert pages == ['still breached — mmr: x']
+    pages, state = decide(state, {}, now=2000.0, re_alert_seconds=1800)
+    assert pages == ['recovered: mmr'] and state == {}

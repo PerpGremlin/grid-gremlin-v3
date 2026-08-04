@@ -24,5 +24,6 @@
       "rungs": 41,
       "split_hysteresis_rungs": 0.3
     }
-  ]
+  ],
+  "watchdog": "configs/watchdog.demo.json"
 }
