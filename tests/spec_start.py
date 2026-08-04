@@ -223,3 +223,58 @@ def spec_I5_the_seed_order_carries_an_owned_link():
     bot = _bot(venue, lines, seed=True)
     assert bot.cycle() == {'seeded': True}
     assert rung_of(venue.market_links[0], bot.botid) == 0
+
+
+# --- V6/G6: the config basis is a fallback — a venue-reported basis wins -----
+# v2's lesson: demo/spot venues may keep no basis; that is WHY the config
+# field exists. Where the venue does report one, truth overrules the config.
+
+class SpotVenue(FakeVenue):
+    holding = 10.0
+    basis_reported = None          # a venue that DOES report basis, for B
+
+    def read_symbol_truth(self, market_type, symbol, funding_interval=480.0):
+        from gridgremlin.exchange.bybit.truth import read_symbol_truth
+        t = read_symbol_truth(self, market_type, symbol, funding_interval,
+                              base_coin='LTC')
+        if self.basis_reported is not None and t['positions']:
+            t['positions'][0]['avg_entry'] = self.basis_reported
+        return t
+
+    def wallet_balance(self):
+        return {'list': [{'totalEquity': '1000', 'coin': [
+            {'coin': 'LTC', 'walletBalance': str(self.holding),
+             'equity': '440', 'availableToWithdraw': str(self.holding)}]}]}
+
+
+SPOT_ADAPTER = None
+
+
+def _spot_bot(venue, lines, **over):
+    from gridgremlin.adapters import SpotAdapter
+    adapter = SpotAdapter({'symbol': 'LTCUSDT', 'qty_step': 0.00001,
+                           'price_tick': 0.01, 'min_qty': 0.00001,
+                           'min_notional': 5.0, 'settle_coin': 'USDT'})
+    row = {'market_type': 'spot', 'symbol': 'LTCUSDT', 'side': 'long',
+           'capital': 3000.0, 'upper': 52.0, 'lower': 36.0, 'rungs': 17,
+           'place_within_pct': 0.2}
+    row.update(over)
+    return Bot(validate_config(row), adapter, venue,
+               Notifier(sink=lines.append), gen_seed=1)
+
+
+def spec_V6_venue_keeps_no_basis_the_config_field_serves():
+    venue = SpotVenue(mark=44.0)
+    bot = _spot_bot(venue, [], assumed_avg_entry=48.0)
+    bot.cycle()
+    sells = [o['price'] for o in venue.orders if o['side'] == 'Sell']
+    assert sells and all(p >= 48.0 * 1.001 for p in sells)   # config floor holds
+
+
+def spec_V6_a_venue_reported_basis_overrules_the_config():
+    venue = SpotVenue(mark=44.0)
+    venue.basis_reported = 40.0
+    bot = _spot_bot(venue, [], assumed_avg_entry=48.0)
+    bot.cycle()
+    sells = [o['price'] for o in venue.orders if o['side'] == 'Sell']
+    assert sells and min(sells) < 48.0             # truth won, config ignored

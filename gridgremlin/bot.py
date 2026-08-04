@@ -353,8 +353,8 @@ class Bot:
                                   'position on our index has the WRONG side — '
                                   'halting this bot until an operator looks')
             return {'anomaly': True}
-        if basis is None:
-            basis = cfg.get('assumed_avg_entry')
+        if basis is None:              # a venue-reported basis overrules the
+            basis = cfg.get('assumed_avg_entry')   # config field (V6, from v2)
 
         reason = self._stop_hit(truth, equity)          # X1: before everything
         if reason:
