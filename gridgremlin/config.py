@@ -255,9 +255,10 @@ def validate_grid(row, where='row'):
 
     cfg['stop'] = _validate_stop(cfg.get('stop'), where)
     if (cfg['stop'] and cfg['stop']['server_side']
-            and cfg['market_type'] == 'spot'):
-        _refuse(f"{where}.stop: server_side needs a derivatives venue — spot "
-                'has no position to attach a stop to')
+            and (cfg['market_type'] == 'spot'
+                 or cfg['venue'] == 'hyperliquid')):
+        _refuse(f"{where}.stop: server_side needs a venue that hosts "
+                'position-level stops — not spot, not hyperliquid (this phase)')
 
     # C4: the one derived value, written back once.
     eff = 1.0
@@ -274,6 +275,9 @@ def validate_martingale(row, where='row'):
     cfg = {k: v for k, v in row.items() if not k.startswith('_')}
 
     cfg['venue'] = _enum(cfg, 'venue', where, VENUES, default='bybit')
+    if cfg['venue'] == 'hyperliquid':
+        _refuse(f'{where}: the martingale is bybit-only this phase — its round '
+                'TP lives venue-side and HL cannot host one (M3)')
     cfg['market_type'] = _enum(cfg, 'market_type', where, ('linear',),
                                default='linear')
     if not isinstance(cfg.get('symbol'), str) or not cfg.get('symbol'):

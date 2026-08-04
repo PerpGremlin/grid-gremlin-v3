@@ -29,6 +29,19 @@ scheduled cure, and now have a live fixture to verify against.
 
 **Next.** Slice 9 — the earned guards.
 
+## 2026-08-04 — postscript: comms and the HL write path
+
+**Done.** Telegram keys ported and the sink built (coalesced, >=3s, order mechanics
+stay in the log — the July-30 channel lesson); first live message delivered. HL flipped
+to testnet-only structurally (mainnet unconstructible — the owner manages real
+positions there; the mainnet agent key was deliberately never copied). Then the owner
+provided a testnet agent key and the write path landed: v2's earned signing stack
+carried verbatim (SDK golden vectors pass bit-for-bit), the write client ported with
+v3 error kinds, a venue facade behind the Bot's unchanged surface — and the last
+venue coupling left the engine: bot.py now imports no venue at all. Live smoke on
+testnet: an order placed, rested, and cancelled by id. Faucet not yet claimed
+(equity 0) — the sized like-real-life testnet fleet waits on mock USDC.
+
 ## 2026-08-04 — the build completes: slices 9-16
 
 **Done.** The second half of the checklist in one continuous run, each slice a merged

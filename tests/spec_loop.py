@@ -28,6 +28,11 @@ class FakeVenue:
         self.position = None          # dict or None
         self._oid = 0
 
+    # the facade surface the Bot drives
+    def read_symbol_truth(self, market_type, symbol, funding_interval=480.0):
+        from gridgremlin.exchange.bybit.truth import read_symbol_truth
+        return read_symbol_truth(self, market_type, symbol, funding_interval)
+
     # reads (the truth functions call these)
     def tickers(self, category, symbol):
         return {'markPrice': str(self.mark), 'bid1Price': str(self.mark - 0.5),

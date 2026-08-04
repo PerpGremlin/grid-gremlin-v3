@@ -156,7 +156,7 @@ def spec_X3_refusals():
         _cfg(market_type='spot', side='long', leverage=None,
              stop={'watch': 'mark_price', 'level': 1500, 'server_side': True})
     except ConfigError as e:
-        assert 'derivatives' in str(e)
+        assert 'hosts' in str(e)
     else:
         raise AssertionError('spot server-side stop accepted')
 

@@ -70,22 +70,42 @@ def snapshot_row(bots, wallet, now):
 def build_fleet(fleet_path, notifier):
     load_env()
     fleet = validate_fleet(json.loads(Path(fleet_path).read_text()))
-    client = WriteClient()
-    refuse_mainnet(client)
-    bots, identities = [], []
+    clients, bots, identities = {}, [], []
     for cfg in fleet['bots']:
-        spec = parse_instrument(cfg['market_type'],
-                                client.instruments_info(cfg['market_type'],
-                                                        cfg['symbol']))
+        venue = cfg['venue']
+        if venue not in clients:
+            if venue == 'hyperliquid':
+                from .exchange.hyperliquid.venue import HLVenueClient
+                clients[venue] = HLVenueClient()      # testnet-only (F5)
+            else:
+                clients[venue] = WriteClient()
+                refuse_mainnet(clients[venue])
+        client = clients[venue]
+        if venue == 'hyperliquid':
+            entry = next(e for e in client.meta()['universe']
+                         if e['name'] == cfg['symbol'])
+            from .exchange.hyperliquid.truth import parse_instrument as hl_pi
+            spec = hl_pi(entry)
+            from .exchange.hyperliquid.adapters import HLPerpAdapter
+            adapter = HLPerpAdapter(spec)
+        else:
+            spec = parse_instrument(cfg['market_type'],
+                                    client.instruments_info(cfg['market_type'],
+                                                            cfg['symbol']))
+            adapter = adapter_for(cfg['market_type'], spec)
         cfg['funding_interval_minutes'] = spec['funding_interval_minutes']
-        adapter = adapter_for(cfg['market_type'], spec)
         check_placeable(cfg, adapter)
         bot = Bot(cfg, adapter, client, notifier, gen_seed=int(time.time()))
-        check_link_fits(bot.botid, cfg.get('rungs', 99), BYBIT_LINK_LIMIT)
+        limit = 16 if venue == 'hyperliquid' else BYBIT_LINK_LIMIT
+        chars = 4 if venue == 'hyperliquid' else 10
+        check_link_fits(bot.botid, cfg.get('rungs', 99), limit, gen_chars=chars)
         identities.append((bot.botid, bot_identity(cfg, adapter)))
-        if cfg['market_type'] == 'linear':
+        if venue == 'bybit' and cfg['market_type'] == 'linear':
             client.ensure_hedge_mode(cfg['market_type'], cfg['symbol'])
             _ensure_capacity(client, cfg, adapter, notifier)
+        elif venue == 'hyperliquid':
+            client.update_leverage(client._entry(cfg['symbol'])[0],
+                                   int(cfg['leverage']))
         bots.append(bot)
     check_fleet_unique(identities)
     if fleet.get('watchdog'):
@@ -95,11 +115,12 @@ def build_fleet(fleet_path, notifier):
                  if b.cfg['strategy'] == 'grid' else None)
                 for b in bots]
         check_watchdog_coverage(caps, wd)
+    envs = ', '.join(f'{v}:{c.env}' for v, c in clients.items())
     notifier.event('fleet', 'fleet',
-                   f"{len(bots)} bot(s) on {client.env}: "
+                   f'{len(bots)} bot(s) on {envs}: '
                    + ', '.join(b.botid for b in bots))
-    _project_margin(client, fleet['bots'], notifier)
-    return fleet, client, bots
+    _project_margin(clients, fleet['bots'], notifier)
+    return fleet, clients, bots
 
 
 def _ensure_capacity(client, cfg, adapter, notifier):
@@ -124,8 +145,8 @@ def _ensure_capacity(client, cfg, adapter, notifier):
     cfg['_tier_mm_rate'] = tier['mm_rate']
 
 
-def _project_margin(client, cfgs, notifier):
-    equity = read_wallet(client.wallet_balance())['equity']
+def _project_margin(clients, cfgs, notifier):
+    equity = sum(c.read_wallet()['equity'] for c in clients.values())
     if not equity:
         return
     mm = sum(c['ladder_notional'] * c.get('_tier_mm_rate', 0.005)
@@ -148,18 +169,21 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         snapshot=None, snapshot_every=60, lock_path=None):
     load_env()
     notifier = make_notifier()
-    fleet, client, bots = build_fleet(fleet_path, notifier)
-    lock = acquire_fleet_lock(lock_path
-                              or f'/tmp/gridgremlin.{client.env}.lock')
+    fleet, clients, bots = build_fleet(fleet_path, notifier)
+    lock_tag = '+'.join(f'{v}.{c.env}' for v, c in sorted(clients.items()))
+    lock = acquire_fleet_lock(lock_path or f'/tmp/gridgremlin.{lock_tag}.lock')
     try:
         notifier.ship_orders = (fleet['notify_orders'] if ship_orders is None
                                 else ship_orders)
         poll = poll_seconds or fleet['poll_seconds']
         n = 0
         while cycles is None or n < cycles:
-            wallet = read_wallet(client.wallet_balance())          # E8
+            wallets = {v: c.read_wallet() for v, c in clients.items()}   # E8
+            wallet = {'equity': sum(w['equity'] for w in wallets.values()),
+                      'mm_rate': max((w['mm_rate'] or 0.0)
+                                     for w in wallets.values())}
             for bot in bots:
-                counts = bot.cycle(equity=wallet['equity'])
+                counts = bot.cycle(equity=wallets[bot.cfg['venue']]['equity'])
                 if counts is not None:
                     print(f"cycle {n} {bot.botid}: {counts}", flush=True)
             if snapshot and n % snapshot_every == 0:

@@ -1,12 +1,20 @@
 # HL info client (reads only; writes arrive with promotion, keys stay in v2).
 import json
 import os
+import urllib.error
 import urllib.request
 
 from ..errors import VenueError
 
 BASE_URLS = {'mainnet': 'https://api.hyperliquid.xyz',
              'testnet': 'https://api.hyperliquid-testnet.xyz'}
+
+
+class HLError(VenueError):
+    def __init__(self, status, msg, body=None, ambiguous=False, kind='other'):
+        super().__init__(msg, kind=kind, ambiguous=ambiguous)
+        self.status = status
+        self.body = body or ''
 
 
 def detect_env():
@@ -54,3 +62,20 @@ class InfoClient:
     def open_orders(self, coin=None):
         return self._transport({'type': 'frontendOpenOrders',
                                 'user': self._user()})
+
+    def _post(self, path, body, retry_429=True):
+        """The write transport (stub point for specs)."""
+        data = json.dumps(body).encode()
+        req = urllib.request.Request(self.base + path, data=data,
+                                     headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            text = e.read().decode(errors='replace')[:300]
+            if e.code == 429 and retry_429:
+                import time as _t
+                _t.sleep(2.0)
+                return self._post(path, body, retry_429=False)
+            raise HLError(e.code, f'{path}: HTTP {e.code}: {text}', text,
+                          kind='rate_limit' if e.code == 429 else 'other')
