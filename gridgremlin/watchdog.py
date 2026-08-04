@@ -1,11 +1,15 @@
 # The watchdog (SPEC F1-F6). Pure evaluate/decide; the CLI pages before it
 # persists, so a failed page re-pages.
 import json
+import os
 import sys
 import time
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 from .config import ConfigError, _flag, _num, _reject_unknown
+from .exchange.env import load_env
 
 WATCHDOG_KEYS = ('tag', 'snapshot', 'state', 'staleness_seconds', 'mm_rate_max',
                  'equity_min', 'equity_drawdown_max', 're_alert_seconds',
@@ -102,7 +106,22 @@ def decide(state, breaches, now, re_alert_seconds):
     return pages, new_state
 
 
+def send_telegram(text):
+    """Direct page — the watchdog is its own process; a send failure RAISES so
+    state is never persisted over an undelivered page (it re-pages next tick,
+    and the unit's OnFailure alarm fires)."""
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
+    if not (token and chat):
+        return
+    data = urllib.parse.urlencode({'chat_id': chat, 'text': text}).encode()
+    urllib.request.urlopen(
+        f'https://api.telegram.org/bot{token}/sendMessage', data,
+        timeout=20).read()
+
+
 def main(argv):
+    load_env()
     cfg = validate_watchdog(json.loads(Path(argv[0]).read_text()))
     now = time.time()
     row = None
@@ -122,6 +141,8 @@ def main(argv):
                                cfg['re_alert_seconds'])
     for page in pages:                       # page BEFORE persisting: a failed
         print(f"[{cfg['tag']}] {page}", flush=True)   # page re-pages next tick
+    if pages:
+        send_telegram(f"[{cfg['tag']}] " + '\n'.join(pages))
     statep.write_text(json.dumps({'_peak': peak, '_alerts': new_alerts}))
     print(f"[{cfg['tag']}] {'BREACHED' if breaches else 'ok'} "
           f'({len(breaches)} breach(es))', flush=True)
