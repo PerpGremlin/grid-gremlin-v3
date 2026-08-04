@@ -64,9 +64,10 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       reduce-only exit one rung up; the #41 boundary churn reproduced as
       predicted -> slices 9/10)
 
-- [ ] **9 — the earned guards**
+- [x] **9 — the earned guards** *(PR #16)*
       builds: B3–B7, G13's placer/venue half (cross guard + post-only rejection path)
       done when: each guard's incident is a spec that fails with the guard removed
+      ✓ (126 specs; live fleet steady under guards)
       NOT here: split hysteresis
 
 - [ ] **10 — split hysteresis**
