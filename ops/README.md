@@ -10,7 +10,13 @@ real ones.
 1. `Restart=always` — crashes recover themselves.
 2. `OnFailure` → a rate-limited Telegram alert (one page per 30 min max — see
    the stamp-file comment in the template; the naive version paged once per
-   retry through a venue outage).
+   retry through a venue outage), then **read-only Claude triage**
+   (`ops/triage.sh <fleet>`): a headless diagnosis paged after the alert, so
+   the page arrives with a cause. Read-only is enforced by
+   `ops/triage-settings.json` passed to `claude --settings` — not by trust.
+   Needs `CLAUDE_CODE_OAUTH_TOKEN` (and optionally `CLAUDE_BIN`) in `.env`;
+   missing either degrades to a "triage unavailable" page, never silence.
+   Test with `TRIAGE_DRY=1 ops/triage.sh demo` (prints instead of paging).
 3. The watchdog on a timer — liveness by *output* (snapshot staleness, per-bot
    bounds, equity floor), catching the wedged-but-alive case restarts can't.
    Exit 1 = breached-and-paged = unit success (`SuccessExitStatus=1`); only a
