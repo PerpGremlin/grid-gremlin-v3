@@ -16,10 +16,10 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       builds: T5 groundwork · package layout, spec runner, CI-green empty suite
       done when: `tests/run.py` runs and reports zero specs, zero failures ✓
 
-- [ ] **1 — config doctrine**
+- [x] **1 — config doctrine** *(PR #8)*
       builds: C1–C7 (C6 decided: a bad row refuses the whole fleet)
       done when: refusal specs green incl. nested objects and near-miss hints; a
-      cannot-place config refuses with the reason
+      cannot-place config refuses with the reason ✓ (25 specs)
 
 - [ ] **2 — contract maths**
       builds: A1–A6
