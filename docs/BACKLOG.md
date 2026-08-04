@@ -33,8 +33,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 3. Ops layer (v2 had these; v3 does not yet)
 
-- **The relay** — inbound Telegram: ask the fleet a question, get a read-only
-  answer. v2's relay still runs and serves during the transition.
 - **Agentic range-review** — routine "is this range still sane" as an ops
   health-check task, not engine code (D10's closing note).
 

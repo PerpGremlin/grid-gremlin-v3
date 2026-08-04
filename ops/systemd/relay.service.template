@@ -1,0 +1,13 @@
+[Unit]
+Description=Grid Gremlin v3 relay — reads owner replies from Telegram, answers read-only
+# No OnFailure alarm ON PURPOSE (v2's reasoning carried): a relay that cannot
+# poll is an inconvenience, not an incident — fleets, watchdogs and the
+# OnFailure chain are unaffected. Paging for it would train the owner to
+# ignore the very channel this script depends on.
+
+[Service]
+Type=oneshot
+WorkingDirectory={{REPO_DIR}}
+ExecStart=/usr/bin/python3 ops/relay.py
+# it shells out to `claude -p`, which can take a while on a cold start
+TimeoutStartSec=420

@@ -23,6 +23,13 @@ real ones.
    crash or an undelivered page fails the unit and fires its own alert.
 4. Per-fleet timer slots (`*:4/5`, `*:1/5`, …) so ticks never queue behind
    each other on a small box.
+5. **The relay** (`ops/relay.py`, every-minute timer) — the inbound half:
+   the owner replies to a bot message (or sends a /command) on Telegram and
+   gets a read-only answer from the box, in the same settings cage as
+   triage. Owner-only (`TELEGRAM_OWNER_ID`, fail closed), persist-before-ack
+   inbox at `logs/inbox.jsonl`, single getUpdates consumer per bot token —
+   never run two relays on one token. `/vc` forces the box to answer even
+   when a workstation session is live. Deliberately no OnFailure alarm.
 
 ## Install
 
