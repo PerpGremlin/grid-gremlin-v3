@@ -184,3 +184,42 @@ def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None):
         if free is not None:
             free -= 1
     return orders
+
+
+# --- the martingale: the same maths, different data (M1, M2, M8) -------------
+
+def martingale_schedule(cfg):
+    """M2: [(notional, cumulative deviation)] — index 0 is the base order."""
+    k = cfg['order_size_multiplier']
+    s = cfg['deviation_step_multiplier']
+    d = cfg['deviation_pct']
+    out = [(cfg['base_order_size'], 0.0)]
+    cumdev = 0.0
+    for i in range(cfg['max_averaging_orders']):
+        cumdev += d * s ** i
+        out.append((cfg['safety_order_size'] * k ** i, cumdev))
+    return out
+
+
+def plan_martingale(cfg, adapter, base_price, split_ref, held_base=0.0):
+    """M1: safety orders from the schedule — cumulative-prefix suppression,
+    entry side only (G13), no exits (the round TP is slice 12). The base order
+    itself is lifecycle, not a resting rung."""
+    sign = -1.0 if cfg['side'] == 'long' else 1.0
+    entry_side = 'Buy' if cfg['side'] == 'long' else 'Sell'
+    orders, cum = [], 0.0
+    for n, (notional, cumdev) in enumerate(martingale_schedule(cfg)):
+        price = adapter.round_price(base_price * (1.0 + sign * cumdev))
+        qty = adapter.round_qty(adapter.qty_from_notional(notional, price))
+        cum += qty
+        if n == 0:
+            continue
+        if held_base >= cum - 1e-12:
+            continue
+        if (cfg['side'] == 'long') == (price >= split_ref):
+            continue
+        if qty <= 0 or not adapter.meets_minimum(qty, price):
+            continue
+        orders.append({'rung': n, 'side': entry_side, 'price': price,
+                       'qty': qty, 'reduce_only': False})
+    return orders

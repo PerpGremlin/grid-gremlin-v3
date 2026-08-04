@@ -231,5 +231,12 @@ def spec_assumed_avg_entry_is_spot_only():
     _refused(_row(assumed_avg_entry=60000), "'spot' only")
 
 
-def spec_martingale_rows_wait_for_slice_5():
-    _refused({'strategy': 'martingale', 'symbol': 'ETHUSDT'}, 'slice 5')
+def spec_martingale_rows_validate_with_their_own_keyset():
+    cfg = validate_config({'strategy': 'martingale', 'market_type': 'linear',
+                           'symbol': 'ETHUSDT', 'side': 'short',
+                           'capital': 500.0, 'leverage': 5,
+                           'base_order_size': 200.0, 'safety_order_size': 200.0,
+                           'deviation_pct': 0.02, 'max_averaging_orders': 3})
+    assert cfg['strategy'] == 'martingale'
+    assert cfg['ladder_total_notional'] == 800.0
+    _refused({'strategy': 'martingale', 'symbol': 'ETHUSDT'})  # side etc. required
