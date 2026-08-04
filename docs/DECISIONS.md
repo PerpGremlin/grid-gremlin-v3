@@ -33,6 +33,29 @@ stands unless the owner corrects it.
   produce**, so it ships as emergent behaviour with zero keys. `no_trade_pct`,
   `entry_deadband_pct`, `exit_deadband_pct` and the ratchet are retired. The 0.1% fee
   floor stays a constant.
+
+  *Why adoption is safe without the knob* (owner asked, 2026-08-04). Normal operation
+  places only post-only limits — market orders exist solely in the seed and the
+  stop-flatten — so nothing can offload or load inventory "at market"; the question is
+  only where limits may rest, and three invariants answer it:
+  1. **Adopt in profit** (basis below mark): the exit floor is `max(ref, basis×1.001)`
+     and ref wins — every exit rests *above* the current price, one lot per rung,
+     nearest ~one rung up. No dumping. Re-buying the rungs the position already
+     occupies is blocked by the replenish prefix (G7): the nearest `held-lots` entries
+     are suppressed and release furthest-first as exits fill — the owner's dissolving
+     band, converging on the basis. The cap bounds accumulation regardless.
+  2. **Adopt underwater** (basis above mark): the basis wins the max — exits rest only
+     above `basis×1.001`; basis beyond the range ⇒ no exits, one warning, position
+     left to the operator (S5). The zone between mark and basis holds *nothing by
+     construction*: above ref so not entries, below the floor so not exits — the
+     deadband, unconfigured. Entries below mark arm normally (buying the dip is the
+     job), cap-bounded.
+  3. **Autofill on placement** is blocked three independent ways: the ref split (G5),
+     the basis floor (G6), and the cross guard (B3) — and post-only makes a crossing
+     order a venue rejection, not a fill.
+  v2's audit measured the configured exit band as inert whenever the mark-to-basis gap
+  exceeded it, and no shipped config ever set the family — the emergent guards anchor
+  to the actual position instead of a guessed number.
 - **D7 — A bad fleet row refuses the whole fleet** *(C6)*. No silent skips; nothing
   starts until the file is fixed.
 
@@ -43,10 +66,9 @@ stands unless the owner corrects it.
   one users understand — adopt it.
 - **D9 — Seeding is a config toggle for flat starts** (irrelevant to adoption). Seed by
   **market order**, sized by bounds + mark: the lower in the range the mark sits, the
-  larger the seed, covering the exit side of the range. On failure: refuse and retry.
-  *Interpretation, flagged: the seed covers **all** exit-side rungs; windowing governs
-  which exits rest, not how much is seeded. Correct me if you meant seed-the-window-only
-  with top-up buys as price climbs.*
+  larger the seed, covering **all** exit-side rungs. Windowing governs which exits
+  *rest*, never how much is seeded (the Pionex shape). On failure: refuse and retry.
+  *Interpretation confirmed by the owner 2026-08-04.*
 - **D10 — Trail is deleted.** Range edits through the normal diff give trailing for
   free when wanted; the SMA machinery goes. Infinity-grid-style behaviour is likewise
   covered by editing bounds. (Owner note for the ops layer: routine range-review can be
