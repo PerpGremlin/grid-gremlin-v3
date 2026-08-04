@@ -4,7 +4,7 @@ import time
 from .apply import diff, make_botid, make_link, pair_amends, rung_of
 from .exchange.bybit.truth import read_symbol_truth
 from .exchange.errors import VenueError
-from .ladder import guard_band, plan_grid
+from .ladder import grid_rungs, guard_band, min_gap, plan_grid
 from .window import window
 
 FLAP_LIMIT = 3          # B5: strikes before a (rung, side) cools
@@ -16,7 +16,8 @@ BACKOFF_CEILING = 300.0
 class Bot:
     # E3: in-memory state, reset on restart by design — the fill baseline
     # (_last_pos, re-seeded first cycle), the link counter (_gen,
-    # restart-unique), and the guards' counters/clocks below.
+    # restart-unique), the held split ref (_held_ref, re-anchors to the live
+    # ref on the first cycle), and the guards' counters/clocks below.
 
     def __init__(self, cfg, adapter, client, notifier, gen_seed, clock=None):
         self.cfg = cfg
@@ -35,6 +36,19 @@ class Bot:
         self._backoff_emitted = 0.0
         self._entry_side = 'Buy' if cfg['side'] == 'long' else 'Sell'
         self._exit_side = 'Sell' if cfg['side'] == 'long' else 'Buy'
+        self._held_ref = None          # B2
+        self._min_gap = min_gap(grid_rungs(cfg, adapter))
+
+    def _sticky(self, ref):
+        """B2: the split ref moves only past the band, then snaps to current.
+        Zero band is identical to unset."""
+        frac = self.cfg.get('split_hysteresis_rungs') or 0.0
+        if frac <= 0:
+            return ref
+        if (self._held_ref is None
+                or abs(ref - self._held_ref) > self._min_gap * frac):
+            self._held_ref = ref
+        return self._held_ref
 
     def _held(self, truth):
         idx = self.adapter.position_idx(self._entry_side, False) or 0
@@ -98,7 +112,8 @@ class Bot:
             self.notify.event('fill' if grew else 'exit', self.botid,
                               f'position {self._last_pos:.10g} -> {held:.10g}')
 
-        ref, bid, ask = truth['split_ref'], truth['bid'], truth['ask']
+        ref = self._sticky(truth['split_ref'])     # W2: the one anchor
+        bid, ask = truth['bid'], truth['ask']
         resting_exits = {rung_of(o['link_id'], self.botid)
                          for o in truth['orders']
                          if o['side'] == self._exit_side
