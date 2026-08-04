@@ -31,19 +31,14 @@ both cited here when they happen. Nothing on this list blocks the current soak.
   fixture-fed; a kline-fetch convenience would let it run on fresh venue data
   from the CLI.
 
-## 3. Ops layer (v2 had these; v3 does not yet)
-
-- **Agentic range-review** — routine "is this range still sane" as an ops
-  health-check task, not engine code (D10's closing note).
-
-## 4. Built but not yet exercised live
+## 3. Built but not yet exercised live
 
 - **Inverse** — the adapter and specs exist; no soak bot has traded an
   inverse contract live. (Spot closed by the LTC grid, PR #37 / SPEC V6.)
 - **`watch: position_sl` and server-side partial SL** (X2/X3) — specced and
   shipped; no soak bot has yet fired one live end-to-end.
 
-## 5. Owner-gated — not buildable, only decidable
+## 4. Owner-gated — not buildable, only decidable
 
 - **Promotion criteria** — what the soak must show (duration, finding-rate
   decay, incident-free watchdog record) before v3 touches real funds. Worth

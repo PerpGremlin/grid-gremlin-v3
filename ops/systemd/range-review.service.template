@@ -1,0 +1,9 @@
+[Unit]
+Description=Grid Gremlin v3 range review — daily "are the bounds still sane", read-only
+# Convenience tier like the relay: no OnFailure alarm on purpose.
+
+[Service]
+Type=oneshot
+WorkingDirectory={{REPO_DIR}}
+ExecStart=/usr/bin/python3 ops/range_review.py configs/fleet.demo.json configs/fleet.hl.testnet.json
+TimeoutStartSec=420
