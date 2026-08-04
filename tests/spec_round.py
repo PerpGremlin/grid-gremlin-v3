@@ -204,3 +204,13 @@ def spec_D21_deepening_fill_refreshes_the_resting_exit():
     assert len(tps) == 1
     assert abs(tps[0]['price'] - ADAPTER.round_price(new_avg * 1.01)) < 0.11
     assert abs(float(tps[0]['qty']) - (old_size + add)) < 1e-9
+
+
+# --- I5: the base order carries our identity ---------------------------------
+
+def spec_I5_the_base_order_carries_an_owned_link():
+    from gridgremlin.apply import rung_of
+    venue, lines = FakeVenue(), []
+    bot = _bot(venue, lines)
+    assert bot.cycle() == {'round_started': 1}
+    assert rung_of(venue.market_links[0], bot.botid) == 0

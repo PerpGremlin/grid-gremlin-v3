@@ -69,7 +69,9 @@ class FakeVenue:
                 o['qty'] = qty
 
     def place_market(self, category, symbol, side, qty, position_idx=0,
-                     reduce_only=False):
+                     reduce_only=False, link_id=None):
+        self.market_links = getattr(self, 'market_links', [])
+        self.market_links.append(link_id)
         if reduce_only and self.position:
             left = float(self.position['size']) - float(qty)
             self.position = None if left <= 1e-12 else dict(

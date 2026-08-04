@@ -117,3 +117,43 @@ def dedup_executions(seen_exec_ids, executions):
             seen_exec_ids.add(eid)
             fresh.append(e)
     return fresh
+
+
+SEVEN_DAYS_MS = 7 * 24 * 3600 * 1000      # the venue's max span per query
+
+
+def read_fills(client, category, symbol, start_ms, end_ms):
+    """R1: history in 7-day windows, each cursor followed to the end or
+    refused (E5); only execType Trade — funding and settlement rows never
+    enter the fill ledger. Deduped by execution id (I4)."""
+    fills, seen = [], set()
+    win_start, end_ms = int(start_ms), int(end_ms)
+    while win_start < end_ms:
+        win_end = min(win_start + SEVEN_DAYS_MS, end_ms)
+        cursor = None
+        for _ in range(MAX_ORDER_PAGES):
+            page = client.executions_page(category, symbol, win_start,
+                                          win_end, cursor)
+            for e in page.get('list', []):
+                eid = e.get('execId')
+                if e.get('execType') != 'Trade' or not eid or eid in seen:
+                    continue
+                seen.add(eid)
+                fills.append({'exec_id': eid,
+                              'time_ms': int(e.get('execTime') or 0),
+                              'symbol': e.get('symbol'),
+                              'side': 'buy' if e.get('side') == 'Buy'
+                              else 'sell',
+                              'price': _f(e.get('execPrice')),
+                              'qty': _f(e.get('execQty'), 0.0),
+                              'fee': _f(e.get('execFee'), 0.0),
+                              'link_id': e.get('orderLinkId') or ''})
+            cursor = page.get('nextPageCursor')
+            if not cursor:
+                break
+        else:
+            raise VenueError(f'{symbol}: execution history beyond '
+                             f'{MAX_ORDER_PAGES} pages', kind='partial_read')
+        win_start = win_end
+    fills.sort(key=lambda f: f['time_ms'])
+    return fills

@@ -138,6 +138,13 @@ class Client:
                         {'category': category, 'symbol': symbol,
                          'limit': limit}, signed=True)
 
+    def executions_page(self, category, symbol, start_ms, end_ms, cursor=None):
+        params = {'category': category, 'symbol': symbol, 'limit': 100,
+                  'startTime': int(start_ms), 'endTime': int(end_ms)}
+        if cursor:
+            params['cursor'] = cursor
+        return self.get('/v5/execution/list', params, signed=True)
+
 
 NOT_MODIFIED_CODES = {110025, 110043, 34040, 110075}
 CANNOT_MODIFY_CODES = {110024, 110028}
@@ -252,11 +259,13 @@ class WriteClient(Client):
                 raise
 
     def place_market(self, category, symbol, side, qty, position_idx=0,
-                     reduce_only=False):
-        return self.post('/v5/order/create', {
-            'category': category, 'symbol': symbol, 'side': side,
-            'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
-            'reduceOnly': reduce_only})
+                     reduce_only=False, link_id=None):
+        body = {'category': category, 'symbol': symbol, 'side': side,
+                'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
+                'reduceOnly': reduce_only}
+        if link_id:
+            body['orderLinkId'] = link_id
+        return self.post('/v5/order/create', body)
 
 
     def read_wallet(self):

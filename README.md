@@ -188,7 +188,23 @@ repeat funding margin backoff warn kill`. `[log]` events stay in the terminal:
 `placed cancel amend skip` — order mechanics never page a human. Everything prints
 locally either way; the terminal is the audit trail.
 
-## 9. Development
+## 9. Reading the results
+
+```
+python3 -m gridgremlin.report configs/fleet.demo.json --hours 24
+```
+
+Pulls fill history from the venue (never a local guess — R1), attributes each
+fill to its bot by order link, and prints per bot: **realized** (matched
+profit, average-cost), **fees**, the open remainder at its average cost,
+**unreal** (mark-to-average), and **total**. *Grid profit = realized − fees*
+(D8). Fills no bot owns — manual trades, or engine market orders placed before
+market-order identity landed (I5) — appear in an `unowned` bucket per symbol
+rather than disappearing (R3). Read-only: safe to run any time,
+anywhere, alongside a live fleet (R4). A venue that cannot be reached is
+skipped with a warning; unknown marks print `—`, never a guess (R5).
+
+## 10. Development
 
 - `python3 tests/run.py` — a spec is a `spec_*` function in `tests/spec_*.py`; its
   name carries the SPEC ID it pins (`spec_G7_...`). An error is a failure, never a
@@ -208,6 +224,7 @@ locally either way; the terminal is the audit trail.
 | [docs/MIGRATION.md](docs/MIGRATION.md) | every v2 name → its v3 fate |
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | the dissection of v2 that started it all |
 | [docs/PLAN.md](docs/PLAN.md) | the sixteen build slices, all ticked |
+| [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
 | [docs/research/](docs/research/) | the evidence trail |
 
 *This repo is public and deliberately carries no account figures, no live position

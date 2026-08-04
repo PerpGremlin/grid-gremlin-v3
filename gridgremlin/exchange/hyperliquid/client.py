@@ -67,6 +67,12 @@ class InfoClient:
         return self._transport({'type': 'userAbstraction',
                                 'user': self._user()})
 
+    def user_fills_by_time(self, start_ms):
+        """Venue caps the answer at 2000 fills — the caller must warn (R1)."""
+        return self._transport({'type': 'userFillsByTime',
+                                'user': self._user(),
+                                'startTime': int(start_ms)})
+
     def spot_clearinghouse_state(self):
         return self._transport({'type': 'spotClearinghouseState',
                                 'user': self._user()})

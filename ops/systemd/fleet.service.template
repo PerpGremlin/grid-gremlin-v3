@@ -1,0 +1,25 @@
+[Unit]
+Description=Grid Gremlin v3 — {{DESC}}
+After=network-online.target
+Wants=network-online.target
+OnFailure=grid-gremlin3-{{FLEET}}-failed.service
+# Patient-retry fleets (a venue that 502s for hours, e.g. a testnet) set
+# StartLimitIntervalSec=0 — the unit never gives up; the watchdog's staleness
+# page is the alarm. Fleets that should stop crash-looping on a code defect
+# keep a finite window instead.
+StartLimitIntervalSec={{START_LIMIT_INTERVAL}}
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory={{REPO_DIR}}
+ExecStart=/usr/bin/python3 -u -m gridgremlin configs/{{FLEET_CONFIG}} --interval 5 --snapshot logs/snapshots-{{FLEET}}.jsonl --snapshot-every 60
+Restart=always
+RestartSec={{RESTART_SEC}}
+# v2's rule kept: under memory pressure test data dies FIRST.
+OOMScoreAdjust=500
+StandardOutput=append:{{REPO_DIR}}/logs/fleet-{{FLEET}}.log
+StandardError=append:{{REPO_DIR}}/logs/fleet-{{FLEET}}.log
+
+[Install]
+WantedBy=default.target

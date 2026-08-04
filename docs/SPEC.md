@@ -176,6 +176,9 @@ eventually pin (T1).
 - **I3** The id fits every venue's link limit, checked at build with a refusal — never a
   silent row skip.
 - **I4** Fills deduplicate by venue execution id, across reconnects and restarts.
+- **I5** Market-path orders (seed, martingale base, stop-flatten) carry an owned link
+  like every other order — I1 has no exceptions; an unattributable own-fill is a
+  defect. *(found by R3's unowned bucket, first live readout)*
 
 ## V — venue and truth
 
@@ -237,6 +240,20 @@ eventually pin (T1).
   write-only paths need it.
 - **F6** Every watchdog threshold documents its assumption set — including whether the
   grid is assumed to be the only actor on the account.
+
+## R — the readout
+
+- **R1** Fill history is venue-derived and link-attributed (I1's rule: ours iff the
+  rung parses), deduped by execution id (I4), every cursor followed to the end or
+  refused (E5) — never a local guess of what filled. *(the exchange is the state)*
+- **R2** Per-bot profit is average-cost accounting over time-ordered fills: a reduce
+  realises against the basis, a flip re-anchors at the flip price.
+- **R3** Fills owned by no bot are reported in their own bucket, never dropped —
+  external activity on the account must be visible. *(F6's other half)*
+- **R4** The readout is read-only by construction: no write surface appears in its
+  module.
+- **R5** "Grid profit" is realized minus fees (D8); "total P&L" adds mark-to-average
+  on the open remainder; an unknown mark yields no number, never a guess.
 
 ## T — testing meta-invariants
 

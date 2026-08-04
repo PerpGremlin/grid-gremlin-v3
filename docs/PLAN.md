@@ -125,6 +125,34 @@ to an exchange until slice 8; nothing trades unwatched, ever.
 trail/SMA machinery (range edits do it), partial TPs, trailing TP, signal
 start-conditions, profit reinvest, cooldown tuning.
 
+---
+
+## Phase 2 — the backlog burn-down (`BACKLOG.md` is the source; started 2026-08-04)
+
+- [x] **18 — the readout** *(PR #36)*
+      `python3 -m gridgremlin.report <fleet.json> [--hours N]` — venue fills →
+      per-bot grid profit vs total P&L (D8), average-cost ledger, unowned
+      bucket, read-only by construction. SPEC R1-R5.
+      done when: the soak's A/B questions can be answered with numbers ✓
+      finding: market-path orders (seed, martingale base, flatten) carry no
+      link id and land in the unowned bucket — market-order identity is the
+      next slice
+
+- [x] **19 — market-order identity** *(same PR)*
+      seed, martingale base, and stop-flatten mint `{botid}-0-{gen}` links
+      (market orders never rest, so D21's rung-0 reservation — resting
+      reduce-only — is untouched). SPEC I5, one spec per path.
+      done when: a fresh seed/base/flatten fill attributes to its bot in the
+      readout; fills from before this slice stay in the unowned bucket
+      honestly ✓
+
+- [x] **20 — unit templates in-repo** *(same PR)*
+      `ops/` — the four deploy layers as genericised systemd templates
+      (placeholder paths; the hygiene rule bars real ones), including the
+      stamp-file page rate-limit found live during the HL venue outage. The
+      box's watchdog-crash alerts synced to the same shape.
+      done when: the deploy is reproducible from the repo alone ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

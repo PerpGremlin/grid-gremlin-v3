@@ -85,7 +85,7 @@ class HLVenueClient(ExchangeClient):
             order_id=int(order_id), reduce_only=match['reduce_only'])
 
     def place_market(self, market_type, symbol, side, qty, position_idx=0,
-                     reduce_only=False):
+                     reduce_only=False, link_id=None):
         """HL has no market type: an aggressive IOC limit is the idiom."""
         asset, entry = self._entry(symbol)
         adapter = self._adapter(symbol)
@@ -93,10 +93,12 @@ class HLVenueClient(ExchangeClient):
         _, ctxs = self.meta_and_ctxs()
         mark = float(ctxs[names.index(symbol)]['markPx'])
         px = mark * (1.05 if side == 'Buy' else 0.95)
-        action = {'type': 'order', 'orders': [
-            {'a': asset, 'b': side == 'Buy', 'p': adapter.fmt_price(px),
-             's': qty, 'r': bool(reduce_only),
-             't': {'limit': {'tif': 'Ioc'}}}], 'grouping': 'na'}
+        order = {'a': asset, 'b': side == 'Buy', 'p': adapter.fmt_price(px),
+                 's': qty, 'r': bool(reduce_only),
+                 't': {'limit': {'tif': 'Ioc'}}}
+        if link_id:
+            order['c'] = link_to_cloid(link_id)
+        action = {'type': 'order', 'orders': [order], 'grouping': 'na'}
         status, oid = self._statuses(self._post_action(action), 1)[0]
         if status == 'error':
             raise VenueError(f'market: {oid}', kind='other')
