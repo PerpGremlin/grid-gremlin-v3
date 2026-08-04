@@ -153,12 +153,29 @@ def exit_ladder(exits, sellable, lot_qty, adapter):
     return [(i, price, qty(s)) for i, price, s in kept]
 
 
-def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None):
+def placeable_exits(side, exits, bid, ask, resting_rungs):
+    """B4: drop exit rungs inside the guard band of the opposite quote so the
+    pour walks outward — unless that rung's exit already rests (keyed by side,
+    never reduce_only). No book, no filter."""
+    if bid is None or ask is None:
+        return exits
+    guard = guard_band(bid, ask)
+    if side == 'long':
+        return [(i, p) for i, p in exits
+                if i in resting_rungs or p > bid + guard]
+    return [(i, p) for i, p in exits
+            if i in resting_rungs or p < ask - guard]
+
+
+def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None,
+              bid=None, ask=None, resting_exit_rungs=frozenset()):
     """G12: the netted plan, pure. G7 suppression, G8 exits, G10 cap, G13
-    non-marketable by construction. Returns {rung, side, price, qty,
-    reduce_only} dicts."""
+    non-marketable by construction, B4 book-aware exits. Returns {rung, side,
+    price, qty, reduce_only} dicts."""
     rungs = grid_rungs(cfg, adapter)
     parts = split(cfg['side'], rungs, split_ref, basis)
+    parts['exits'] = placeable_exits(cfg['side'], parts['exits'], bid, ask,
+                                     resting_exit_rungs)
     lot_qty = lot(cfg, adapter, split_ref)
     sellable = sellable_base(cfg, adapter, held_base)
     notionals = rung_notionals(cfg)
