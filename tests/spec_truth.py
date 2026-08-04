@@ -187,3 +187,22 @@ def spec_env_demo_flag_resolves_demo_and_comments_strip(tmp='/tmp/v3спec.env')
     assert os.environ['FAKE_B'] == 'x'
     os.environ.pop('FAKE_A'), os.environ.pop('FAKE_B')
     assert detect_env() in ('demo', 'testnet', 'mainnet')
+
+
+def spec_rate_limit_glide_sleeps_to_the_window_reset():
+    import time as _time
+    from gridgremlin.exchange.bybit.client import Client, RATE_LIMIT_FLOOR
+    c = Client(env='demo', api_key='k', api_secret='s',
+               transport=lambda u, h: {'retCode': 0, 'result': {}})
+    slept = []
+    real_sleep, _time.sleep = _time.sleep, slept.append
+    try:
+        now_ms = int(_time.time() * 1000)
+        c._glide({'X-Bapi-Limit-Status': '2',
+                  'X-Bapi-Limit-Reset-Timestamp': str(now_ms + 1200)})
+        c._glide({'X-Bapi-Limit-Status': '40',
+                  'X-Bapi-Limit-Reset-Timestamp': str(now_ms + 1200)})
+        c._glide({})                              # headerless: no-op
+    finally:
+        _time.sleep = real_sleep
+    assert len(slept) == 1 and 0.5 < slept[0] <= 5.0

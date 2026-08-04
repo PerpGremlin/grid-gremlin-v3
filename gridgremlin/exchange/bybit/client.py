@@ -13,6 +13,7 @@ BASE_URLS = {'demo': 'https://api-demo.bybit.com',
              'testnet': 'https://api-testnet.bybit.com',
              'mainnet': 'https://api.bybit.com'}
 RECV_WINDOW = '15000'
+RATE_LIMIT_FLOOR = 3     # glide: when the window has fewer calls left, wait
 RATE_LIMIT_CODES = {10006, 10018, 10429, 429}
 ORDER_GONE_CODES = {110001, 170213}
 CLOCK_CODE = 10002
@@ -51,7 +52,22 @@ class Client:
     def _http(self, url, headers):
         req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=15) as resp:
+            self._glide(resp.headers)
             return json.loads(resp.read().decode())
+
+    def _glide(self, headers):
+        """v2's earned rate discipline: when X-Bapi-Limit-Status says the
+        window is nearly spent, sleep to its reset — server-time-relative,
+        bounded 0-5s — instead of slamming into 10006."""
+        try:
+            left = int(headers.get('X-Bapi-Limit-Status', ''))
+            reset_ms = int(headers.get('X-Bapi-Limit-Reset-Timestamp', ''))
+        except (TypeError, ValueError):
+            return
+        if left > RATE_LIMIT_FLOOR:
+            return
+        wait = (reset_ms - (int(time.time() * 1000) + self._offset_ms)) / 1000.0
+        time.sleep(min(max(wait, 0.0), 5.0))
 
     def _ts(self):
         return str(int(time.time() * 1000) + self._offset_ms)
