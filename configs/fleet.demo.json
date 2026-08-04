@@ -1,0 +1,11 @@
+{
+  "_note": "demo tier only - v3 has no mainnet path",
+  "poll_seconds": 5,
+  "bots": [
+    {
+      "market_type": "linear", "symbol": "BTCUSDT", "side": "long",
+      "capital": 300, "leverage": 10,
+      "lower": 62000, "upper": 66000, "rungs": 41
+    }
+  ]
+}
