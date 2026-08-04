@@ -33,6 +33,10 @@
       "min": 0,
       "max": 33456
     },
+    "spoLTCUSDTl": {
+      "min": 0,
+      "max": 83.7
+    },
     "linSOLUSDTs": {
       "min": 0,
       "max": 120

@@ -109,6 +109,20 @@
       "place_within_pct": 0.03
     },
     {
+      "_note": "the spot path's first live exercise: plain sells, wallet-derived holding (V6)",
+      "market_type": "spot",
+      "symbol": "LTCUSDT",
+      "side": "long",
+      "capital": 3000,
+      "lower": 36,
+      "upper": 52,
+      "rungs": 17,
+      "stop": {
+        "watch": "mark_price",
+        "level": 34
+      }
+    },
+    {
       "_note": "looping martingale, gentle multiplier, widening steps",
       "strategy": "martingale",
       "market_type": "linear",

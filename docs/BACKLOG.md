@@ -40,8 +40,8 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 5. Built but not yet exercised live
 
-- **Spot and inverse** — adapters and specs exist; every soak bot so far is
-  linear. A small spot grid in the demo fleet would close this.
+- **Inverse** — the adapter and specs exist; no soak bot has traded an
+  inverse contract live. (Spot closed by the LTC grid, PR #37 / SPEC V6.)
 - **`watch: position_sl` and server-side partial SL** (X2/X3) — specced and
   shipped; no soak bot has yet fired one live end-to-end.
 - **D21 on Hyperliquid, live proof** — the venue-resting martingale exit is in

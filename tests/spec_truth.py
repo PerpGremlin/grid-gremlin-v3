@@ -206,3 +206,70 @@ def spec_rate_limit_glide_sleeps_to_the_window_reset():
     finally:
         _time.sleep = real_sleep
     assert len(slept) == 1 and 0.5 < slept[0] <= 5.0
+
+
+# --- V6: spot — the wallet holding IS the position ---------------------------
+
+class SpotClient:
+    """No position_list at all: calling it would raise, proving spot truth
+    never touches the position endpoint."""
+
+    def tickers(self, category, symbol):
+        return {'lastPrice': '44.3', 'bid1Price': '44.2', 'ask1Price': '44.4'}
+
+    def open_orders_page(self, category, symbol, cursor=None):
+        return {'list': [], 'nextPageCursor': None}
+
+    def wallet_balance(self):
+        return {'list': [{'totalEquity': '1000', 'coin': [
+            {'coin': 'LTC', 'walletBalance': '2.5', 'equity': '110',
+             'availableToWithdraw': '2.5'}]}]}
+
+
+def spec_V6_spot_position_is_the_wallet_holding():
+    truth = read_symbol_truth(SpotClient(), 'spot', 'LTCUSDT',
+                              base_coin='LTC')
+    p = truth['positions'][0]
+    assert p['side'] == 'Buy' and p['size'] == 2.5
+    assert p['avg_entry'] is None                    # the venue keeps no basis
+    assert truth['mark'] == 44.3                     # lastPrice fallback
+    assert truth['funding_rate_hourly'] is None      # spot has no funding
+
+
+def spec_V6_no_holding_means_no_position():
+    class Flat(SpotClient):
+        def wallet_balance(self):
+            return {'list': [{'totalEquity': '1000', 'coin': []}]}
+    assert read_symbol_truth(Flat(), 'spot', 'LTCUSDT',
+                             base_coin='LTC')['positions'] == {}
+
+
+def spec_V6_spot_truth_without_base_coin_refuses():
+    try:
+        read_symbol_truth(SpotClient(), 'spot', 'LTCUSDT')
+    except TruthError:
+        pass
+    else:
+        raise AssertionError('spot truth guessed a base coin')
+
+
+def spec_V6_spot_write_bodies_carry_no_position_concepts():
+    from gridgremlin.exchange.bybit.client import WriteClient
+
+    class W(WriteClient):
+        def __init__(self):
+            self.bodies = []
+
+        def post(self, path, body):
+            self.bodies.append(body)
+            return {}
+    w = W()
+    w.place_order('spot', 'LTCUSDT', 'Sell', '1', '50', 'x-1-a')
+    w.place_market('spot', 'LTCUSDT', 'Buy', '1', link_id='x-0-a')
+    w.place_order('linear', 'BTCUSDT', 'Buy', '1', '50', 'x-1-a',
+                  position_idx=1)
+    spot_limit, spot_market, lin = w.bodies
+    assert 'positionIdx' not in spot_limit and 'reduceOnly' not in spot_limit
+    assert spot_market['marketUnit'] == 'baseCoin'
+    assert 'positionIdx' not in spot_market
+    assert lin['positionIdx'] == 1                   # perps unchanged

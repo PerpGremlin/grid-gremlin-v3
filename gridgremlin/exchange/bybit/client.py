@@ -195,12 +195,14 @@ class WriteClient(Client):
 
     def place_order(self, category, symbol, side, qty, price, link_id,
                     position_idx=0, reduce_only=False, post_only=True):
-        return self.post('/v5/order/create', {
-            'category': category, 'symbol': symbol, 'side': side,
-            'orderType': 'Limit',
-            'timeInForce': 'PostOnly' if post_only else 'GTC', 'qty': qty,
-            'price': price, 'orderLinkId': link_id,
-            'positionIdx': position_idx, 'reduceOnly': reduce_only})
+        body = {'category': category, 'symbol': symbol, 'side': side,
+                'orderType': 'Limit',
+                'timeInForce': 'PostOnly' if post_only else 'GTC', 'qty': qty,
+                'price': price, 'orderLinkId': link_id}
+        if category != 'spot':          # spot has neither concept (V6)
+            body['positionIdx'] = position_idx
+            body['reduceOnly'] = reduce_only
+        return self.post('/v5/order/create', body)
 
     def set_trading_stop(self, category, symbol, position_idx,
                          take_profit=None, stop_loss=None, sl_size=None):
@@ -261,8 +263,14 @@ class WriteClient(Client):
     def place_market(self, category, symbol, side, qty, position_idx=0,
                      reduce_only=False, link_id=None):
         body = {'category': category, 'symbol': symbol, 'side': side,
-                'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
-                'reduceOnly': reduce_only}
+                'orderType': 'Market', 'qty': qty}
+        if category == 'spot':
+            # a spot market Buy is QUOTE-denominated by default — pin the unit
+            # so qty stays base on both sides (V6)
+            body['marketUnit'] = 'baseCoin'
+        else:
+            body['positionIdx'] = position_idx
+            body['reduceOnly'] = reduce_only
         if link_id:
             body['orderLinkId'] = link_id
         return self.post('/v5/order/create', body)
@@ -274,4 +282,15 @@ class WriteClient(Client):
 
     def read_symbol_truth(self, market_type, symbol, funding_interval=480.0):
         from . import truth as _t
-        return _t.read_symbol_truth(self, market_type, symbol, funding_interval)
+        base_coin = None
+        if market_type == 'spot':
+            # memo of immutable instrument metadata, not venue state (V3-safe)
+            memo = getattr(self, '_base_coins', None) or {}
+            if symbol not in memo:
+                memo[symbol] = _t.parse_instrument(
+                    market_type,
+                    self.instruments_info(market_type, symbol))['base_coin']
+                self._base_coins = memo
+            base_coin = memo[symbol]
+        return _t.read_symbol_truth(self, market_type, symbol, funding_interval,
+                                    base_coin=base_coin)

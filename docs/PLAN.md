@@ -153,6 +153,14 @@ start-conditions, profit reinvest, cooldown tuning.
       box's watchdog-crash alerts synced to the same shape.
       done when: the deploy is reproducible from the repo alone ✓
 
+- [x] **21 — spot, live** *(PR #37)*
+      the venue half spot never had: the wallet holding synthesized as the
+      position (the position endpoint is never called), spot-safe write
+      bodies, `marketUnit=baseCoin`. SPEC V6. An LTC spot grid joins the
+      demo fleet — the spot path's first live exercise.
+      done when: the spot bot rests a ladder on the venue and the readout
+      attributes its fills ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing
