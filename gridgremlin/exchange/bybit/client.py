@@ -121,3 +121,98 @@ class Client:
         return self.get('/v5/execution/list',
                         {'category': category, 'symbol': symbol,
                          'limit': limit}, signed=True)
+
+
+NOT_MODIFIED_CODES = {110025, 110043, 34040}
+CANNOT_MODIFY_CODES = {110024, 110028}
+RO_CAPACITY_CODES = {110017}
+MARGIN_CODES = {110004, 110006, 110007, 110012, 110044, 110045, 110052, 170131}
+
+
+def _post_kind(ret_code):
+    if ret_code in NOT_MODIFIED_CODES:
+        return 'not_modified'
+    if ret_code in CANNOT_MODIFY_CODES:
+        return 'cannot_modify'
+    if ret_code in RO_CAPACITY_CODES:
+        return 'ro_capacity'
+    if ret_code in MARGIN_CODES:
+        return 'margin'
+    if ret_code in ORDER_GONE_CODES:
+        return 'gone'
+    if ret_code in RATE_LIMIT_CODES:
+        return 'rate_limit'
+    return 'other'
+
+
+class WriteClient(Client):
+    """The write surface. Every order is post-only (G13's venue backstop)."""
+
+    def post(self, path, body):
+        if not self._synced:
+            self._sync_clock()
+        ts = self._ts()
+        payload = json.dumps(body)
+        headers = {'X-BAPI-API-KEY': self.api_key,
+                   'X-BAPI-TIMESTAMP': ts,
+                   'X-BAPI-RECV-WINDOW': RECV_WINDOW,
+                   'X-BAPI-SIGN': self._sign(ts, payload),
+                   'Content-Type': 'application/json'}
+        req = urllib.request.Request(self.base + path, data=payload.encode(),
+                                     headers=headers, method='POST')
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+        code = int(data.get('retCode', -1))
+        if code in NOT_MODIFIED_CODES or code == 0:
+            return data.get('result', {})
+        raise VenueError(f"bybit {path}: retCode {code}: {data.get('retMsg')}",
+                         kind=_post_kind(code))
+
+    def place_order(self, category, symbol, side, qty, price, link_id,
+                    position_idx=0, reduce_only=False):
+        return self.post('/v5/order/create', {
+            'category': category, 'symbol': symbol, 'side': side,
+            'orderType': 'Limit', 'timeInForce': 'PostOnly', 'qty': qty,
+            'price': price, 'orderLinkId': link_id,
+            'positionIdx': position_idx, 'reduceOnly': reduce_only})
+
+    def cancel_order(self, category, symbol, order_id):
+        return self.post('/v5/order/cancel', {'category': category,
+                                              'symbol': symbol,
+                                              'orderId': order_id})
+
+    def amend_order(self, category, symbol, order_id, qty):
+        return self.post('/v5/order/amend', {'category': category,
+                                             'symbol': symbol,
+                                             'orderId': order_id, 'qty': qty})
+
+    def ensure_hedge_mode(self, category, symbol):
+        try:
+            self.post('/v5/position/switch-mode',
+                      {'category': category, 'symbol': symbol, 'mode': 3})
+        except VenueError as e:
+            if e.kind not in ('not_modified', 'cannot_modify'):
+                raise
+
+    def risk_limit_tiers(self, category, symbol):
+        r = self.get('/v5/market/risk-limit',
+                     {'category': category, 'symbol': symbol})
+        return [{'id': int(t['id']), 'limit': float(t['riskLimitValue']),
+                 'mm_rate': float(t['maintenanceMargin']),
+                 'max_leverage': float(t.get('maxLeverage', 0))}
+                for t in r['list']]
+
+    def set_risk_limit(self, category, symbol, risk_id, position_idx):
+        self.post('/v5/position/set-risk-limit',
+                  {'category': category, 'symbol': symbol, 'riskId': risk_id,
+                   'positionIdx': position_idx})
+
+    def set_leverage(self, category, symbol, leverage):
+        try:
+            self.post('/v5/position/set-leverage',
+                      {'category': category, 'symbol': symbol,
+                       'buyLeverage': str(leverage),
+                       'sellLeverage': str(leverage)})
+        except VenueError as e:
+            if e.kind != 'not_modified':
+                raise

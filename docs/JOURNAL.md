@@ -5,6 +5,30 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-08-04 — build day: slices 0-8, first live trade
+
+**Done.** Eight slices in one session, each its own merged PR, suite growing 0 -> 115
+specs: scaffold, config doctrine, contract maths, the ladder (lattice/lot/split), the
+plan level (exits/caps/entry guard), the martingale as data, Bybit truth, diff/identity,
+and the loop. The demo grid ran live: 21 post-only entries, 25 consecutive cycles of
+empty steady-state diff, then a real fill -> fill event shipped -> a reduce-only exit
+one lot, one rung above, its price pushed by the fee floor exactly as G6 specifies.
+
+**Caught along the way** (both directions): C7 refused two of my own draft error
+messages for quoting retired keys; a spec fixture had the short-in-profit floor wrong;
+the exit-ladder pour lost a qty-step per iteration to float-floor residue (rebuilt in
+integer steps) and dropped sub-minimum first shares (they now walk outward). The owner
+called the draft docstrings "long and confounded" — prose stripped to SPEC ids; the why
+lives in one place now.
+
+**Observed, expected.** With no guards built yet, the live run reproduced v2's #41
+boundary churn: the mark wobbling across the held rung shifts the suppression prefix and
+cancel/re-places the neighbour entry each crossing. The incident arrived exactly where
+the plan said it would — slices 9 (flap cooldown) and 10 (split hysteresis) are its
+scheduled cure, and now have a live fixture to verify against.
+
+**Next.** Slice 9 — the earned guards.
+
 ## 2026-08-04 — decisions day
 
 **Done.** The owner read the full pre-build surface and answered every open call —

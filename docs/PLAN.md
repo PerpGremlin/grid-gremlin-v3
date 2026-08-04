@@ -56,10 +56,13 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       done when: keep/cancel/create/amend decisions green on fixtures incl. truncation
       tolerance and foreign-order immunity; error-kind matrix specced ✓ (109 specs)
 
-- [ ] **8 — the loop, the window, events** (first demo trade)
+- [x] **8 — the loop, the window, events** (first demo trade) *(PR #15)*
       builds: E3, W1–W3, plus the event vocabulary
       done when: a two-cycle spec (T2) passes; a demo grid places, fills, and re-plans
       with an empty steady-state diff; order events logged, not shipped
+      ✓ (115 specs; live: 21 entries placed, 25 empty-diff cycles, one fill ->
+      reduce-only exit one rung up; the #41 boundary churn reproduced as
+      predicted -> slices 9/10)
 
 - [ ] **9 — the earned guards**
       builds: B3–B7, G13's placer/venue half (cross guard + post-only rejection path)

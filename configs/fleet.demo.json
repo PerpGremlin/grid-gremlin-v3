@@ -1,0 +1,26 @@
+{
+  "_note": "demo tier only - v3 has no mainnet path. Sized per the owner's instruction to run the demo at ~30-40% maintenance margin at full deployment: use the test funds, don't sit in safetyland.",
+  "poll_seconds": 5,
+  "bots": [
+    {
+      "market_type": "linear",
+      "symbol": "BTCUSDT",
+      "side": "long",
+      "capital": 46600,
+      "leverage": 75,
+      "lower": 62000,
+      "upper": 66000,
+      "rungs": 41
+    },
+    {
+      "market_type": "linear",
+      "symbol": "ETHUSDT",
+      "side": "short",
+      "capital": 63600,
+      "leverage": 55,
+      "lower": 1780,
+      "upper": 1960,
+      "rungs": 41
+    }
+  ]
+}
