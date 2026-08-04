@@ -159,3 +159,20 @@ def spec_F5_hl_mainnet_is_refused_this_phase():
     else:
         raise AssertionError('HL mainnet client was constructible')
     assert InfoClient(env='testnet').base.startswith('https://api.hyperliquid-t')
+
+
+# --- C7 at the universe seam: a removed coin refuses BY NAME -----------------
+# HL removed XRP from its testnet universe mid-soak; the build crashed as a
+# bare StopIteration. The refusal must name the coin.
+
+def spec_C7_a_coin_missing_from_the_universe_refuses_by_name():
+    from gridgremlin.exchange.errors import VenueError
+    from gridgremlin.exchange.hyperliquid.venue import HLVenueClient
+    c = HLVenueClient.__new__(HLVenueClient)
+    c._universe = {'BTC': (0, {'name': 'BTC'})}
+    try:
+        c._entry('XRP')
+    except VenueError as e:
+        assert 'XRP' in str(e)
+    else:
+        raise AssertionError('a missing coin did not refuse')

@@ -68,10 +68,11 @@
       }
     },
     {
+      "_note": "was XRP until HL removed it from the testnet universe 2026-08-04",
       "venue": "hyperliquid",
       "strategy": "martingale",
       "market_type": "linear",
-      "symbol": "XRP",
+      "symbol": "AVAX",
       "side": "long",
       "capital": 80,
       "leverage": 3,
