@@ -24,6 +24,10 @@
     "linDOGEs": {
       "min": 0,
       "max": 12820
+    },
+    "linXRPl": {
+      "min": 0,
+      "max": 139
     }
   }
 }

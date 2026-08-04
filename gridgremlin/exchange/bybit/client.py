@@ -164,6 +164,8 @@ def _post_kind(ret_code):
 class WriteClient(Client):
     """The write surface. Every order is post-only (G13's venue backstop)."""
 
+    hosts_position_tp = True     # D21: native position-TP, arguably stronger
+
     def post(self, path, body):
         if not self._synced:
             self._sync_clock()
@@ -239,12 +241,12 @@ class WriteClient(Client):
                   {'category': category, 'symbol': symbol, 'riskId': risk_id,
                    'positionIdx': position_idx})
 
-    def set_leverage(self, category, symbol, leverage):
+    def set_leverage(self, category, symbol, buy_leverage, sell_leverage=None):
         try:
             self.post('/v5/position/set-leverage',
                       {'category': category, 'symbol': symbol,
-                       'buyLeverage': str(leverage),
-                       'sellLeverage': str(leverage)})
+                       'buyLeverage': str(buy_leverage),
+                       'sellLeverage': str(sell_leverage or buy_leverage)})
         except VenueError as e:
             if e.kind != 'not_modified':
                 raise

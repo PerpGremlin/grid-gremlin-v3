@@ -110,5 +110,14 @@ stands unless the owner corrects it.
   martingale/DCA product, available only in their mobile/tablet app — recorded against
   `research/field-martingale-bots.md`'s "not confirmed."
 
+- **D21 — HL martingales via the venue-resting exit (2026-08-04).** M3 generalises:
+  *a round is never without a venue-resting exit* — a hosted position-TP where the
+  venue offers one (Bybit keeps its native TP: arguably stronger), a resting
+  reduce-only limit at the target elsewhere (HL). The choice is a client
+  *capability* (`hosts_position_tp`), never a venue-name test — the bot stays
+  venue-blind. Rung 0 of a round is reserved for the resting exit and shielded from
+  the diff. A resting-limit TP fills on trade-through rather than mark-trigger —
+  at the target or better, accepted.
+
 *Source documents: the owner's response file (local) and the 2026-08-04 Q&A. Scrutiny
 was invited; scrutiny applied is recorded inline above.*

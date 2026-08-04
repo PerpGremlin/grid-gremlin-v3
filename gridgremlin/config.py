@@ -275,9 +275,6 @@ def validate_martingale(row, where='row'):
     cfg = {k: v for k, v in row.items() if not k.startswith('_')}
 
     cfg['venue'] = _enum(cfg, 'venue', where, VENUES, default='bybit')
-    if cfg['venue'] == 'hyperliquid':
-        _refuse(f'{where}: the martingale is bybit-only this phase — its round '
-                'TP lives venue-side and HL cannot host one (M3)')
     cfg['market_type'] = _enum(cfg, 'market_type', where, ('linear',),
                                default='linear')
     if not isinstance(cfg.get('symbol'), str) or not cfg.get('symbol'):
