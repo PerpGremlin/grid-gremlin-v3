@@ -138,6 +138,13 @@ class Client:
                         {'category': category, 'symbol': symbol,
                          'limit': limit}, signed=True)
 
+    def executions_page(self, category, symbol, start_ms, end_ms, cursor=None):
+        params = {'category': category, 'symbol': symbol, 'limit': 100,
+                  'startTime': int(start_ms), 'endTime': int(end_ms)}
+        if cursor:
+            params['cursor'] = cursor
+        return self.get('/v5/execution/list', params, signed=True)
+
 
 NOT_MODIFIED_CODES = {110025, 110043, 34040, 110075}
 CANNOT_MODIFY_CODES = {110024, 110028}

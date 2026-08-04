@@ -26,11 +26,10 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 3. Reporting and measurement
 
-- **Per-bot profit readout** — D8 adopted the grid-profit vs total-P&L
-  reporting model; the engine journals every fill, but nothing yet *reads* the
-  journal back into that shape. This is the tool the current parameter
-  experiments (weighted vs uniform rungs, hysteresis on/off, martingale
-  multiplier/deviation spreads) are waiting on to be judged.
+- **Market-order identity** — the readout (PR #36, SPEC R1-R5) surfaced that
+  seed, martingale-base, and stop-flatten orders carry no link id, so their
+  fills land in the unowned bucket. Every order we place should carry our
+  identity (I1's spirit).
 - **Soak readout doctrine** — define what the A/B fleets must show, and for how
   long, before a parameter question is called. Measure before theorising.
 

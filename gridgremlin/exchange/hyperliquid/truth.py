@@ -126,3 +126,23 @@ def read_symbol_truth(client, coin):
         'next_funding_time_ms': None,
         'orders': read_orders(client.open_orders(coin), coin),
         'positions': read_positions(client.clearinghouse_state(), coin)})
+
+
+def read_fills(raw, coins):
+    """R1: the shared fill shape; tid is the execution id, the cloid decodes
+    back to the link. Rows outside `coins` are not ours to ledger."""
+    out = []
+    for f in raw:
+        if f.get('coin') not in coins:
+            continue
+        out.append({'exec_id': str(f.get('tid')),
+                    'time_ms': int(f.get('time') or 0),
+                    'symbol': f.get('coin'),
+                    'side': 'buy' if f.get('side') == 'B' else 'sell',
+                    'price': _f(f.get('px')),
+                    'qty': _f(f.get('sz'), 0.0),
+                    'fee': _f(f.get('fee'), 0.0),
+                    'link_id': cloid_to_link(f.get('cloid'))
+                    or (f.get('cloid') or '')})
+    out.sort(key=lambda f: f['time_ms'])
+    return out
