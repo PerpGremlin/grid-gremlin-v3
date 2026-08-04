@@ -16,6 +16,7 @@ def parse_instrument(category, info):
             'min_notional': _f(lot.get('minNotionalValue')
                                or lot.get('minOrderAmt')),
             'settle_coin': info.get('settleCoin'),
+            'base_coin': info.get('baseCoin'),
             'funding_interval_minutes': _f(info.get('fundingInterval'), 480.0)}
     if info.get('status') != 'Trading':
         raise VenueError(f"{info['symbol']}: status {info.get('status')!r}")
@@ -86,13 +87,38 @@ def read_orders(client, category, symbol):
                      kind='partial_read')
 
 
-def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.0):
-    """V1/V2: the one truth shape; funding normalised to per-hour at read."""
+def read_spot_position(wallet, base_coin):
+    """V6: spot's 'position' is the wallet's base-coin holding, synthesized
+    into the one position shape. The venue keeps no basis: avg_entry is None
+    and the adoption family runs ref-only (G6's no-basis arm) unless the
+    config states `assumed_avg_entry`."""
+    coin = wallet['coins'].get(base_coin) or {}
+    size = coin.get('wallet_balance', 0.0)
+    if size <= 0:
+        return {}
+    return {0: {'position_idx': 0, 'side': 'Buy', 'size': size,
+                'avg_entry': None, 'liq_price': None, 'stop_loss': None,
+                'take_profit': None, 'leverage': None,
+                'unrealised_pnl': None}}
+
+
+def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.0,
+                      base_coin=None):
+    """V1/V2: the one truth shape; funding normalised to per-hour at read.
+    V6: spot has no position endpoint — the wallet holding is the position."""
     t = client.tickers(market_type, symbol)
     mark = _f(t.get('markPrice')) or _f(t.get('lastPrice'))
     bid, ask = _f(t.get('bid1Price')), _f(t.get('ask1Price'))
     rate = _f(t.get('fundingRate'))
     hours = max(funding_interval_minutes, 1.0) / 60.0
+    if market_type == 'spot':
+        if not base_coin:
+            raise TruthError(f'{symbol}: spot truth needs base_coin — refuse, '
+                             'never guess (E8)')
+        positions = read_spot_position(read_wallet(client.wallet_balance()),
+                                       base_coin)
+    else:
+        positions = read_positions(client.position_list(market_type, symbol))
     return validate_truth({
         'symbol': symbol,
         'market_type': market_type,
@@ -103,7 +129,7 @@ def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.
         'funding_rate_hourly': rate / hours if rate is not None else None,
         'next_funding_time_ms': int(t.get('nextFundingTime') or 0) or None,
         'orders': read_orders(client, market_type, symbol),
-        'positions': read_positions(client.position_list(market_type, symbol))})
+        'positions': positions})
 
 
 def dedup_executions(seen_exec_ids, executions):
