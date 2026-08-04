@@ -1,50 +1,9 @@
-# The truth contract, Bybit side (SPEC V1-V5, E5, I4). Pure reads: nothing
-# here caches or mutates (V3). Schemas validated at the seam (V1).
+# Bybit truth (SPEC V1-V5, E5, I4). Pure reads; the schema is shared (../truth).
 from ..errors import VenueError
+from ..truth import (ORDER_KEYS, POSITION_KEYS, TRUTH_KEYS, WALLET_KEYS,
+                     TruthError, _f, validate_truth, validate_wallet)
 
 MAX_ORDER_PAGES = 500     # E5 backstop: hitting it is an error, not a bound
-
-TRUTH_KEYS = ('symbol', 'market_type', 'mark', 'bid', 'ask', 'split_ref',
-              'funding_rate_hourly', 'next_funding_time_ms', 'orders',
-              'positions')
-ORDER_KEYS = ('order_id', 'link_id', 'side', 'price', 'qty', 'cum_exec_qty',
-              'reduce_only', 'status', 'position_idx', 'order_type',
-              'updated_time_ms')
-POSITION_KEYS = ('position_idx', 'side', 'size', 'avg_entry', 'liq_price',
-                 'stop_loss', 'take_profit', 'leverage', 'unrealised_pnl')
-WALLET_KEYS = ('equity', 'available', 'mm_rate', 'im_rate', 'maint_margin',
-               'coins')
-
-
-class TruthError(ValueError):
-    """V1: a shape the engine must not trade from."""
-
-
-def _f(x, default=None):
-    try:
-        return float(x)
-    except (TypeError, ValueError):
-        return default
-
-
-def _require(d, keys, what):
-    missing = [k for k in keys if k not in d]
-    if missing:
-        raise TruthError(f'{what} missing {missing}')
-
-
-def validate_truth(t):
-    _require(t, TRUTH_KEYS, 'truth')
-    for o in t['orders']:
-        _require(o, ORDER_KEYS, 'order')
-    for p in t['positions'].values():
-        _require(p, POSITION_KEYS, 'position')
-    return t
-
-
-def validate_wallet(w):
-    _require(w, WALLET_KEYS, 'wallet')
-    return w
 
 
 def parse_instrument(category, info):
