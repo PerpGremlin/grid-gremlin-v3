@@ -63,16 +63,30 @@ class FakeVenue:
             if o['order_id'] == order_id:
                 o['qty'] = qty
 
-    def place_market(self, category, symbol, side, qty, position_idx=0):
+    def place_market(self, category, symbol, side, qty, position_idx=0,
+                     reduce_only=False):
+        if reduce_only and self.position:
+            left = float(self.position['size']) - float(qty)
+            self.position = None if left <= 1e-12 else dict(
+                self.position, size=str(left))
+            return
         self.position = {'positionIdx': position_idx, 'side': side,
                          'size': qty, 'avgPrice': str(self.mark),
                          'leverage': '10', 'unrealisedPnl': '0'}
 
-    def set_trading_stop(self, category, symbol, take_profit, position_idx):
-        self.tp_calls = getattr(self, 'tp_calls', [])
-        self.tp_calls.append(float(take_profit))
-        if self.position:
-            self.position['takeProfit'] = take_profit
+    def set_trading_stop(self, category, symbol, position_idx,
+                         take_profit=None, stop_loss=None, sl_size=None):
+        if take_profit is not None:
+            self.tp_calls = getattr(self, 'tp_calls', [])
+            self.tp_calls.append(float(take_profit))
+            if self.position:
+                self.position['takeProfit'] = take_profit
+        if stop_loss is not None:
+            self.sl_calls = getattr(self, 'sl_calls', [])
+            self.sl_calls.append((float(stop_loss),
+                                  float(sl_size) if sl_size else None))
+            if self.position:
+                self.position['stopLoss'] = stop_loss
 
     def fill(self, order_id, avg):
         """Simulate a taker sweep: order gone, position appears."""

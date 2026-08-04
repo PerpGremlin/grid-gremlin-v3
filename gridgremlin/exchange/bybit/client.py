@@ -177,11 +177,20 @@ class WriteClient(Client):
             'price': price, 'orderLinkId': link_id,
             'positionIdx': position_idx, 'reduceOnly': reduce_only})
 
-    def set_trading_stop(self, category, symbol, take_profit, position_idx):
-        self.post('/v5/position/trading-stop', {
-            'category': category, 'symbol': symbol,
-            'takeProfit': take_profit, 'tpslMode': 'Full',
-            'tpTriggerBy': 'MarkPrice', 'positionIdx': position_idx})
+    def set_trading_stop(self, category, symbol, position_idx,
+                         take_profit=None, stop_loss=None, sl_size=None):
+        body = {'category': category, 'symbol': symbol,
+                'positionIdx': position_idx,
+                'tpslMode': 'Partial' if sl_size else 'Full'}
+        if take_profit is not None:
+            body['takeProfit'] = take_profit
+            body['tpTriggerBy'] = 'MarkPrice'
+        if stop_loss is not None:
+            body['stopLoss'] = stop_loss
+            body['slTriggerBy'] = 'MarkPrice'
+            if sl_size is not None:
+                body['slSize'] = sl_size
+        self.post('/v5/position/trading-stop', body)
 
     def cancel_order(self, category, symbol, order_id):
         return self.post('/v5/order/cancel', {'category': category,
@@ -224,7 +233,9 @@ class WriteClient(Client):
             if e.kind != 'not_modified':
                 raise
 
-    def place_market(self, category, symbol, side, qty, position_idx=0):
+    def place_market(self, category, symbol, side, qty, position_idx=0,
+                     reduce_only=False):
         return self.post('/v5/order/create', {
             'category': category, 'symbol': symbol, 'side': side,
-            'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx})
+            'orderType': 'Market', 'qty': qty, 'positionIdx': position_idx,
+            'reduceOnly': reduce_only})

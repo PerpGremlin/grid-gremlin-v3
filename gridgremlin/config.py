@@ -25,7 +25,7 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'base_order_size', 'safety_order_size', 'order_size_multiplier',
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
-STOP_KEYS = ('watch', 'level')
+STOP_KEYS = ('watch', 'level', 'server_side')
 FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit', 'notify_orders')
 
 # C2 — renames. old key -> (new key, message).
@@ -142,15 +142,20 @@ def _validate_stop(stop, where):
         _refuse(f"{where}: 'stop' must be an object")
     _reject_unknown(stop, STOP_KEYS, f'{where}.stop')
     watch = _enum(stop, 'watch', f'{where}.stop', STOP_WATCHES)
+    server = _flag(stop, 'server_side')
+    if server and watch != 'mark_price':
+        _refuse(f"{where}.stop: server_side applies to watch: mark_price only — "
+                "account_equity lives in-process; position_sl IS the "
+                'venue-hosted stop')
     if watch == 'position_sl':
         if 'level' in stop:
             _refuse(f"{where}.stop: 'level' does not apply to watch: position_sl — "
                     "the level is the stop-loss you placed on the venue")
-        return {'watch': watch}
+        return {'watch': watch, 'server_side': False}
     least = 1.0 if watch == 'account_equity' else 0.0
     level = _num(stop, 'level', f'{where}.stop', least=least, least_open=(least == 0.0),
                  required=True)
-    return {'watch': watch, 'level': level}
+    return {'watch': watch, 'level': level, 'server_side': server}
 
 
 def _derive_rungs(cfg, where):
@@ -248,6 +253,10 @@ def validate_grid(row, where='row'):
         cfg['spot_leverage'] = sl
 
     cfg['stop'] = _validate_stop(cfg.get('stop'), where)
+    if (cfg['stop'] and cfg['stop']['server_side']
+            and cfg['market_type'] == 'spot'):
+        _refuse(f"{where}.stop: server_side needs a derivatives venue — spot "
+                'has no position to attach a stop to')
 
     # C4: the one derived value, written back once.
     eff = 1.0

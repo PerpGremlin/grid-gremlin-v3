@@ -87,11 +87,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       restart-adoption specs green on demo ✓ (155 specs; live round opened on demo:
       base at market -> venue TP at avg x 1.01 -> doubled safeties resting)
 
-- [ ] **13 — stops**
+- [x] **13 — stops** *(PR #20)*
       builds: X1–X6 (flatten-and-kill per D1; grid-inventory scope per D2; watch
       restructure per D3)
       done when: each stop path's on-venue residue is specced; server-side refuses
-      where unsupported; the floor core provably survives a stop
+      where unsupported; the floor core provably survives a stop ✓ (166 specs)
 
 - [ ] **14 — fleet and watchdog**
       builds: F1–F6, E3's snapshot half
