@@ -33,9 +33,11 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       NOT here: exits, caps, martingale
 
 - [ ] **4 — the exit ladder, the caps, the entry guard** (pure)
-      builds: G7–G10, G12 (G4 decided: ref-priced lot, one anchor)
+      builds: G7–G10, G12, G13's plan-level half (G4 decided: ref-priced lot)
       done when: the start-matrix rows for flat and simple-adopt fixtures green;
-      sabotage specs (T1) prove G7 and G9 can fail
+      sabotage specs (T1) prove G7, G9 and G13 can fail — incl. the two adoption
+      cases: in-profit emits no sell below ref, underwater emits no order between
+      mark and basis
 
 - [ ] **5 — the martingale as data** (pure)
       builds: M1, M2, M5, M8 (3Commas vocabulary per D11; no range bounds)
@@ -58,7 +60,7 @@ to an exchange until slice 8; nothing trades unwatched, ever.
       with an empty steady-state diff; order events logged, not shipped
 
 - [ ] **9 — the earned guards**
-      builds: B3–B7
+      builds: B3–B7, G13's placer/venue half (cross guard + post-only rejection path)
       done when: each guard's incident is a spec that fails with the guard removed
       NOT here: split hysteresis
 

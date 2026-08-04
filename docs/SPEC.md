@@ -75,6 +75,12 @@ eventually pin (T1).
   fires or the position is closed from outside (S7). *(§5d; field consensus; D1)*
 - **G12** The engine is netted (Camp B): the ladder re-derives from the net position;
   no per-rung paired state exists anywhere. *(decided 2026-07-20; ALIGNMENT §1)*
+- **G13** No planned order is ever marketable — in any position state, including every
+  adoption case: entries only below the ref, exits only above their floor, the cross
+  guard drops anything near the opposite quote, and post-only is the venue-enforced
+  backstop (a crossing order is rejected, never filled). Pinned by sabotage: with the
+  split or the floor removed, the guard and the venue must still refuse. *(the owner's
+  adoption concern, 2026-08-04; D6)*
 
 ## W — the window
 
