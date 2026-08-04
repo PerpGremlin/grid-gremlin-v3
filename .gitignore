@@ -14,3 +14,6 @@ docs/PerpGremlinResponse.txt
 # Secrets — never commit
 .env
 logs/
+
+# Claude Code local state — never commit, any variant
+.claude/
