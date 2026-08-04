@@ -149,7 +149,9 @@ def _ensure_symbol_capacity(clients, bots, notifier):
                 client.set_risk_limit('linear', symbol, tier['id'], idx)
             except Exception as e:
                 notifier.event('warn', symbol, f'risk limit: {e}')
-        buy = sell = None
+        # the venue requires buy lv == sell lv (10001): one symbol leverage,
+        # the max of the legs — margin-cheapest; ladder sizes come from config
+        levs = []
         for b in legs:
             lev = min(b.cfg['leverage'], tier['max_leverage'] or b.cfg['leverage'])
             if lev != b.cfg['leverage']:
@@ -158,12 +160,15 @@ def _ensure_symbol_capacity(clients, bots, notifier):
                                f"{b.cfg['leverage']:g} -> {lev:g} (tier max at "
                                f'{need:,.0f} symbol notional)')
                 b.cfg['leverage'] = lev
-            if b.cfg['side'] == 'long':
-                buy = lev
-            else:
-                sell = lev
+            levs.append(lev)
             b.cfg['_tier_mm_rate'] = tier['mm_rate']
-        client.set_leverage('linear', symbol, buy or sell, sell or buy)
+        symbol_lev = max(levs)
+        if len(set(levs)) > 1:
+            notifier.event('warn', symbol,
+                           f'legs configured {sorted(set(levs))} but the venue '
+                           f'requires equal buy/sell leverage — using '
+                           f'{symbol_lev:g} for both (sizes unaffected)')
+        client.set_leverage('linear', symbol, symbol_lev)
 
 
 def _project_margin(clients, cfgs, notifier):
