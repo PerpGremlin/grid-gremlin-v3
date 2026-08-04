@@ -5,6 +5,22 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-08-04 — the VPS: pipeline and the watch
+
+**Done.** v3 cloned onto the VPS beside the parked v2 (which stays untouched at its
+good commit); the work-here-push-pull-there loop proven — and its first run caught the
+T4 parity specs hardcoding workstation assumptions, fixed via the loop itself. The v2
+watchdog setup replicated for v3: fleet unit (Restart=always, OOM-sacrifice-first,
+OnFailure Telegram alarm), watchdog oneshot + 5-minute timer in its own slot
+(SuccessExitStatus=1 — a paged breach is the unit succeeding; only a crash alarms),
+watchdog-broken alarm, and the watchdog now pages Telegram directly with v2's
+send-before-persist discipline. The demo fleet runs CONTINUOUSLY on the box now — and
+its first cycle re-adopted the ladders the workstation had placed, across machines,
+by identity, zero churn. Discipline note: the demo account's single process lives on
+the VPS henceforth; workstation demo runs only with the unit stopped.
+
+**Next.** Soak. The watchdog watches; the phone hears; the owner reads.
+
 ## 2026-08-04 — build day: slices 0-8, first live trade
 
 **Done.** Eight slices in one session, each its own merged PR, suite growing 0 -> 115
