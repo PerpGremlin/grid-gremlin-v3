@@ -10,3 +10,6 @@ __pycache__/
 
 # Owner working notes — never commit
 docs/PerpGremlinResponse.txt
+
+# Secrets — never commit
+.env
