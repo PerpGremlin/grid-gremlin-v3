@@ -1,5 +1,5 @@
 {
-  "_note": "HL TESTNET fleet - sized against the real 999 USDC faucet allowance per the owner's test-like-real-life doctrine: 40% capital at 5x, a pre-committed stop below the range, watchdog-required.",
+  "_note": "HL TESTNET fleet: long+short grids across coins (HL is one-way, so hedging happens across symbols). Sized against the ~999 mock USDC like real capital. Martingale refused on HL this phase (M3).",
   "watchdog": "configs/watchdog.hl.testnet.json",
   "poll_seconds": 5,
   "bots": [
@@ -8,7 +8,7 @@
       "market_type": "linear",
       "symbol": "BTC",
       "side": "long",
-      "capital": 400,
+      "capital": 300,
       "leverage": 5,
       "lower": 62000,
       "upper": 66000,
@@ -17,6 +17,54 @@
       "stop": {
         "watch": "mark_price",
         "level": 61500
+      }
+    },
+    {
+      "venue": "hyperliquid",
+      "market_type": "linear",
+      "symbol": "ETH",
+      "side": "short",
+      "capital": 200,
+      "leverage": 5,
+      "lower": 1780,
+      "upper": 1960,
+      "rungs": 21,
+      "split_hysteresis_rungs": 0.3,
+      "stop": {
+        "watch": "mark_price",
+        "level": 1985
+      }
+    },
+    {
+      "venue": "hyperliquid",
+      "market_type": "linear",
+      "symbol": "SOL",
+      "side": "long",
+      "capital": 150,
+      "leverage": 5,
+      "lower": 69,
+      "upper": 78,
+      "rungs": 15,
+      "split_hysteresis_rungs": 0.3,
+      "stop": {
+        "watch": "mark_price",
+        "level": 68
+      }
+    },
+    {
+      "venue": "hyperliquid",
+      "market_type": "linear",
+      "symbol": "DOGE",
+      "side": "short",
+      "capital": 150,
+      "leverage": 5,
+      "lower": 0.066,
+      "upper": 0.075,
+      "rungs": 15,
+      "split_hysteresis_rungs": 0.3,
+      "stop": {
+        "watch": "mark_price",
+        "level": 0.077
       }
     }
   ]

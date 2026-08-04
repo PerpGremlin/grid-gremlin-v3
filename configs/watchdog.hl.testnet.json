@@ -11,7 +11,19 @@
   "positions": {
     "linBTCl": {
       "min": 0,
-      "max": 0.0375
+      "max": 0.0282
+    },
+    "linETHs": {
+      "min": 0,
+      "max": 0.643
+    },
+    "linSOLl": {
+      "min": 0,
+      "max": 12.2
+    },
+    "linDOGEs": {
+      "min": 0,
+      "max": 12820
     }
   }
 }
