@@ -37,9 +37,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
   diagnosis attached to the failure alarm, so a page arrives with a cause.
 - **Agentic range-review** — routine "is this range still sane" as an ops
   health-check task, not engine code (D10's closing note).
-- **Unit templates in-repo** — the systemd units live only on the deploy box;
-  genericised templates (placeholder paths — the hygiene rule bars real ones)
-  belong under `ops/` so the setup is reproducible from the repo.
 
 ## 5. Built but not yet exercised live
 

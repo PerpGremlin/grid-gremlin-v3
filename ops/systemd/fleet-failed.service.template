@@ -1,0 +1,11 @@
+[Unit]
+Description=Grid Gremlin v3 {{FLEET}} fleet down — alert, at most one page per 30 min
+
+[Service]
+Type=oneshot
+EnvironmentFile={{REPO_DIR}}/.env
+# The stamp file rate-limits the page. Found live 2026-08-04: with
+# StartLimitIntervalSec=0, EVERY failed restart re-triggers OnFailure — a
+# venue outage became one Telegram page per retry, all night. First failure
+# pages immediately; repeats are swallowed for 1800s.
+ExecStart=/bin/sh -c 'stamp={{REPO_DIR}}/logs/{{FLEET}}-failed.stamp; now=$$(date +%%s); last=$$(cat "$$stamp" 2>/dev/null || echo 0); [ $$((now - last)) -lt 1800 ] && exit 0; echo "$$now" > "$$stamp"; curl -s -m 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" --data-urlencode text="[v3 {{FLEET}}] the fleet is down (page repeats at most every 30 min). See: journalctl --user -u grid-gremlin3-{{FLEET}} -n 200"'

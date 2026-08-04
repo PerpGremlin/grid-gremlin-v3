@@ -146,6 +146,13 @@ start-conditions, profit reinvest, cooldown tuning.
       readout; fills from before this slice stay in the unowned bucket
       honestly ✓
 
+- [x] **20 — unit templates in-repo** *(same PR)*
+      `ops/` — the four deploy layers as genericised systemd templates
+      (placeholder paths; the hygiene rule bars real ones), including the
+      stamp-file page rate-limit found live during the HL venue outage. The
+      box's watchdog-crash alerts synced to the same shape.
+      done when: the deploy is reproducible from the repo alone ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

@@ -1,0 +1,12 @@
+[Unit]
+Description=Grid Gremlin v3 {{FLEET}} watchdog — liveness by output, every 5 min
+
+[Timer]
+# Every fleet's watchdog takes its own minute slot so nothing ever queues
+# behind anything else on a small box (v2 held *:0/5 and *:2/5; v3 runs in
+# the free slots). Pick an unused {{SLOT}} per fleet, e.g. *:4/5 or *:1/5.
+OnCalendar={{SLOT}}
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

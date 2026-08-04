@@ -1,0 +1,11 @@
+[Unit]
+Description=Grid Gremlin v3 {{FLEET}} watchdog — snapshot staleness + per-bot bounds
+OnFailure=grid-gremlin3-{{FLEET}}-watchdog-failed.service
+
+[Service]
+Type=oneshot
+WorkingDirectory={{REPO_DIR}}
+ExecStart=/usr/bin/python3 -m gridgremlin.watchdog configs/{{WATCHDOG_CONFIG}}
+# exit 1 = breaches found AND PAGED by the watchdog itself — that is a success
+# for the unit; only a crash (send failure, traceback) is a unit failure.
+SuccessExitStatus=1
