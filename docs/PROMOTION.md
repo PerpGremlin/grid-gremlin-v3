@@ -22,8 +22,10 @@ flag (F5) — a mainnet fleet file lives beside the box's `.env`, not in git.
 - [ ] Finding rate flat: no new engine defect for 7 consecutive days —
       alarm-path and venue-outage findings count, config tuning does not.
 - [ ] Zero unexplained watchdog breaches over the same window.
-- [ ] A stop has fired end-to-end live (X1: flatten, cancel, kill, page) at
-      least once, deliberately if the market never obliges.
+- [x] A stop has fired end-to-end live (X1: flatten, cancel, kill, page) —
+      the deliberate 2026-08-05 test, including X7 tombstone persistence
+      across two restarts. (The server-side variant still owes a live venue
+      trigger.)
 - [ ] Restart continuity proven across a deploy on BOTH venues (S6, routine by
       now) and across one full box reboot.
 - [ ] The readout's owned/unowned split is clean: no unexplained unowned fills

@@ -96,7 +96,7 @@
       "seed": true
     },
     {
-      "_note": "DELIBERATE X1/X7 STOP-FIRE TEST 2026-08-05 (owner-authorized): level set past mark so the stop fires on cycle one; the XRP experiment clock is sacrificed and restarts after",
+      "_note": "A/B: half-band hysteresis, tight window. Clock restarted 2026-08-05 after the deliberate X1/X7 stop-fire test; now carries a server-side stop so X3 stays exercised",
       "market_type": "linear",
       "symbol": "XRPUSDT",
       "side": "short",
@@ -109,7 +109,8 @@
       "place_within_pct": 0.03,
       "stop": {
         "watch": "mark_price",
-        "level": 1.05
+        "level": 1.16,
+        "server_side": true
       }
     },
     {
