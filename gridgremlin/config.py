@@ -193,8 +193,13 @@ def validate_grid(row, where='row'):
     if not isinstance(cfg.get('symbol'), str) or not cfg.get('symbol'):
         _refuse(f"{where}: 'symbol' must be a non-empty string")
     cfg['side'] = _enum(cfg, 'side', where, SIDES)
-    if cfg['market_type'] == 'spot' and cfg['side'] == 'short':
-        _refuse(f"{where}: spot cannot be shorted")
+    if cfg['market_type'] == 'spot' and cfg['side'] == 'short' \
+            and not cfg.get('spot_borrow'):
+        _refuse(f"{where}: a spot short needs 'spot_borrow': true — only "
+                'borrow can sell what is not held (D24)')
+    if cfg['market_type'] == 'spot' and cfg.get('leverage') is not None:
+        _refuse(f"{where}: spot does not take 'leverage' — borrow sizing is "
+                "'spot_leverage' under 'spot_borrow' (D24)")
     cfg['strategy'] = 'grid'  # normalised back for BOTH strategies (config M14)
 
     capital = _num(cfg, 'capital', where, least=0.0, least_open=True, required=True)
@@ -250,8 +255,15 @@ def validate_grid(row, where='row'):
     if (cfg['spot_borrow'] or sl is not None) and cfg['market_type'] != 'spot':
         _refuse(f"{where}: 'spot_borrow'/'spot_leverage' apply to market_type "
                 "'spot' only")
-    if sl is not None:
+    if cfg['spot_borrow'] and sl is None:
+        _refuse(f"{where}: 'spot_borrow' needs 'spot_leverage' — say the "
+                'multiple (D24)')
+    if sl is not None and not cfg['spot_borrow']:
+        _refuse(f"{where}: 'spot_leverage' without 'spot_borrow' is half a "
+                'directive (D24)')
+    if cfg['spot_borrow']:
         cfg['spot_leverage'] = sl
+        cfg['leverage'] = sl     # D24: sizing flows the one normal path
 
     cfg['stop'] = _validate_stop(cfg.get('stop'), where)
     if (cfg['stop'] and cfg['stop']['server_side']

@@ -290,3 +290,44 @@ def spec_V6_dust_below_the_venue_minimum_is_flat():
     held = read_symbol_truth(SpotClient(), 'spot', 'LTCUSDT',
                              base_coin='LTC', dust=0.00001)
     assert held['positions'][0]['size'] == 2.5     # real holdings unaffected
+
+
+def spec_D24_a_negative_balance_is_a_short():
+    class Short(SpotClient):
+        def wallet_balance(self):
+            return {'list': [{'totalEquity': '1000', 'coin': [
+                {'coin': 'LTC', 'walletBalance': '-3.2', 'equity': '-142',
+                 'availableToWithdraw': '0'}]}]}
+    p = read_symbol_truth(Short(), 'spot', 'LTCUSDT', base_coin='LTC',
+                          dust=0.00001)['positions'][0]
+    assert p['side'] == 'Sell' and p['size'] == 3.2
+
+
+def spec_D24_dust_is_symmetric_around_zero():
+    class NegDust(SpotClient):
+        def wallet_balance(self):
+            return {'list': [{'totalEquity': '1000', 'coin': [
+                {'coin': 'LTC', 'walletBalance': '-0.000008', 'equity': '0',
+                 'availableToWithdraw': '0'}]}]}
+    assert read_symbol_truth(NegDust(), 'spot', 'LTCUSDT', base_coin='LTC',
+                             dust=0.00001)['positions'] == {}
+
+
+def spec_D24_spot_bodies_carry_the_borrow_flag():
+    from gridgremlin.exchange.bybit.client import WriteClient
+
+    class W(WriteClient):
+        def __init__(self):
+            self.bodies = []
+
+        def post(self, path, body):
+            self.bodies.append(body)
+            return {}
+    w = W()
+    w.place_order('spot', 'LTCUSDT', 'Sell', '1', '50', 'x-1-a', borrow=True)
+    w.place_order('spot', 'LTCUSDT', 'Buy', '1', '40', 'x-2-a')
+    w.place_market('spot', 'LTCUSDT', 'Sell', '1', link_id='x-0-a',
+                   borrow=True)
+    assert w.bodies[0]['isLeverage'] == 1        # margin trade
+    assert w.bodies[1]['isLeverage'] == 0        # plain spot, stated
+    assert w.bodies[2]['isLeverage'] == 1

@@ -93,12 +93,16 @@ def read_spot_position(wallet, base_coin, dust=0.0):
     and the adoption family runs ref-only (G6's no-basis arm) unless the
     config states `assumed_avg_entry`. A residue below `dust` (the venue's
     min order qty) is FLAT — spot fees settle in the base coin, so a full
-    exit leaves an unsellable shaving that must never count as holding."""
+    exit leaves an unsellable shaving that must never count as holding.
+    D24: the balance is SIGNED — a borrow-short lives as a negative balance,
+    so sign is side and the dust rule applies symmetrically around zero."""
     coin = wallet['coins'].get(base_coin) or {}
     size = coin.get('wallet_balance', 0.0)
-    if size <= 0 or size < dust:
+    if abs(size) < dust or size == 0:
         return {}
-    return {0: {'position_idx': 0, 'side': 'Buy', 'size': size,
+    return {0: {'position_idx': 0,
+                'side': 'Buy' if size > 0 else 'Sell',   # D24: negative = short
+                'size': abs(size),
                 'avg_entry': None, 'liq_price': None, 'stop_loss': None,
                 'take_profit': None, 'leverage': None,
                 'unrealised_pnl': None}}

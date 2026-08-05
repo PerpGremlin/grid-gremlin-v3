@@ -214,7 +214,8 @@ class WriteClient(Client):
                          kind=_post_kind(code))
 
     def place_order(self, category, symbol, side, qty, price, link_id,
-                    position_idx=0, reduce_only=False, post_only=True):
+                    position_idx=0, reduce_only=False, post_only=True,
+                    borrow=False):
         body = {'category': category, 'symbol': symbol, 'side': side,
                 'orderType': 'Limit',
                 'timeInForce': 'PostOnly' if post_only else 'GTC', 'qty': qty,
@@ -222,6 +223,8 @@ class WriteClient(Client):
         if category != 'spot':          # spot has neither concept (V6)
             body['positionIdx'] = position_idx
             body['reduceOnly'] = reduce_only
+        else:
+            body['isLeverage'] = 1 if borrow else 0     # D24: margin spot
         return self.post('/v5/order/create', body)
 
     def set_trading_stop(self, category, symbol, position_idx,
@@ -281,13 +284,14 @@ class WriteClient(Client):
                 raise
 
     def place_market(self, category, symbol, side, qty, position_idx=0,
-                     reduce_only=False, link_id=None):
+                     reduce_only=False, link_id=None, borrow=False):
         body = {'category': category, 'symbol': symbol, 'side': side,
                 'orderType': 'Market', 'qty': qty}
         if category == 'spot':
             # a spot market Buy is QUOTE-denominated by default — pin the unit
             # so qty stays base on both sides (V6)
             body['marketUnit'] = 'baseCoin'
+            body['isLeverage'] = 1 if borrow else 0     # D24: margin spot
         else:
             body['positionIdx'] = position_idx
             body['reduceOnly'] = reduce_only

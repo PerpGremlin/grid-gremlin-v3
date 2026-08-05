@@ -206,12 +206,32 @@ def spec_strategy_is_normalised_back_for_grid_too():
     assert validate_config(dict(ROW))['strategy'] == 'grid'  # config M14's fix
 
 
-def spec_spot_short_is_refused():
-    _refused(_row(market_type='spot', side='short'), 'spot cannot be shorted')
+def spec_D24_spot_short_needs_borrow():
+    _refused(_row(market_type='spot', side='short', leverage=None),
+             "needs 'spot_borrow'")
+    cfg = validate_config(_row(market_type='spot', side='short', leverage=None,
+                               spot_borrow=True, spot_leverage=2))
+    assert cfg['side'] == 'short' and cfg['leverage'] == 2.0
+
+
+def spec_D24_borrow_and_leverage_come_together():
+    _refused(_row(market_type='spot', side='long', leverage=None,
+                  spot_borrow=True), "needs 'spot_leverage'")
+    _refused(_row(market_type='spot', side='long', leverage=None,
+                  spot_leverage=3), 'half a directive')
+    cfg = validate_config(_row(market_type='spot', side='long', leverage=None,
+                               spot_borrow=True, spot_leverage=3))
+    assert cfg['leverage'] == 3.0      # D24: sizing flows the one normal path
+
+
+def spec_D24_spot_refuses_the_plain_leverage_key():
+    _refused(_row(market_type='spot', side='long', leverage=5),
+             "does not take 'leverage'")
 
 
 def spec_booleans_coerce_unconditionally():
-    cfg = validate_config(_row(market_type='spot', side='long', spot_borrow=0))
+    cfg = validate_config(_row(market_type='spot', side='long',
+                               leverage=None, spot_borrow=0))
     assert cfg['spot_borrow'] is False  # M16: never coerced inside an `if`
 
 

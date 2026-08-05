@@ -45,6 +45,7 @@ class Bot:
         self._uncovered_warned = False
         self._anomaly_warned = False
         self._anchor = None            # M: the round's base price
+        self._borrow = bool(cfg.get('spot_borrow'))    # D24
         self._round = 0
 
     def _kill(self, truth, reason):
@@ -104,7 +105,8 @@ class Bot:
                     cfg['market_type'], cfg['symbol'], self._exit_side,
                     adapter.fmt_qty(qty),
                     adapter.position_idx(self._exit_side, True) or 0,
-                    reduce_only=True, link_id=self._make_link(0))
+                    reduce_only=True, link_id=self._make_link(0),
+                    borrow=self._borrow)
             except VenueError as e:
                 self.notify.event('warn', self.botid, f'flatten: {e}')
         floor = abs(held) - qty
@@ -184,7 +186,8 @@ class Bot:
             self._gen += 1
             self.client.place_market(cfg['market_type'], cfg['symbol'],
                                      self._entry_side, adapter.fmt_qty(qty),
-                                     idx, link_id=self._make_link(0))
+                                     idx, link_id=self._make_link(0),
+                                     borrow=self._borrow)
             self._anchor = truth['mark']
             self.notify.event('start', self.botid,
                               f'round {self._round + 1}: base '
@@ -213,7 +216,8 @@ class Bot:
                 cfg['market_type'], cfg['symbol'], self._exit_side,
                 adapter.fmt_qty(abs(held)), adapter.fmt_price(target), link,
                 adapter.position_idx(self._exit_side, True) or 0,
-                reduce_only=True, post_only=False)     # marketable: target or better
+                reduce_only=True, post_only=False,     # marketable: target or better
+                borrow=self._borrow)
             self.notify.event('tp', self.botid,
                               f'target {target:.10g} already met — closing the '
                               'round at target or better')
@@ -240,7 +244,7 @@ class Bot:
                         adapter.fmt_qty(abs(held)), adapter.fmt_price(target),
                         self._make_link(0),
                         adapter.position_idx(self._exit_side, True) or 0,
-                        reduce_only=True, post_only=False)
+                        reduce_only=True, post_only=False, borrow=self._borrow)
                 if venue_tp is None:
                     self.notify.event('tp', self.botid,
                                       f'round TP resting: {target:.10g}')
@@ -266,7 +270,8 @@ class Bot:
         self._gen += 1
         self.client.place_market(self.cfg['market_type'], self.cfg['symbol'],
                                  self._entry_side, self.adapter.fmt_qty(qty),
-                                 idx, link_id=self._make_link(0))
+                                 idx, link_id=self._make_link(0),
+                                 borrow=self._borrow)
         self.notify.event('seed', self.botid,
                           f'{self._entry_side} {qty:.10g} at market for '
                           f'{len(exit_rungs)} exit rungs')
@@ -446,7 +451,7 @@ class Bot:
                 self.client.place_order(
                     cfg['market_type'], cfg['symbol'], want['side'],
                     adapter.fmt_qty(want['qty']), adapter.fmt_price(want['price']),
-                    link, idx, want['reduce_only'])
+                    link, idx, want['reduce_only'], borrow=self._borrow)
                 placed_now.add(key)
                 if want['side'] == self._exit_side:
                     placed_exit_links.add(link)

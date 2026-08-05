@@ -53,7 +53,8 @@ class FakeVenue:
 
     # writes
     def place_order(self, category, symbol, side, qty, price, link_id,
-                    position_idx=0, reduce_only=False, post_only=True):
+                    position_idx=0, reduce_only=False, post_only=True,
+                    borrow=False):
         self._oid += 1
         self.orders.append({'order_id': f'o{self._oid}', 'link_id': link_id,
                             'side': side, 'price': float(price), 'qty': qty,
@@ -69,7 +70,7 @@ class FakeVenue:
                 o['qty'] = qty
 
     def place_market(self, category, symbol, side, qty, position_idx=0,
-                     reduce_only=False, link_id=None):
+                     reduce_only=False, link_id=None, borrow=False):
         self.market_links = getattr(self, 'market_links', [])
         self.market_links.append(link_id)
         if reduce_only and self.position:

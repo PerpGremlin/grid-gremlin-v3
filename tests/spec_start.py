@@ -34,7 +34,7 @@ class SeedVenue(FakeVenue):
         self.market_orders = []
 
     def place_market(self, category, symbol, side, qty, position_idx=0,
-                     reduce_only=False, link_id=None):
+                     reduce_only=False, link_id=None, borrow=False):
         self.market_orders.append((side, float(qty)))
         self.market_links = getattr(self, 'market_links', [])
         self.market_links.append(link_id)
@@ -150,7 +150,8 @@ def spec_S6_the_reset_list_is_complete_and_documented():
                   '_anchor', '_round'}
     state = {k for k, v in vars(bot).items()
              if k.startswith('_') and not callable(v)
-             and k not in ('_now', '_entry_side', '_exit_side', '_min_gap')}
+             and k not in ('_now', '_entry_side', '_exit_side', '_min_gap',
+                           '_borrow')}
     assert state == documented, state ^ documented
 
 
@@ -278,3 +279,28 @@ def spec_V6_a_venue_reported_basis_overrules_the_config():
     bot.cycle()
     sells = [o['price'] for o in venue.orders if o['side'] == 'Sell']
     assert sells and min(sells) < 48.0             # truth won, config ignored
+
+
+# --- D24: a borrow bot marks every placement -----------------------------------
+
+def spec_D24_placements_carry_the_borrow_flag():
+    class Recorder(SpotVenue):
+        def __init__(self, mark=44.0):
+            super().__init__(mark)
+            self.borrows = []
+
+        def place_order(self, category, symbol, side, qty, price, link_id,
+                        position_idx=0, reduce_only=False, post_only=True,
+                        borrow=False):
+            self.borrows.append(borrow)
+            super().place_order(category, symbol, side, qty, price, link_id,
+                                position_idx, reduce_only, post_only)
+    venue = Recorder()
+    venue.holding = 0.0
+    bot = _spot_bot(venue, [], spot_borrow=True, spot_leverage=2)
+    bot.cycle()
+    assert venue.borrows and all(venue.borrows)  # every order borrows
+    plain = Recorder()
+    plain.holding = 0.0
+    _spot_bot(plain, []).cycle()
+    assert plain.borrows and not any(plain.borrows)
