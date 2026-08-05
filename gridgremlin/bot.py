@@ -49,6 +49,8 @@ class Bot:
         self._borrow = bool(cfg.get('spot_borrow'))    # D24
         self.tombs = tombstones        # X7: the prevents-restart half of D1
         self._round = 0
+        self._scale = None             # M12: reinvest factor, venue-derived
+        self._cool_until = None        # M13: venue-anchored, recomputed on need
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
@@ -165,6 +167,34 @@ class Bot:
         raw = basis * (1.0 + pct) if self.cfg['side'] == 'long' \
             else basis * (1.0 - pct)
         return self.adapter.round_price(raw)
+
+    def _own_fills(self):
+        """M12/M13: this bot's whole venue fill history, link-attributed —
+        the exchange is the state, so scale and cooldown survive restarts."""
+        hist = getattr(self.client, 'fills_history', None)
+        if hist is None:
+            return []
+        now_ms = int(self._now() * 1000)
+        fills = hist(self.cfg['market_type'], self.cfg['symbol'], 0, now_ms)
+        return [f for f in fills
+                if rung_of(f['link_id'], self.botid) is not None]
+
+    def _reinvest_scale(self, fills):
+        """M12: 1 + lifetime realized-net / capital, floored at 0, CAPPED at
+        1.2 — the watchdog ceiling sits at cap x1.2 (F2), so auto-compound
+        never outgrows its watcher; beyond +20% the owner raises capital in
+        config, ceiling reviewed together (D26)."""
+        from .report import apply_fill, new_book
+        book = new_book()
+        inverse = self.cfg['market_type'] == 'inverse'
+        for f in sorted(fills, key=lambda f: f['time_ms']):
+            apply_fill(book, f['side'], f['price'], f['qty'], f['fee'],
+                       inverse=inverse)
+        net = book['realized'] - book['fees']
+        if inverse:
+            net = self.adapter.pnl_to_usd(net, fills[-1]['price']) if fills \
+                else 0.0
+        return min(max(0.0, 1.0 + net / self.cfg['capital']), 1.2)
 
     def _round_targets(self, basis, held):
         """M4/D23: targets from average entry; tranches share ONE position."""
@@ -283,7 +313,33 @@ class Bot:
                 self.notify.event('repeat', self.botid,
                                   f'round {self._round + 1} re-anchors at '
                                   'market (M5: from flat only)')
-            qty = adapter.round_qty(cfg['base_order_size'] / truth['mark'])
+            if cfg.get('repeat_cooldown_seconds') or cfg.get('reinvest'):
+                fills = self._own_fills()
+                cd = cfg.get('repeat_cooldown_seconds') or 0.0
+                if cd and fills:
+                    last_s = max(f['time_ms'] for f in fills) / 1000.0
+                    if self._cool_until != last_s + cd:
+                        self._cool_until = last_s + cd
+                        if self._now() < self._cool_until:
+                            self.notify.event(
+                                'repeat', self.botid,
+                                f'round complete — cooling {cd:.0f}s from the '
+                                'TP fill (M13, venue-anchored)')
+                    if self._now() < self._cool_until:
+                        return {'round': 'cooling'}
+                if cfg.get('reinvest'):
+                    scale = self._reinvest_scale(fills)
+                    if self._scale != scale:
+                        self._scale = scale
+                        if abs(scale - 1.0) > 1e-9:
+                            self.notify.event(
+                                'repeat', self.botid,
+                                f'reinvest: sizes x{scale:.4g} (M12, from '
+                                'lifetime venue fills)')
+            scale = self._scale if (cfg.get('reinvest') and self._scale) \
+                else 1.0
+            qty = adapter.round_qty(cfg['base_order_size'] * scale
+                                    / truth['mark'])
             if qty <= 0 or not adapter.meets_minimum(qty, truth['mark']):
                 self.notify.event('warn', self.botid, 'base order below minimum')
                 return {'round': 'unplaceable'}
@@ -518,8 +574,13 @@ class Bot:
                                    and o['side'] == self._exit_side
                                    and rung_of(o['link_id'], self.botid) == 0)]
         if cfg['strategy'] == 'martingale':
+            if cfg.get('reinvest') and self._scale is None:
+                self._scale = self._reinvest_scale(self._own_fills())
             desired = plan_martingale(cfg, adapter, self._anchor or basis or ref,
-                                      ref, held)
+                                      ref, held,
+                                      scale=(self._scale
+                                             if cfg.get('reinvest')
+                                             and self._scale else 1.0))
         else:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
                                 resting_exits)

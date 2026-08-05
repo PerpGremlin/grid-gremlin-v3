@@ -9,10 +9,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 - **Signal start-conditions** — a round opens on an external signal, not
   immediately. Owner 2026-08-05: flagged for LATER — they do their own TA to
   enter, even with bots.
-- **Profit reinvest** — fold realised profit back into `capital` instead of
-  letting it idle.
-- **Cooldown-between-rounds tuning** — `repeat` today restarts a martingale
-  round on the next cycle; a configurable pause may belong here.
 
 ## 2. Built but not yet exercised live
 

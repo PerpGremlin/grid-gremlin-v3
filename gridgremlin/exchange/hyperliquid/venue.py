@@ -49,6 +49,10 @@ class HLVenueClient(ExchangeClient):
         link_to_cloid(link)                      # refuses > 16 bytes
         return link
 
+    def fills_history(self, market_type, symbol, since_ms, now_ms):
+        return hl_truth.read_fills(self.user_fills_by_time(since_ms),
+                                   {symbol})
+
     def read_wallet(self):
         return hl_truth.read_wallet(self)
 

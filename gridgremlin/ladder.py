@@ -218,16 +218,20 @@ def martingale_schedule(cfg):
     return out
 
 
-def plan_martingale(cfg, adapter, base_price, split_ref, held_base=0.0):
+def plan_martingale(cfg, adapter, base_price, split_ref, held_base=0.0,
+                    scale=1.0):
     """M1: safety orders from the schedule — cumulative-prefix suppression,
     entry side only (G13), no exits (the round TP is slice 12). The base order
-    itself is lifecycle, not a resting rung."""
+    itself is lifecycle, not a resting rung. `scale` is M12's reinvest factor:
+    every size in the series, same multiplier, invariants preserved by
+    proportionality."""
     sign = -1.0 if cfg['side'] == 'long' else 1.0
     entry_side = 'Buy' if cfg['side'] == 'long' else 'Sell'
     orders, cum = [], 0.0
     for n, (notional, cumdev) in enumerate(martingale_schedule(cfg)):
         price = adapter.round_price(base_price * (1.0 + sign * cumdev))
-        qty = adapter.round_qty(adapter.qty_from_notional(notional, price))
+        qty = adapter.round_qty(adapter.qty_from_notional(notional * scale,
+                                                          price))
         cum += qty
         if n == 0:
             continue

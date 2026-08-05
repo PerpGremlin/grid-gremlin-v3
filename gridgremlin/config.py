@@ -22,7 +22,8 @@ GRID_KEYS = COMMON_KEYS + (
     'assumed_avg_entry', 'min_position_base', 'max_position_base',
     'spot_borrow', 'spot_leverage', 'seed')
 MARTINGALE_KEYS = COMMON_KEYS + (
-    'take_profit_tranches', 'trailing_stop_pct',
+    'take_profit_tranches', 'trailing_stop_pct', 'reinvest',
+    'repeat_cooldown_seconds',
     'base_order_size', 'safety_order_size', 'order_size_multiplier',
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
@@ -251,6 +252,9 @@ def validate_grid(row, where='row'):
             _refuse(f"{where}: 'max_position_base' must exceed 'min_position_base'")
         cfg['max_position_base'] = cap
 
+    if cfg.get('reinvest') is not None:
+        _refuse(f"{where}: grids reinvest by EDITING 'capital' — deliberate, "
+                'ceiling reviewed together (D26); the toggle is martingale-only')
     cfg['seed'] = _flag(cfg, 'seed')
     cfg['spot_borrow'] = _flag(cfg, 'spot_borrow')
     sl = _num(cfg, 'spot_leverage', where, least=1.0, most=10.0)
@@ -360,6 +364,12 @@ def validate_martingale(row, where='row'):
     w = _fraction(cfg, 'place_within_pct', where)
     cfg['place_within_pct'] = 0.05 if w is None else w
     cfg['repeat'] = _flag(cfg, 'repeat')
+    cfg['reinvest'] = _flag(cfg, 'reinvest')     # M12: auto-compound toggle
+    cd = _num(cfg, 'repeat_cooldown_seconds', where, least=0.0)
+    if cd and not cfg['repeat']:
+        _refuse(f"{where}: 'repeat_cooldown_seconds' without 'repeat' is a "
+                'pause before nothing (M13)')
+    cfg['repeat_cooldown_seconds'] = cd or 0.0
     cfg['stop'] = _validate_stop(cfg.get('stop'), where)
 
     # M2: expand the series; refuse a ladder the capital cannot carry.

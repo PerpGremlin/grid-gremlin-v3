@@ -290,3 +290,76 @@ def spec_D23_trailing_rides_the_venue_once_per_round():
     assert venue.trail_calls == [600.0]            # 1% of the 60000 basis
     bot.cycle()                                    # venue holds it: no re-set
     assert venue.trail_calls == [600.0]
+
+
+# --- M12/M13: reinvest and the venue-anchored cooldown -----------------------
+
+def _histfills(*rows):
+    out = []
+    for t, side, price, qty, fee, link in rows:
+        out.append({'time_ms': t, 'side': side, 'price': price, 'qty': qty,
+                    'fee': fee, 'link_id': link, 'symbol': 'BTCUSDT',
+                    'exec_id': f'h{t}'})
+    return out
+
+
+def spec_M13_cooldown_anchors_to_the_venue_TP_fill():
+    venue, lines = FakeVenue(), []
+    clock = {'t': 1_000_000.0}
+    bot = Bot(_cfg(repeat=True, repeat_cooldown_seconds=300.0), ADAPTER,
+              venue, Notifier(sink=lines.append), gen_seed=1,
+              clock=lambda: clock['t'])
+    link = f'{bot.botid}-0-x'
+    venue.fills_history = lambda mt, sym, a, b: _histfills(
+        (999_900_000, 'sell', 60600.0, 0.016, 0.1, link))   # TP filled t=999900
+    bot._last_pos = 0.016                          # a round just closed
+    assert bot.cycle() == {'round': 'cooling'}     # 999900+300 > 1000000? no...
+    clock['t'] = 999_900.0 + 299.0
+    bot._last_pos = 0.016
+    bot._cool_until = None
+    assert bot.cycle() == {'round': 'cooling'}
+    clock['t'] = 999_900.0 + 301.0
+    bot._last_pos = 0.016
+    bot._cool_until = None
+    r = bot.cycle()
+    assert r == {'round_started': 2} or 'round_started' in r
+
+
+def spec_M12_reinvest_scales_the_base_from_lifetime_fills():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True, reinvest=True), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    link = f'{bot.botid}-1-x'
+    # one closed round: bought 0.1 @ 50000, sold 0.1 @ 51000 -> +100 net on
+    # capital 1000 -> factor 1.1
+    venue.fills_history = lambda mt, sym, a, b: _histfills(
+        (1_000, 'buy', 50000.0, 0.1, 0.0, link),
+        (2_000, 'sell', 51000.0, 0.1, 0.0, link))
+    bot.cycle()                                    # opens round 1, scaled
+    qty = float(venue.position['size'])
+    base = 1000.0 / 60000.0                        # unscaled base qty
+    assert abs(qty - ADAPTER.round_qty(base * 1.1)) < 1e-9
+    assert any('reinvest: sizes x1.1' in ln for ln in lines)
+
+
+def spec_M12_the_factor_caps_at_the_watchdog_headroom():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True, reinvest=True), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    link = f'{bot.botid}-1-x'
+    venue.fills_history = lambda mt, sym, a, b: _histfills(
+        (1_000, 'buy', 50000.0, 0.1, 0.0, link),
+        (2_000, 'sell', 60000.0, 0.1, 0.0, link))  # +1000 on 1000 = x2 raw
+    fills = bot._own_fills()
+    assert bot._reinvest_scale(fills) == 1.2       # capped (F2 headroom)
+
+
+def spec_M12_losses_shrink_never_grow():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True, reinvest=True), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    link = f'{bot.botid}-1-x'
+    venue.fills_history = lambda mt, sym, a, b: _histfills(
+        (1_000, 'buy', 50000.0, 0.1, 0.0, link),
+        (2_000, 'sell', 48000.0, 0.1, 0.0, link))  # -200 on 1000
+    assert abs(bot._reinvest_scale(bot._own_fills()) - 0.8) < 1e-9
