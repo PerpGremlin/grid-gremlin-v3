@@ -10,7 +10,7 @@ MARKET_TYPES = ('linear', 'inverse', 'spot')
 # the phone's at-a-glance venue colours (owner 2026-08-05); config.py is the
 # one venue-name surface (A6), so the map lives here, not in events
 VENUE_ICONS = {'bybit': '🟠⚫',
-               'hyperliquid': '🌲'}    # the forest green (owner)
+               'hyperliquid': '🟢🟩'}   # light+dark green pair (owner)
 SIDES = ('long', 'short')
 STRATEGIES = ('grid', 'martingale')
 SPACING_TYPES = ('percent', 'fixed')
