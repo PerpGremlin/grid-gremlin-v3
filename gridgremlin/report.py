@@ -109,10 +109,10 @@ def _bybit_pull(rows, since_ms, now_ms):
         try:
             # the CLIENT method, not the raw reader — it knows spot truth
             # needs the instrument's base coin (V6)
-            marks[symbol] = client.read_symbol_truth(category,
-                                                     symbol)['mark']
+            marks[(category, symbol)] = client.read_symbol_truth(
+                category, symbol)['mark']
         except (VenueError, OSError):
-            marks[symbol] = None
+            marks[(category, symbol)] = None
     return fills, marks
 
 
@@ -129,9 +129,9 @@ def _hl_pull(rows, since_ms):
     marks = {}
     for coin in coins:
         try:
-            marks[coin] = read_symbol_truth(client, coin)['mark']
+            marks[('linear', coin)] = read_symbol_truth(client, coin)['mark']
         except (VenueError, OSError):
-            marks[coin] = None
+            marks[('linear', coin)] = None
     return fills, marks
 
 
@@ -170,14 +170,15 @@ def main(argv):
     fleet = validate_fleet(json.loads(Path(argv[0]).read_text()))
     now_ms = int(time.time() * 1000)
     since_ms = now_ms - int(hours * 3600 * 1000)
-    by_venue, symbol_of, inverse_ids = {}, {}, set()
+    by_venue, key_of, inverse_ids = {}, {}, set()
     for cfg in fleet['bots']:
         by_venue.setdefault(cfg['venue'], []).append(cfg)
         botid = make_botid(cfg['market_type'], cfg['symbol'], cfg['side'])
-        symbol_of[botid] = cfg['symbol']
+        key_of[botid] = (cfg['market_type'], cfg['symbol'])
         if cfg['market_type'] == 'inverse':
             inverse_ids.add(botid)
-    botids = list(symbol_of)
+            inverse_ids.add(('unowned', cfg['symbol']))
+    botids = list(key_of)
     fills, marks = [], {}
     for venue, rows in sorted(by_venue.items()):
         try:
@@ -200,11 +201,15 @@ def main(argv):
             print(f'{botid:<18}{0:>6}{"—":>12}{"—":>10}{"—":>20}'
                   f'{"—":>12}{"—":>12}')
             continue
-        print(_row(botid, book, marks.get(symbol_of[botid])))
-    for key in sorted(k for k in books if isinstance(k, tuple)):
+        print(_row(botid, book, marks.get(key_of[botid])))
+    for key in sorted(k for k in books if isinstance(k, tuple)
+                      and k[0] == 'unowned'):
         _, symbol = key
-        print(_row(f'unowned {symbol}', books[key], marks.get(symbol)))
+        mark = next((m for (cat, sym), m in marks.items()
+                     if sym == symbol and m is not None), None)
+        print(_row(f'unowned {symbol}', books[key], mark))
     owned = [b for k, b in books.items() if not isinstance(k, tuple)]
+    # (unowned tuple keys excluded above)
     if owned:
         realized = sum(b['realized'] for b in owned)
         fees = sum(b['fees'] for b in owned)

@@ -172,6 +172,12 @@ def read_fills(client, category, symbol, start_ms, end_ms):
                 if e.get('execType') != 'Trade' or not eid or eid in seen:
                     continue
                 seen.add(eid)
+                fee = _f(e.get('execFee'), 0.0)
+                fc = e.get('feeCurrency') or ''
+                if category == 'spot' and fc and not symbol.endswith(fc):
+                    # spot buys pay fees in the RECEIVED base coin —
+                    # quote-normalise at the fill price (the audit's M2)
+                    fee *= _f(e.get('execPrice'), 0.0)
                 fills.append({'exec_id': eid,
                               'time_ms': int(e.get('execTime') or 0),
                               'symbol': e.get('symbol'),
@@ -179,7 +185,7 @@ def read_fills(client, category, symbol, start_ms, end_ms):
                               else 'sell',
                               'price': _f(e.get('execPrice')),
                               'qty': _f(e.get('execQty'), 0.0),
-                              'fee': _f(e.get('execFee'), 0.0),
+                              'fee': fee,
                               'link_id': e.get('orderLinkId') or ''})
             cursor = page.get('nextPageCursor')
             if not cursor:

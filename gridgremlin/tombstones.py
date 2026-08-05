@@ -8,13 +8,23 @@ import time
 from pathlib import Path
 
 
+class TombstoneError(Exception):
+    pass
+
+
 class Tombstones:
     def __init__(self, path):
         self.path = Path(path)
         try:
             self._rows = json.loads(self.path.read_text())
-        except (OSError, ValueError):
+        except FileNotFoundError:
             self._rows = {}
+        except (OSError, ValueError) as e:
+            # fail CLOSED: a corrupt/unreadable tombstone file must never
+            # silently revive stop-fired bots (the audit's M3)
+            raise TombstoneError(
+                f'{path}: unreadable ({e}) — fix or delete it, deliberately; '
+                'refusing to build rather than revive stopped bots') from e
 
     def has(self, botid):
         return botid in self._rows

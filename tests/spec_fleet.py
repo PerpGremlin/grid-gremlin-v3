@@ -235,3 +235,44 @@ def spec_F5_no_repo_fleet_file_ever_carries_the_mainnet_flag():
             f'{f.name} carries allow_mainnet — the armour ships OFF (F5/F7)'
         checked += 1
     assert checked >= 4                    # both fleets, both watchdogs
+
+
+def spec_E7_a_malformed_venue_response_also_costs_only_the_cycle():
+    from gridgremlin import main as m
+    from gridgremlin.events import Notifier
+    calls = {'n': 0}
+
+    class Malformed:
+        env = 'demo'
+
+        def read_wallet(self):
+            calls['n'] += 1
+            if calls['n'] == 2:
+                raise ValueError('Expecting value: line 1 column 1 (char 0)')
+            if calls['n'] == 3:
+                raise IndexError('list index out of range')
+            return {'equity': 1000.0, 'mm_rate': 0.01}
+
+    class IdleBot:
+        alive = True
+        cfg = {'venue': 'bybit'}
+        botid = 'idle'
+
+        def cycle(self, equity=None):
+            return None
+
+    events = []
+    saved = (m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock)
+    m.build_fleet = lambda p, notif, **kw: ({'notify_orders': False,
+                                             'poll_seconds': 0},
+                                            {'bybit': Malformed()},
+                                            [IdleBot()])
+    m.make_notifier = lambda: Notifier(sink=events.append)
+    m.load_env = lambda: None
+    m.acquire_fleet_lock = lambda path: open('/dev/null')
+    try:
+        rc = m.run('ignored', cycles=4, poll_seconds=0)
+    finally:
+        m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock = saved
+    assert rc == 0 and calls['n'] == 4          # both bad cycles lost, not fatal
+    assert any('ValueError' in e for e in events)

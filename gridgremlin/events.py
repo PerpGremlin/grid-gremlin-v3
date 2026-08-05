@@ -45,7 +45,9 @@ class TelegramNotifier(Notifier):
         if kind in ORDER_KINDS and not self.ship_orders:
             return
         self._buffer.append(f'{kind} {botid}: {text}')
-        self._maybe_flush()
+        # a kill page must not sit in the buffer until some later event
+        # arrives (the audit's M6) — it flushes NOW, rate limit or not
+        self._maybe_flush(force=(kind == 'kill'))
 
     def _maybe_flush(self, force=False):
         if not self._buffer:

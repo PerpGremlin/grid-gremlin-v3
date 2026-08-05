@@ -48,6 +48,10 @@ def main(argv):
     if cfg.get('strategy') == 'martingale':
         print(f'{botid}: the backtester replays plan_grid — grids only (T3)')
         return 2
+    if cfg['market_type'] != 'linear':
+        print(f"{botid}: the backtester's fee/PnL maths are linear-only — "
+              f"'{cfg['market_type']}' would return confident nonsense (A4)")
+        return 2
     from .exchange.bybit.klines import fetch_bars, fetch_instrument
     from .exchange.bybit.truth import parse_instrument
     adapter = adapter_for(cfg['market_type'], parse_instrument(

@@ -187,3 +187,24 @@ def spec_R5_inverse_total_converts_to_quote_at_mark():
     assert abs(u - 0.004) < 1e-9                       # base coin
     assert abs(total_pnl(b, 62500.0) - 250.0) < 1e-6   # $ at mark
     assert total_pnl(b, None) is None                  # open + no mark
+
+
+# --- audit M2: spot fees settle in the base coin -----------------------------
+
+def spec_R2_spot_base_coin_fees_are_quote_normalised():
+    from gridgremlin.exchange.bybit.truth import read_fills
+
+    class SpotExec:
+        def executions_page(self, category, symbol, s, e, cursor=None):
+            return {'list': [
+                {'execId': 'b', 'execType': 'Trade', 'execTime': '2',
+                 'symbol': 'LTCUSDT', 'side': 'Buy', 'execPrice': '50',
+                 'execQty': '1', 'execFee': '0.001', 'feeCurrency': 'LTC',
+                 'orderLinkId': 'x-1-a'},
+                {'execId': 's', 'execType': 'Trade', 'execTime': '3',
+                 'symbol': 'LTCUSDT', 'side': 'Sell', 'execPrice': '52',
+                 'execQty': '1', 'execFee': '0.052', 'feeCurrency': 'USDT',
+                 'orderLinkId': 'x-2-a'}], 'nextPageCursor': None}
+    fills = read_fills(SpotExec(), 'spot', 'LTCUSDT', 0, 1000)
+    assert abs(fills[0]['fee'] - 0.05) < 1e-12      # 0.001 LTC @ 50 -> quote
+    assert abs(fills[1]['fee'] - 0.052) < 1e-12     # already quote: untouched

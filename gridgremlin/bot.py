@@ -11,6 +11,7 @@ FLAP_LIMIT = 3          # B5: strikes before a (rung, side) cools
 FLAP_COOLDOWN = 60.0
 BACKOFF_BASE = 30.0     # B7: margin backoff, doubling to the ceiling
 BACKOFF_CEILING = 300.0
+HISTORY_WINDOW_DAYS = 30    # M12/M13: the venue-practical fills lookback
 
 
 class Bot:
@@ -51,12 +52,19 @@ class Bot:
         self._round = 0
         self._scale = None             # M12: reinvest factor, venue-derived
         self._cool_until = None        # M13: venue-anchored, recomputed on need
+        self._unplaceable_warned = False
+        self._history_capped_warned = False
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
         the event states what still rests. X7: tombstone FIRST."""
         if self.tombs:
-            self.tombs.add(self.botid, reason)
+            try:
+                self.tombs.add(self.botid, reason)
+            except OSError as e:
+                self.notify.event('warn', self.botid,
+                                  f'tombstone write FAILED ({e}) — killing '
+                                  'anyway; this bot may revive on restart')
         n = 0
         for o in truth['orders']:
             if rung_of(o['link_id'], self.botid) is not None:
@@ -104,7 +112,12 @@ class Bot:
         states what still rests. X5: owned orders only, from paginated truth."""
         cfg, adapter = self.cfg, self.adapter
         if self.tombs:                 # X7: durable BEFORE the flatten — a
-            self.tombs.add(self.botid, reason)   # crash mid-stop stays dead
+            try:                       # crash mid-stop stays dead
+                self.tombs.add(self.botid, reason)
+            except OSError as e:       # a broken disk must never block the
+                self.notify.event('warn', self.botid,   # flatten itself (M3)
+                                  f'tombstone write FAILED ({e}) — stopping '
+                                  'anyway; this bot may revive on restart')
         qty = self._flatten_scope(held)
         if qty > 0:
             self._gen += 1
@@ -118,8 +131,23 @@ class Bot:
             except VenueError as e:
                 self.notify.event('warn', self.botid, f'flatten: {e}')
         floor = abs(held) - qty
-        residue = (f'floor core {floor:.10g} REMAINS, unprotected'
-                   if floor > 1e-12 else 'position flat')
+        try:                           # X4 honestly: re-read, never assume the
+            after = self.client.read_symbol_truth(     # flatten fully filled
+                cfg['market_type'], cfg['symbol'],
+                cfg.get('funding_interval_minutes', 480.0))
+            idx_now = adapter.position_idx(self._entry_side, False) or 0
+            left = (after['positions'].get(idx_now) or {}).get('size', 0.0)
+        except Exception:                                    # noqa: BLE001
+            left = None
+        if left is None:
+            residue = f'flatten SUBMITTED for {qty:.10g}; venue unreadable to confirm'
+        elif left > floor + 1e-12:
+            residue = (f'position {left:.10g} STILL OPEN (flatten partial?) — '
+                       'look at the venue')
+        elif floor > 1e-12:
+            residue = f'floor core {floor:.10g} REMAINS, unprotected'
+        else:
+            residue = 'position flat'
         n = 0
         for o in truth['orders']:
             if rung_of(o['link_id'], self.botid) is not None:
@@ -147,10 +175,32 @@ class Bot:
         idx = self.adapter.position_idx(self._entry_side, False) or 0
         venue_sl = truth['positions'].get(idx, {}).get('stop_loss')
         want = self.adapter.round_price(stop['level'])
+        partial = self._flatten_scope(held) < abs(held)
         if venue_sl is not None and abs(venue_sl - want) < 1e-9:
-            return                                    # the venue already agrees
+            if not partial:
+                return                            # the venue already agrees
+            # partial mode: the level agreeing says nothing about the SIZE —
+            # the audit's H2: growth must re-size the venue's conditional.
+            # Partial-mode set_trading_stop STACKS a new conditional per
+            # call, so stale ones are cancelled before the new set.
+            book = getattr(self.client, 'stop_orders', None)
+            if book is not None:
+                mine = [o for o in book(self.cfg['market_type'],
+                                        self.cfg['symbol'])
+                        if 'StopLoss' in (o.get('stopOrderType') or '')
+                        and int(o.get('positionIdx') or 0) == idx]
+                have = sum(float(o.get('qty') or 0) for o in mine)
+                if abs(have - qty) <= max(qty * 0.001, 1e-12):
+                    return                        # level AND size agree
+                for o in mine:
+                    try:
+                        self.client.cancel_order(self.cfg['market_type'],
+                                                 self.cfg['symbol'],
+                                                 o['orderId'])
+                    except VenueError as e:
+                        if e.kind != 'gone':
+                            raise
         try:
-            partial = self._flatten_scope(held) < abs(held)
             self.client.set_trading_stop(
                 self.cfg['market_type'], self.cfg['symbol'], idx,
                 stop_loss=self.adapter.fmt_price(want),
@@ -169,13 +219,22 @@ class Bot:
         return self.adapter.round_price(raw)
 
     def _own_fills(self):
-        """M12/M13: this bot's whole venue fill history, link-attributed —
-        the exchange is the state, so scale and cooldown survive restarts."""
+        """M12/M13: this bot's venue fills over the last HISTORY_WINDOW_DAYS,
+        link-attributed — the exchange is the state, so scale and cooldown
+        survive restarts. Bounded: an epoch-0 pull was ~3,000 requests (the
+        audit's H1); 30 days is five."""
         hist = getattr(self.client, 'fills_history', None)
         if hist is None:
             return []
         now_ms = int(self._now() * 1000)
-        fills = hist(self.cfg['market_type'], self.cfg['symbol'], 0, now_ms)
+        since_ms = now_ms - HISTORY_WINDOW_DAYS * 86_400_000
+        fills = hist(self.cfg['market_type'], self.cfg['symbol'], since_ms,
+                     now_ms)
+        if len(fills) >= 2000 and not self._history_capped_warned:
+            self._history_capped_warned = True
+            self.notify.event('warn', self.botid,
+                              'fill history hit the venue cap — reinvest/'
+                              'cooldown are reading a truncated window')
         return [f for f in fills
                 if rung_of(f['link_id'], self.botid) is not None]
 
@@ -214,6 +273,8 @@ class Bot:
                 for p, q in targets if q > 0}
         have = {}
         for o in self.client.stop_orders(cfg['market_type'], cfg['symbol']):
+            if int(o.get('positionIdx') or 0) != idx:
+                continue                  # not ours to touch (I1's spirit, H3)
             if 'TakeProfit' in (o.get('stopOrderType') or ''):
                 key = (adapter.fmt_price(float(o.get('triggerPrice') or 0)),
                        adapter.fmt_qty(float(o.get('qty') or 0)))
@@ -313,36 +374,68 @@ class Bot:
                 self.notify.event('repeat', self.botid,
                                   f'round {self._round + 1} re-anchors at '
                                   'market (M5: from flat only)')
-            if cfg.get('repeat_cooldown_seconds') or cfg.get('reinvest'):
-                fills = self._own_fills()
-                cd = cfg.get('repeat_cooldown_seconds') or 0.0
-                if cd and fills:
-                    last_s = max(f['time_ms'] for f in fills) / 1000.0
-                    if self._cool_until != last_s + cd:
-                        self._cool_until = last_s + cd
+                # ONE venue read answers both cooldown and reinvest (H1),
+                # then the completion latch clears so none of this re-runs
+                # on the next flat cycle (H4a)
+                if cfg.get('repeat_cooldown_seconds') or cfg.get('reinvest'):
+                    fills = self._own_fills()
+                    cd = cfg.get('repeat_cooldown_seconds') or 0.0
+                    if cd and fills:
+                        self._cool_until = (max(f['time_ms'] for f in fills)
+                                            / 1000.0 + cd)
                         if self._now() < self._cool_until:
                             self.notify.event(
                                 'repeat', self.botid,
-                                f'round complete — cooling {cd:.0f}s from the '
-                                'TP fill (M13, venue-anchored)')
-                    if self._now() < self._cool_until:
-                        return {'round': 'cooling'}
-                if cfg.get('reinvest'):
-                    scale = self._reinvest_scale(fills)
-                    if self._scale != scale:
-                        self._scale = scale
-                        if abs(scale - 1.0) > 1e-9:
-                            self.notify.event(
-                                'repeat', self.botid,
-                                f'reinvest: sizes x{scale:.4g} (M12, from '
-                                'lifetime venue fills)')
+                                f'cooling {cd:.0f}s from the TP fill '
+                                '(M13, venue-anchored)')
+                    if cfg.get('reinvest'):
+                        scale = self._reinvest_scale(fills)
+                        if self._scale != scale:
+                            self._scale = scale
+                            if abs(scale - 1.0) > 1e-9:
+                                self.notify.event(
+                                    'repeat', self.botid,
+                                    f'reinvest: sizes x{scale:.4g} (M12, '
+                                    f'last {HISTORY_WINDOW_DAYS}d of venue '
+                                    'fills)')
+                self._last_pos = 0.0             # the completion latch (H4a)
+                # E2 across rounds (H4b): the closed round's safety ladder is
+                # cancelled BEFORE any new base fires — this cycle cleans,
+                # the next one opens
+                stale = [o for o in truth['orders']
+                         if rung_of(o['link_id'], self.botid) is not None]
+                if stale:
+                    for o in stale:
+                        try:
+                            self.client.cancel_order(cfg['market_type'],
+                                                     cfg['symbol'],
+                                                     o['order_id'])
+                        except VenueError as e:
+                            if e.kind != 'gone':
+                                raise
+                    return {'round': 'cleanup'}
+            cd = cfg.get('repeat_cooldown_seconds') or 0.0
+            if cd and self._cool_until is None and self._last_pos is None:
+                # restart during a cooldown: re-derive the anchor from the
+                # venue once — a first-ever start has no fills and skips this
+                fills = self._own_fills()
+                self._cool_until = ((max(f['time_ms'] for f in fills)
+                                     / 1000.0 + cd) if fills else 0.0)
+            if self._cool_until and self._now() < self._cool_until:
+                return {'round': 'cooling'}
+            if cfg.get('reinvest') and self._scale is None:
+                self._scale = self._reinvest_scale(self._own_fills())
             scale = self._scale if (cfg.get('reinvest') and self._scale) \
                 else 1.0
             qty = adapter.round_qty(cfg['base_order_size'] * scale
                                     / truth['mark'])
             if qty <= 0 or not adapter.meets_minimum(qty, truth['mark']):
-                self.notify.event('warn', self.botid, 'base order below minimum')
+                if not self._unplaceable_warned:         # once, not once/sec
+                    self._unplaceable_warned = True
+                    self.notify.event('warn', self.botid,
+                                      'base order below minimum')
                 return {'round': 'unplaceable'}
+            self._unplaceable_warned = False
             self._gen += 1
             self.client.place_market(cfg['market_type'], cfg['symbol'],
                                      self._entry_side, adapter.fmt_qty(qty),
@@ -491,6 +584,8 @@ class Bot:
         return True
 
     def _do_backoff(self, now):
+        if now > self._backoff_until + BACKOFF_CEILING:
+            self._backoff = 0.0            # quiet spell: the schedule restarts
         self._backoff = min(max(BACKOFF_BASE, self._backoff * 2.0),
                             BACKOFF_CEILING)
         self._backoff_until = now + self._backoff
