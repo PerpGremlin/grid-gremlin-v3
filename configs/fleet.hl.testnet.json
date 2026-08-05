@@ -1,5 +1,6 @@
 {
   "_note": "HL TESTNET fleet: long+short grids across coins (HL is one-way, so hedging happens across symbols). Sized against the ~999 mock USDC like real capital. Martingale runs here via the venue-resting exit (D21).",
+  "preflight": { "probe": true, "max_failed_bots": 0 },
   "watchdog": "configs/watchdog.hl.testnet.json",
   "poll_seconds": 5,
   "bots": [

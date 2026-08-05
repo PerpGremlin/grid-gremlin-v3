@@ -257,6 +257,14 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: cooling and scaled rounds are specced and the ADA
       martingale soaks both ✓
 
+- [x] **34 — the preflight (F8/D27)** *(PR #58)*
+      the dress rehearsal: one unfillable post-only probe per bot at build,
+      cancelled on success; metadata refusals from the venue's own
+      catalogue; `max_failed_bots` tolerance between D7 strictness and
+      dead-and-visible. Born from the 170037 incident.
+      done when: both fleets probe at start and a refusing venue yields one
+      named build failure instead of a warn storm ✓
+
 **Standing rules while building:** every PR updates this file and its ID-named specs
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

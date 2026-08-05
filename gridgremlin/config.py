@@ -28,7 +28,7 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
 STOP_KEYS = ('watch', 'level', 'server_side')
-FLEET_KEYS = ('bots', 'poll_seconds', 'allow_mainnet',
+FLEET_KEYS = ('bots', 'poll_seconds', 'allow_mainnet', 'preflight',
               'tombstones',
               'notify_orders', 'watchdog')
 
@@ -410,6 +410,24 @@ def check_placeable(cfg, adapter, where='row'):
     return cfg
 
 
+def _validate_preflight(v, where):
+    """F8 (D27): optional. probe=true places one unfillable rehearsal order
+    per bot at build and cancels it — the whole placement path proven before
+    any strategy order. max_failed_bots is the tolerance: 0 (default)
+    refuses the fleet on any preflight failure (D7); N lets up to N bots
+    build dead-and-visible while the rest trade."""
+    if v is None:
+        return {'probe': False, 'max_failed_bots': 0}
+    if not isinstance(v, dict):
+        _refuse(f"{where}.preflight: an object: "
+                '{"probe": bool, "max_failed_bots": int}')
+    _reject_unknown(v, ('probe', 'max_failed_bots'), f'{where}.preflight')
+    out = {'probe': _flag(v, 'probe'),
+           'max_failed_bots': _num(v, 'max_failed_bots', f'{where}.preflight',
+                                   least=0, integer=True) or 0}
+    return out
+
+
 def validate_fleet(data, where='fleet'):
     """C6: any bad row refuses the whole fleet. A bare list is a fleet whose only
     key is 'bots' — the same key check applies either way (config M15's fix)."""
@@ -427,6 +445,7 @@ def validate_fleet(data, where='fleet'):
                              least_open=True) or 5.0,
         'notify_orders': _flag(data, 'notify_orders'),
         'allow_mainnet': _flag(data, 'allow_mainnet'),   # D25: half of the safety
+        'preflight': _validate_preflight(data.get('preflight'), where),
         'tombstones': data.get('tombstones'),            # X7 path (default logs/)
     }
     fleet['bots'] = [validate_config(row, where=f'{where}.bots[{i}]')

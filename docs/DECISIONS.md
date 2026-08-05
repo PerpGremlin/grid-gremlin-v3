@@ -158,6 +158,15 @@ stands unless the owner corrects it.
   timestamp. Signal start-conditions: deferred by the owner ("i usually do my
   own TA to enter, even with bots").
 
+- **D27 — The preflight is optional, with a tolerance (2026-08-05).** Probe +
+  metadata checks per F8, but the owner's call: *"there may be times when users
+  might be okay with one bot failing, not the whole fleet. or a tolerance for
+  how many failed bots a user may allow before the algo says nope."*
+  `preflight: {probe, max_failed_bots}` — strict D7 refusal at tolerance 0
+  (default), dead-and-visible bots within tolerance. Born from the 170037
+  incident and the owner's read that metadata checks are "ask the exchange for
+  truth — asking what we can find."
+
 *Source documents: the owner's response file (local), the 2026-08-04 Q&A, and the
 2026-08-05 morning directives. Scrutiny was invited; scrutiny applied is recorded
 inline above.*

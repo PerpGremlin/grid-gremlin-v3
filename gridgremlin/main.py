@@ -82,6 +82,52 @@ def snapshot_row(bots, wallet, now):
                      for b in bots}}
 
 
+def preflight_verdict(failures, tolerance):
+    """F8's policy, pure: within tolerance the failed bots stay dead-and-
+    visible; beyond it the fleet refuses, naming every failure (D7/D27)."""
+    if len(failures) > tolerance:
+        listed = '; '.join(f'{b}: {r}' for b, r in failures)
+        raise ConfigError(
+            f'preflight failed for {len(failures)} bot(s) '
+            f'(tolerance {tolerance}) — {listed}')
+
+
+def probe_bot(bot):
+    """F8: the dress rehearsal — one unfillable post-only order at a far
+    price on the ENTRY side, resting proves the whole placement path (auth,
+    permissions, collateral, lot rules), then it is cancelled. Returns None
+    on success, the venue's reason on failure."""
+    cfg, adapter, client = bot.cfg, bot.adapter, bot.client
+    try:
+        truth = client.read_symbol_truth(
+            cfg['market_type'], cfg['symbol'],
+            cfg.get('funding_interval_minutes', 480.0))
+        mark = truth['mark']
+        far = mark * (0.7 if cfg['side'] == 'long' else 1.3)
+        price = adapter.round_price(far)
+        qty = adapter.round_qty(max(
+            adapter.min_qty,
+            adapter.qty_from_notional(adapter.min_notional * 1.05, price)))
+        bot._gen += 1
+        r = client.place_order(
+            cfg['market_type'], cfg['symbol'], bot._entry_side,
+            adapter.fmt_qty(qty), adapter.fmt_price(price),
+            bot._make_link(0),
+            adapter.position_idx(bot._entry_side, False) or 0,
+            reduce_only=False, post_only=True,
+            borrow=bool(cfg.get('spot_borrow')))
+        oid = (r or {}).get('orderId') or (r or {}).get('oid')
+        if oid is not None:
+            try:
+                client.cancel_order(cfg['market_type'], cfg['symbol'], oid)
+            except VenueError as e:
+                if e.kind != 'gone':
+                    raise
+        return None
+    except (VenueError, OSError) as e:
+        return str(e)
+
+
 def build_fleet(fleet_path, notifier, allow_mainnet=False):
     load_env()
     fleet = validate_fleet(json.loads(Path(fleet_path).read_text()))
@@ -116,6 +162,14 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
                                                             cfg['symbol']))
             adapter = adapter_for(cfg['market_type'], spec)
         cfg['funding_interval_minutes'] = spec['funding_interval_minutes']
+        if (cfg.get('spot_borrow')
+                and spec.get('margin_trading') not in (None, 'both',
+                                                       'utaOnly')):
+            # F8's metadata half: the venue's own catalogue says this coin
+            # cannot margin-trade — ask what CAN be asked (D27)
+            cfg['_preflight_fail'] = (f"venue catalogue: marginTrading="
+                                      f"'{spec.get('margin_trading')}' — "
+                                      'this coin cannot borrow')
         check_placeable(cfg, adapter)
         bot = Bot(cfg, adapter, client, notifier, gen_seed=int(time.time()),
                   tombstones=tombs)
@@ -151,6 +205,20 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
         bots.append(bot)
     _ensure_symbol_capacity(clients, bots, notifier)
     check_fleet_unique(identities)
+    pf = fleet.get('preflight') or {'probe': False, 'max_failed_bots': 0}
+    failures = []
+    for b in bots:
+        if not b.alive:
+            continue                       # tombstoned: already dead-visible
+        reason = b.cfg.pop('_preflight_fail', None)
+        if reason is None and pf.get('probe'):
+            reason = probe_bot(b)
+        if reason is not None:
+            failures.append((b.botid, reason))
+            b.alive = False
+            notifier.event('warn', b.botid,
+                           f'preflight FAILED — building dead: {reason}')
+    preflight_verdict(failures, pf.get('max_failed_bots', 0))
     if not fleet.get('watchdog'):
         raise ConfigError("the fleet has no 'watchdog' config — nothing "
                           'trades unwatched (F1)')

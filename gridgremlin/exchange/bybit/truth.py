@@ -17,6 +17,7 @@ def parse_instrument(category, info):
                                or lot.get('minOrderAmt')),
             'settle_coin': info.get('settleCoin'),
             'base_coin': info.get('baseCoin'),
+            'margin_trading': info.get('marginTrading'),
             'funding_interval_minutes': _f(info.get('fundingInterval'), 480.0)}
     if info.get('status') != 'Trading':
         raise VenueError(f"{info['symbol']}: status {info.get('status')!r}")
