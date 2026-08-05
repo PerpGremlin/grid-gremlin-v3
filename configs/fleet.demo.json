@@ -196,7 +196,7 @@
       ],
       "trailing_stop_pct": 0.008,
       "repeat": true,
-      "repeat_cooldown_seconds": 600,
+      "repeat_cooldown_seconds": 3600,
       "reinvest": true
     },
     {
