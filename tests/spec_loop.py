@@ -275,3 +275,16 @@ def spec_fleet_events_do_not_stutter():
     assert lines[-1] == '[ship] fleet: 12 bot(s) on demo'
     Notifier(sink=lines.append is None or lines.append).event('fill', 'botA', 'x')
     assert lines[-1] == '[ship] fill botA: x'
+
+
+def spec_venue_icon_reaches_the_phone_never_the_terminal():
+    """Owner 2026-08-05: colour-coded venue icons at a glance on TG; the
+    terminal stays clean ASCII (it is the grepped audit trail)."""
+    lines, sent = [], []
+    from gridgremlin.events import TelegramNotifier
+    t = TelegramNotifier('tok', 'chat', transport=sent.append,
+                         clock=lambda: 100.0, sink=lines.append)
+    t.event('fill', 'botA', 'position 0 -> 1', icon='X Y')
+    t.close()
+    assert lines[-1] == '[ship] fill botA: position 0 -> 1'   # no icon here
+    assert sent and sent[-1].startswith('X Y fill botA:')      # icon here
