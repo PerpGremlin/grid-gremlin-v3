@@ -119,5 +119,19 @@ stands unless the owner corrects it.
   the diff. A resting-limit TP fills on trade-through rather than mark-trigger —
   at the target or better, accepted.
 
-*Source documents: the owner's response file (local) and the 2026-08-04 Q&A. Scrutiny
-was invited; scrutiny applied is recorded inline above.*
+- **D22 — 1s polling instead of WS wake (2026-08-05).** The owner's call on the
+  WS-wake question: raise the poll to 1s fleet-wide. The venue's rate budget is
+  the real pace — the Bybit glide and HL's 429-sleep stretch a nominal 1s to
+  whatever the venue allows — so "1" means "as fast as permitted", with zero
+  new moving parts. WS wake leaves the backlog; it can return as its own
+  decision if 1s proves insufficient for tight grids.
+- **D23 — Martingale partial TPs and trailing ride the venue (2026-08-05).**
+  The owner: "utilise bybit's exchange side options… do what we did for the
+  full TP logic, except partial." Same doctrine as D21: venue-hosted where the
+  venue offers it (Bybit's Partial tpslMode / trailing stop), the resting
+  reduce-only ladder where it doesn't (HL: partial TPs are simply several
+  rung-0-style exits at tranche prices). Staged next; D15's list shrinks.
+
+*Source documents: the owner's response file (local), the 2026-08-04 Q&A, and the
+2026-08-05 morning directives. Scrutiny was invited; scrutiny applied is recorded
+inline above.*

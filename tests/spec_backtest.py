@@ -189,3 +189,12 @@ def spec_T4_the_lot_anchor_divergence_is_intended_and_cited():
     v2_lot = min(q for _, q in v2_sells)
     v3_lot = min(q for _, q in v3_sells)
     assert v2_lot != v3_lot and abs(v2_lot - v3_lot) <= 2 * step
+
+
+def spec_T3_kline_rows_reverse_to_oldest_first_bars():
+    from gridgremlin.exchange.bybit.klines import parse_kline_rows
+    rows = [['2000', '61', '62', '60', '61.5', '9', '9'],     # newest first
+            ['1000', '60', '61', '59', '60.5', '9', '9']]
+    bars = parse_kline_rows(rows)
+    assert [b['t'] for b in bars] == [1000, 2000]
+    assert bars[0] == {'t': 1000, 'o': 60.0, 'h': 61.0, 'l': 59.0, 'c': 60.5}

@@ -193,6 +193,26 @@ start-conditions, profit reinvest, cooldown tuning.
       v3's ops layer now exceeds v2's.
       done when: a dry run pages a correct review of all 11 grids ✓
 
+- [x] **26 — backtest on fresh bars** *(PR #43)*
+      `python3 -m gridgremlin.backtest_cli <fleet> --bot <botid> --days N` —
+      public klines (exchange/bybit/klines.py) into the untouched pure core.
+      A6 held: the first draft put a venue name in backtest.py and the
+      sabotage spec refused it; the CLI is composition glue like main.py.
+      done when: a fleet bot backtests on live venue bars ✓
+
+- [x] **27 — 1s polling (D22)** *(PR #43)*
+      --interval 1 both fleets; the venue's rate budget is the pace (Bybit
+      glide; HL info reads now 429-sleep like its writes). WS wake leaves
+      the backlog by decision.
+      done when: both fleets cycle at venue-permitted speed with no warn
+      storm ✓
+
+- [x] **28 — inverse, live** *(PR #43)*
+      a BTC-margined BTCUSD grid joins the demo fleet ($1 contracts, PnL in
+      BASE coin — A4's maths finally exercised with money-shaped numbers).
+      done when: the inverse bot rests its ladder and the readout can
+      account it ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing
