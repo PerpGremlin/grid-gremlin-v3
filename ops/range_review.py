@@ -162,6 +162,11 @@ def main(argv):
     if os.environ.get('RANGE_DRY'):
         print(f'--- facts ---\n{facts}\n--- page ---\n{text}')
         return 0
+    log = REPO / 'logs' / 'range-review.log'          # the record of record:
+    log.parent.mkdir(parents=True, exist_ok=True)     # "what did he say" must
+    with open(log, 'a') as f:                         # never need reproducing
+        import time as _t
+        f.write(f'{_t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime())}\n{text}\n\n')
     page(env, text)
     return 0
 
