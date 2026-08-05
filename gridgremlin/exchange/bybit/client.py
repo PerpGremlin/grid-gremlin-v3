@@ -270,6 +270,17 @@ class WriteClient(Client):
                                              'symbol': symbol,
                                              'orderId': order_id, 'qty': qty})
 
+    def ensure_collateral(self, coin):
+        """D24's build precondition: margin-spot orders are refused with
+        170037 until the coin's collateral switch is ON (found live — a
+        warn per cycle until it was flipped). Idempotent."""
+        try:
+            self.post('/v5/account/set-collateral-switch',
+                      {'coin': coin, 'collateralSwitch': 'ON'})
+        except VenueError as e:
+            if e.kind not in ('not_modified',):
+                raise
+
     def ensure_hedge_mode(self, category, symbol):
         try:
             self.post('/v5/position/switch-mode',
