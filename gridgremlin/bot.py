@@ -20,7 +20,8 @@ class Bot:
     # _backoff*/_exit_links_last/_uncovered_warned/_anomaly_warned (latches).
     # Everything else the bot knows comes from the venue each cycle.
 
-    def __init__(self, cfg, adapter, client, notifier, gen_seed, clock=None):
+    def __init__(self, cfg, adapter, client, notifier, gen_seed, clock=None,
+                 tombstones=None):
         self.cfg = cfg
         self.adapter = adapter
         self.client = client
@@ -46,11 +47,14 @@ class Bot:
         self._anomaly_warned = False
         self._anchor = None            # M: the round's base price
         self._borrow = bool(cfg.get('spot_borrow'))    # D24
+        self.tombs = tombstones        # X7: the prevents-restart half of D1
         self._round = 0
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
-        the event states what still rests."""
+        the event states what still rests. X7: tombstone FIRST."""
+        if self.tombs:
+            self.tombs.add(self.botid, reason)
         n = 0
         for o in truth['orders']:
             if rung_of(o['link_id'], self.botid) is not None:
@@ -97,6 +101,8 @@ class Bot:
         """X1 (D1): flatten, cancel, kill, never restart. X4: the event
         states what still rests. X5: owned orders only, from paginated truth."""
         cfg, adapter = self.cfg, self.adapter
+        if self.tombs:                 # X7: durable BEFORE the flatten — a
+            self.tombs.add(self.botid, reason)   # crash mid-stop stays dead
         qty = self._flatten_scope(held)
         if qty > 0:
             self._gen += 1

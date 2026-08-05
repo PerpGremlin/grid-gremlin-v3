@@ -239,6 +239,15 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: tranches rest, re-anchor on deepen, and never churn on a
       quiet cycle — both venue styles specced ✓
 
+- [x] **32 — the tombstone (SPEC X7)** *(PR #50)*
+      found by preparing the live stop-fire: alive=False was in-memory
+      only — a restart would have revived a stopped bot into the market
+      (the undesigned fifth start state, finally closed). Durable BEFORE
+      the flatten; tombstoned bots build dead-and-visible; revival is a
+      deliberate operator act.
+      done when: the live stop-fire below proves the whole chain across a
+      restart ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

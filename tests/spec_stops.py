@@ -190,3 +190,53 @@ def spec_I5_the_flatten_order_carries_an_owned_link():
     bot.cycle()
     assert not bot.alive
     assert rung_of(venue.market_links[-1], bot.botid) == 0
+
+
+# --- X7: a fired stop survives the process -----------------------------------
+
+def spec_X7_tombstone_lands_BEFORE_the_flatten():
+    import tempfile
+    from pathlib import Path as _P
+    from gridgremlin.tombstones import Tombstones
+    tmp = _P(tempfile.mkdtemp()) / 'tombs.json'
+    order = []
+
+    class Sequenced(FakeVenue):
+        def place_market(self, *a, **kw):
+            order.append('flatten')
+            return super().place_market(*a, **kw)
+
+    class Watching(Tombstones):
+        def add(self, botid, reason):
+            order.append('tombstone')
+            super().add(botid, reason)
+
+    venue, lines = Sequenced(mark=61000.0), []
+    _holding(venue)
+    bot = _bot(venue, lines, stop={'watch': 'mark_price', 'level': 58000})
+    bot.tombs = Watching(tmp)
+    bot.cycle()
+    venue.mark = 57000.0
+    bot.cycle()
+    assert order[:2] == ['tombstone', 'flatten']   # durable FIRST
+    fresh = Tombstones(tmp)                        # a new process
+    assert fresh.has(bot.botid)
+    assert 'mark_price' in fresh.reason(bot.botid)
+
+
+def spec_X7_external_close_also_tombstones():
+    import tempfile
+    from pathlib import Path as _P
+    from gridgremlin.tombstones import Tombstones
+    tmp = _P(tempfile.mkdtemp()) / 'tombs.json'
+    venue, lines = FakeVenue(), []
+    bot = _bot(venue, lines)
+    bot.tombs = Tombstones(tmp)
+    bot.cycle()
+    buy = next(o for o in venue.orders if o['side'] == 'Buy')
+    venue.fill(buy['order_id'], buy['price'])
+    bot.cycle()                                    # holding now
+    venue.position = None                          # owner closes it by hand
+    bot.cycle()                                    # S7: kill
+    assert not bot.alive
+    assert Tombstones(tmp).has(bot.botid)
