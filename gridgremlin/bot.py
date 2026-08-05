@@ -26,7 +26,10 @@ class Bot:
         self.cfg = cfg
         self.adapter = adapter
         self.client = client
-        self.notify = notifier
+        from .config import VENUE_ICONS
+        from .events import VenueNotifier
+        self.notify = VenueNotifier(
+            notifier, VENUE_ICONS.get(cfg.get('venue'), ''))
         self.botid = make_botid(cfg['market_type'], cfg['symbol'], cfg['side'])
         self._gen = gen_seed
         self._now = clock or time.time

@@ -11,7 +11,9 @@ class Notifier:
         self.ship_orders = ship_orders
         self.sink = sink or (lambda line: print(line, flush=True))
 
-    def event(self, kind, botid, text):
+    def event(self, kind, botid, text, icon=''):
+        # the terminal stays clean ASCII — it is the audit trail tools grep;
+        # the icon is the PHONE's affordance only (TelegramNotifier)
         route = 'log' if ((kind in ORDER_KINDS and not self.ship_orders)
                           or kind in LOG_ONLY_KINDS) else 'ship'
         label = kind if botid == kind else f'{kind} {botid}'   # no "fleet fleet"
@@ -44,12 +46,13 @@ class TelegramNotifier(Notifier):
             headers={'Content-Type': 'application/json'})
         urllib.request.urlopen(req, timeout=10).read()
 
-    def event(self, kind, botid, text):
+    def event(self, kind, botid, text, icon=''):
         super().event(kind, botid, text)
         if (kind in ORDER_KINDS and not self.ship_orders) \
                 or kind in LOG_ONLY_KINDS:
             return
-        self._buffer.append(f'{kind} {botid}: {text}')
+        prefix = f'{icon} ' if icon else ''
+        self._buffer.append(f'{prefix}{kind} {botid}: {text}')
         # a kill page must not sit in the buffer until some later event
         # arrives (the audit's M6) — it flushes NOW, rate limit or not
         self._maybe_flush(force=(kind == 'kill'))
@@ -69,3 +72,16 @@ class TelegramNotifier(Notifier):
 
     def close(self):
         self._maybe_flush(force=True)
+
+
+class VenueNotifier:
+    """The seam that colours a bot's phone events at a glance (owner ask,
+    2026-08-05) — wraps once at construction, zero call-site changes. Takes
+    the ICON, not the venue name: this module stays venue-blind (A6)."""
+
+    def __init__(self, inner, icon):
+        self._inner = inner
+        self._icon = icon
+
+    def event(self, kind, botid, text):
+        self._inner.event(kind, botid, text, icon=self._icon)
