@@ -369,3 +369,32 @@ def spec_M12_losses_shrink_never_grow():
         (1_000, 'buy', 50000.0, 0.1, 0.0, link),
         (2_000, 'sell', 48000.0, 0.1, 0.0, link))  # -200 on 1000
     assert abs(bot._reinvest_scale(bot._own_fills()) - 0.8) < 1e-9
+
+
+def spec_M10_a_passed_tranche_is_done_the_rest_renormalise():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()                                    # base fills at 60000
+    venue.mark = 60800.0                           # past t1, before t2
+    venue.position = dict(venue.position, size='0.008')   # t1 fired: half gone
+    bot.cycle()
+    tps = [o for o in venue.stop_orders('linear', 'BTCUSDT')
+           if 'TakeProfit' in o['stopOrderType']]
+    assert len(tps) == 1                           # t1 is NOT re-placed
+    assert float(tps[0]['triggerPrice']) == 61200.0
+    assert tps[0]['qty'] == '0.008'                # whole remainder, renormalised
+
+
+def spec_M10_blown_through_closes_at_target_or_better():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()
+    venue.mark = 62000.0                           # past BOTH targets
+    r = bot.cycle()
+    assert r == {'round': 'closing'}               # M3: never without an exit
+    sells = [o for o in venue.orders
+             if o['side'] == 'Sell' and o['reduce_only']]
+    assert sells and sells[-1]['price'] == 61200.0     # deepest target, or better
+    assert any('every tranche target met' in ln for ln in lines)

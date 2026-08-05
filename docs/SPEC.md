@@ -155,7 +155,11 @@ eventually pin (T1).
 - **M10** A round's exit may be TRANCHED (D23): shares of one position at ascending
   targets, summing to one, every price re-anchored from the average as fills deepen —
   venue-hosted partial TPs where the venue hosts them, several D21 resting exits
-  where it does not. The same law as M3, split into shares.
+  where it does not. A tranche the mark has PASSED is done — never re-placed below
+  mark (the venue refuses those, correctly); the remaining shares renormalise over
+  what is still held, and with every target met the remainder closes marketable at
+  the deepest target, or better. The same law as M3, split into shares. *(the ADA
+  re-anchor warns, 2026-08-05)*
 - **M11** Trailing rides the venue or does not exist: set once per round from the
   average, the venue moves it from there; refused where the venue cannot host it.
   *(D23)*
