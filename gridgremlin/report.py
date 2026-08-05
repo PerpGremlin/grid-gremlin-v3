@@ -26,16 +26,31 @@ def owner_of(link_id, botids):
 
 def new_book():
     return {'fills': 0, 'bought': 0.0, 'sold': 0.0, 'realized': 0.0,
-            'fees': 0.0, 'position': 0.0, 'avg_cost': 0.0, 'inverse': False}
+            'fees': 0.0, 'position': 0.0, 'avg_cost': 0.0, 'inverse': False,
+            # R6 — the activity layer, same fills, no new state:
+            'trips': 0,            # realisation events (a grid's round trips)
+            'rounds': 0,           # flat crossings (a martingale's rounds)
+            'round_pnl_sum': 0.0,  # realized per completed round, summed
+            'so_fills': 0,         # entry fills at rung >= 1 (safety orders)
+            'max_depth': 0,        # deepest safety rung ever reached
+            '_round_realized0': 0.0, '_round_depth': 0}
 
 
-def apply_fill(book, side, price, qty, fee, inverse=False):
+def apply_fill(book, side, price, qty, fee, inverse=False, rung=None,
+               entry_side=None):
     """R2: average-cost accounting — a reduce realises, a flip re-anchors.
     A4's unit law holds here too: an inverse book realises in the BASE coin
-    (qty is $1 contracts), a linear/spot book in the quote coin."""
+    (qty is $1 contracts), a linear/spot book in the quote coin.
+    R6: the same stream carries the activity — a realisation is a TRIP, a
+    flat crossing closes a ROUND, an entry fill at rung >= 1 is a SAFETY
+    order and its rung is the round's depth."""
     signed = qty if side == 'buy' else -qty
     pos = book['position']
     book['inverse'] = inverse
+    if entry_side is not None and side == entry_side and rung and rung >= 1:
+        book['so_fills'] += 1
+        book['_round_depth'] = max(book['_round_depth'], rung)
+        book['max_depth'] = max(book['max_depth'], book['_round_depth'])
     if abs(pos) < EPS or (pos > 0) == (signed > 0):
         total = abs(pos) + qty
         book['avg_cost'] = (book['avg_cost'] * abs(pos) + price * qty) / total
@@ -43,6 +58,7 @@ def apply_fill(book, side, price, qty, fee, inverse=False):
     else:
         closed = min(abs(pos), qty)
         held = 1.0 if pos > 0 else -1.0
+        book['trips'] += 1
         if inverse:
             book['realized'] += closed * (1.0 / book['avg_cost']
                                           - 1.0 / price) * held
@@ -53,21 +69,29 @@ def apply_fill(book, side, price, qty, fee, inverse=False):
             book['avg_cost'] = price
         elif abs(book['position']) < EPS:
             book['position'], book['avg_cost'] = 0.0, 0.0
+            book['rounds'] += 1                       # a flat crossing
+            book['round_pnl_sum'] += (book['realized']
+                                      - book['_round_realized0'])
+            book['_round_realized0'] = book['realized']
+            book['_round_depth'] = 0
     book['fees'] += fee
     book['fills'] += 1
     book['bought' if side == 'buy' else 'sold'] += qty
     return book
 
 
-def ledger(fills, botids, inverse_ids=()):
+def ledger(fills, botids, inverse_ids=(), entry_sides=None):
     """R1/R3: time-ordered fills -> books keyed by botid, or by
-    ('unowned', symbol) — external activity is reported, never dropped."""
-    books = {}
+    ('unowned', symbol) — external activity is reported, never dropped.
+    R6: rung and entry side ride along so the activity layer can count."""
+    books, entry_sides = {}, entry_sides or {}
     for f in sorted(fills, key=lambda f: f['time_ms']):
         key = owner_of(f['link_id'], botids) or ('unowned', f['symbol'])
+        rung = rung_of(f['link_id'], key) if isinstance(key, str) else None
         apply_fill(books.setdefault(key, new_book()),
                    f['side'], f['price'], f['qty'], f['fee'],
-                   inverse=key in inverse_ids)
+                   inverse=key in inverse_ids, rung=rung,
+                   entry_side=entry_sides.get(key))
     return books
 
 
@@ -171,10 +195,13 @@ def main(argv):
     now_ms = int(time.time() * 1000)
     since_ms = now_ms - int(hours * 3600 * 1000)
     by_venue, key_of, inverse_ids = {}, {}, set()
+    strat_of, entry_sides = {}, {}
     for cfg in fleet['bots']:
         by_venue.setdefault(cfg['venue'], []).append(cfg)
         botid = make_botid(cfg['market_type'], cfg['symbol'], cfg['side'])
         key_of[botid] = (cfg['market_type'], cfg['symbol'])
+        strat_of[botid] = cfg.get('strategy', 'grid')
+        entry_sides[botid] = 'buy' if cfg['side'] == 'long' else 'sell'
         if cfg['market_type'] == 'inverse':
             inverse_ids.add(botid)
             inverse_ids.add(('unowned', cfg['symbol']))
@@ -190,7 +217,7 @@ def main(argv):
             continue
         fills += got
         marks.update(m)
-    books = ledger(fills, botids, inverse_ids)
+    books = ledger(fills, botids, inverse_ids, entry_sides)
     print(f'last {hours:g}h · grid profit = realized − fees (D8) · '
           f'total adds mark-to-average on the open remainder')
     print(f"{'bot':<18}{'fills':>6}{'realized':>12}{'fees':>10}"
@@ -216,6 +243,21 @@ def main(argv):
         print(f"{'TOTAL (owned)':<18}{sum(b['fills'] for b in owned):>6}"
               f'{_n(realized):>12}{_n(fees):>10}{"":>20}{"":>12}'
               f'{_n(realized - fees):>12}')
+    print()
+    print(f"{'— activity —':<18}{'trips':>7}{'per-trip':>10}"
+          f"{'rounds':>8}{'avg/round':>11}{'SO fills':>10}{'max depth':>11}")
+    for botid in botids:
+        b = books.get(botid)
+        if b is None or b['fills'] == 0:
+            continue
+        if strat_of.get(botid) == 'martingale':
+            avg = (b['round_pnl_sum'] / b['rounds']) if b['rounds'] else None
+            print(f"{botid:<18}{'—':>7}{'—':>10}{b['rounds']:>8}"
+                  f"{_n(avg):>11}{b['so_fills']:>10}{b['max_depth']:>11}")
+        else:
+            per = (b['realized'] / b['trips']) if b['trips'] else None
+            print(f"{botid:<18}{b['trips']:>7}{_n(per):>10}"
+                  f"{'—':>8}{'—':>11}{'—':>10}{'—':>11}")
     return 0
 
 

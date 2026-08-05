@@ -324,6 +324,11 @@ eventually pin (T1).
   module.
 - **R5** "Grid profit" is realized minus fees (D8); "total P&L" adds mark-to-average
   on the open remainder; an unknown mark yields no number, never a guess.
+- **R6** The activity layer derives from the SAME fills, no new state: every
+  realisation is a trip (counted at a loss too — underwater churn is visible), a
+  flat crossing closes a round and banks its realized, an entry fill at rung ≥ 1 is
+  a safety order and its rung is the round's depth; the max depth ever reached is
+  the martingale's true risk gauge.
 
 ## T — testing meta-invariants
 
