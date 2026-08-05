@@ -136,6 +136,11 @@ eventually pin (T1).
 - **M4** The round TP measures from average entry, recomputed as fills deepen, the
   basis named into the key. *(D12)*
 - **M5** `repeat` re-anchors only from flat; an absolute TP is refused alongside it.
+- **M5a** On a venue that hosts the position-TP, a TP fill and an operator's manual
+  close are INDISTINGUISHABLE in truth (both leave flat with no owned order gone) —
+  a repeat martingale there re-enters after a manual close; the watchdog's
+  `assumes_sole_actor` is the assumption that makes this safe, and on the resting-
+  exit venue S7 detects it properly. *(audit M1 — documented limitation)*
 - **M6** Round state is venue-derivable: a restart adopts the resting TP and never
   rewrites a live round's exit. *(the restart-flattens-a-round incident)*
 - **M7** The martingale carries no floor/cap/damping keys: its cap is the
@@ -155,8 +160,9 @@ eventually pin (T1).
   average, the venue moves it from there; refused where the venue cannot host it.
   *(D23)*
 - **M12** Reinvest is a toggle (D26): on, the round's sizes scale by
-  1 + lifetime-realized-net/capital — derived from the bot's own venue fills, so
-  restarts change nothing — floored at 0 (losses shrink, never grow) and CAPPED at
+  1 + realized-net/capital over the last 30 days of the bot's own venue fills
+  (bounded — an epoch-0 history pull was ~3,000 requests, the audit's H1; the
+  window is stated in the event), restart-proof by derivation — floored at 0 (losses shrink, never grow) and CAPPED at
   1.2, the watchdog ceiling's own headroom (F2); beyond +20% the owner raises
   `capital` in config, ceiling reviewed together. Grids reinvest only by that
   manual path; the key refuses on a grid, naming it.
@@ -265,6 +271,9 @@ eventually pin (T1).
 - **X7** A fired stop survives the process: the tombstone is durable BEFORE the
   flatten (a crash mid-stop stays dead), a tombstoned botid builds dead-and-visible
   (F4), and revival is a deliberate operator act — delete the entry, never automatic.
+  The file fails CLOSED (corrupt ⇒ the fleet refuses to build, never a silent
+  revival), but a failed WRITE never blocks the flatten itself — stopping beats
+  remembering.
   The one narrow local durable fact E3 permits: the exchange cannot express "this
   bot's stop fired". *(the undesigned fifth start state, ALIGNMENT — closed
   2026-08-05)*

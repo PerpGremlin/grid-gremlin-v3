@@ -5,6 +5,40 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-08-05 (later) — the unbiased eyes
+
+**Done.** The owner asked for an audit by fresh eyes: two independent agents,
+zero build context, read-only, told to DEMONSTRATE what they claim. Both earned
+their keep. The docs auditor's worst find: the README still said "no mainnet
+path — not a flag, an absence", denying the very armour built that morning —
+the repo's own failure mode, on the safety-critical claim, caught in hours. The
+README gained a Safety section, everything shipped since slice 16, and a spec
+now scans configs/ so no fleet file can ever carry `allow_mainnet`. One dead
+config key (`cancel_orders_on_exit`) deleted.
+
+**The code auditor demonstrated four HIGHs, all in the newest code**: an
+epoch-0 fills pull (~3,000 requests per call, re-fired every cooldown cycle);
+the partial server-side SL never re-sizing as the position grows (and the spec
+ASSERTED the absence — a spec testing the bug); tranche maintenance cancelling
+conditionals it didn't own (a hedge pair would wage a mutual-cancellation war);
+and round-completion mis-detection (phantom round counters, event spam, and the
+new base firing before the old safety ladder was cancelled — E2 violated across
+rounds). All fixed: bounded 30-day history read once per completion; cancel-
+then-set resize with ownership by position index; the completion latch; cleanup-
+before-open. Plus the mediums: spot base-coin fees quote-normalised in the
+ledger (M2), tombstones fail CLOSED on corruption but a failed write never
+blocks the flatten (M3), the loop survives ANY exception (M4), kill pages flush
+immediately (M6), the backtester refuses non-linear maths by name (M8), the
+fleet-file lock lands before build's account writes (L1), and five smaller
+honesty fixes. One documented limitation (M5a): a hosted-TP martingale cannot
+distinguish a manual close from its own TP — `assumes_sole_actor`, stated.
+
+**Lesson.** Six of the audit's findings were masked by specs that tested the
+wrong thing — including one asserting the buggy behaviour. Fresh eyes are not a
+luxury; they are the only reviewer the author cannot pre-agree with.
+
+---
+
 ## 2026-08-05 — the day the safety systems earned their names
 
 **Done.** Slices 26-32 in one day, all owner-directed: the backtest CLI on

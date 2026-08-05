@@ -240,3 +240,80 @@ def spec_X7_external_close_also_tombstones():
     bot.cycle()                                    # S7: kill
     assert not bot.alive
     assert Tombstones(tmp).has(bot.botid)
+
+
+# --- audit H2/H3: the conditional book is resized and respected --------------
+
+def spec_X3_partial_SL_resizes_when_the_position_grows():
+    venue, lines = FakeVenue(mark=61000.0), []
+    _holding(venue, size='0.035')
+    bot = _bot(venue, lines, min_position_base=0.014,
+               stop={'watch': 'mark_price', 'level': 58000,
+                     'server_side': True})
+    bot.cycle()
+    assert venue.sl_calls[-1] == (58000.0, 0.021)     # sized to inventory
+    venue.position = dict(venue.position, size='0.060')   # grows, SL kept
+    bot.cycle()
+    assert venue.sl_calls[-1] == (58000.0, 0.046)     # H2: RE-SIZED
+    book = venue.stop_orders('linear', 'BTCUSDT')
+    sls = [o for o in book if 'StopLoss' in o['stopOrderType']]
+    assert len(sls) == 1                              # stale one CANCELLED
+    n = len(venue.sl_calls)
+    bot.cycle()
+    assert len(venue.sl_calls) == n                   # level+size agree: quiet
+
+
+def spec_I1_foreign_conditionals_are_never_cancelled():
+    row = {'strategy': 'martingale', 'market_type': 'linear',
+           'symbol': 'BTCUSDT', 'side': 'long', 'capital': 1000.0,
+           'leverage': 10, 'base_order_size': 1000.0,
+           'safety_order_size': 1000.0, 'order_size_multiplier': 2.0,
+           'deviation_pct': 0.01, 'deviation_step_multiplier': 2.0,
+           'max_averaging_orders': 3,
+           'take_profit_tranches': [{'at_avg_pct': 0.01, 'share': 0.5},
+                                    {'at_avg_pct': 0.02, 'share': 0.5}]}
+    venue, lines = FakeVenue(), []
+    bot = Bot(validate_config(row), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    # an operator's manual TP on the OTHER index — and one on no index
+    venue.stop_book = [{'orderId': 'yours1', 'stopOrderType': 'TakeProfit',
+                        'triggerPrice': '65000', 'qty': '0.5',
+                        'positionIdx': 2},
+                       {'orderId': 'yours2', 'stopOrderType': 'TakeProfit',
+                        'triggerPrice': '64000', 'qty': '0.5',
+                        'positionIdx': 0}]
+    bot.cycle()                                       # base
+    bot.cycle()                                       # tranches maintained
+    ids = {o['orderId'] for o in venue.stop_orders('linear', 'BTCUSDT')}
+    assert {'yours1', 'yours2'} <= ids                # H3: untouched
+
+
+# --- audit M3: the tombstone fails CLOSED, and never blocks the stop ---------
+
+def spec_X7_a_corrupt_tombstone_file_refuses_never_revives():
+    import tempfile
+    from pathlib import Path as _P
+    from gridgremlin.tombstones import Tombstones, TombstoneError
+    tmp = _P(tempfile.mkdtemp()) / 'tombs.json'
+    tmp.write_text('{not json')
+    try:
+        Tombstones(tmp)
+    except TombstoneError as e:
+        assert 'deliberately' in str(e)
+    else:
+        raise AssertionError('a corrupt tombstone file was swallowed')
+
+
+def spec_X7_a_failed_tombstone_write_never_blocks_the_flatten():
+    class BrokenDisk:
+        def add(self, botid, reason):
+            raise OSError(30, 'Read-only file system')
+    venue, lines = FakeVenue(mark=61000.0), []
+    _holding(venue)
+    bot = _bot(venue, lines, stop={'watch': 'mark_price', 'level': 58000})
+    bot.tombs = BrokenDisk()
+    bot.cycle()
+    venue.mark = 57000.0
+    bot.cycle()
+    assert not bot.alive and venue.position is None   # the stop STILL executed
+    assert any('tombstone write FAILED' in ln for ln in lines)

@@ -113,6 +113,8 @@ def send_telegram(text):
     token = os.environ.get('TELEGRAM_BOT_TOKEN')
     chat = os.environ.get('TELEGRAM_CHAT_ID')
     if not (token and chat):
+        print('WATCHDOG HAS NO TELEGRAM CREDENTIALS — this page reached '
+              'NOBODY (journal only)', flush=True)
         return
     data = urllib.parse.urlencode({'chat_id': chat, 'text': text}).encode()
     urllib.request.urlopen(

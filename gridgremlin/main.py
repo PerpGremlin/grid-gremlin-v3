@@ -17,7 +17,7 @@ from .exchange.bybit.truth import parse_instrument, read_wallet
 from .exchange.errors import VenueError
 from .exchange.env import load_env
 from .ladder import grid_rungs, position_cap
-from .tombstones import Tombstones
+from .tombstones import Tombstones, TombstoneError
 from .watchdog import validate_watchdog
 
 BYBIT_LINK_LIMIT = 36
@@ -85,7 +85,10 @@ def snapshot_row(bots, wallet, now):
 def build_fleet(fleet_path, notifier, allow_mainnet=False):
     load_env()
     fleet = validate_fleet(json.loads(Path(fleet_path).read_text()))
-    tombs = Tombstones(fleet.get('tombstones') or 'logs/tombstones.json')
+    try:
+        tombs = Tombstones(fleet.get('tombstones') or 'logs/tombstones.json')
+    except TombstoneError as e:
+        raise ConfigError(str(e)) from e
     clients, bots, identities = {}, [], []
     for cfg in fleet['bots']:
         venue = cfg['venue']
@@ -172,7 +175,7 @@ def _ensure_symbol_capacity(clients, bots, notifier):
         need = sum(b.cfg['ladder_notional'] for b in legs)
         tiers = client.risk_limit_tiers('linear', symbol)
         tier = next((t for t in tiers if need <= t['limit']), tiers[-1])
-        for idx in {legs and 1, 2} & {1, 2}:
+        for idx in (1, 2):        # both hedge indexes, always
             try:
                 client.set_risk_limit('linear', symbol, tier['id'], idx)
             except Exception as e:
@@ -223,6 +226,11 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         snapshot=None, snapshot_every=60, lock_path=None, allow_mainnet=False):
     load_env()
     notifier = make_notifier()
+    # L1: build_fleet issues account writes (hedge mode, leverage, tiers) —
+    # a second launch must die BEFORE those, so a coarse per-file lock comes
+    # first; the per-account lock follows once the venues are known
+    prelock = acquire_fleet_lock(
+        f'/tmp/gridgremlin.{Path(fleet_path).resolve().name}.prelock')
     fleet, clients, bots = build_fleet(fleet_path, notifier,
                                        allow_mainnet=allow_mainnet)
     lock_tag = '+'.join(f'{v}.{c.env}' for v, c in sorted(clients.items()))
@@ -248,15 +256,19 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
                     row = snapshot_row(bots, wallet, time.time())
                     with open(snapshot, 'a') as f:
                         f.write(json.dumps(row) + '\n')
-            except (VenueError, OSError) as e:
-                # E7 at the loop: a failed read (or an ambiguous write — the
-                # next truth read reconciles it) costs THIS CYCLE, never the
-                # process. No snapshot is written, so a persistent outage
-                # still raises the watchdog's staleness page.
+            except Exception as e:                       # noqa: BLE001
+                # E7 at the loop: a failed read, a malformed venue response
+                # (truncated JSON, an LB error page — the audit's M4), or an
+                # ambiguous write — any costs THIS CYCLE, never the process.
+                # No snapshot is written, so a persistent problem still
+                # raises the watchdog's staleness page.
                 failing += 1
                 if failing == 1 or failing % 120 == 0:
+                    import traceback
+                    traceback.print_exc()
                     notifier.event('warn', 'fleet',
-                                   f'cycle {n} lost ({failing} in a row): {e}')
+                                   f'cycle {n} lost ({failing} in a row): '
+                                   f'{type(e).__name__}: {e}')
             else:
                 if failing:
                     notifier.event('fleet', 'fleet',
@@ -274,3 +286,4 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         if hasattr(notifier, 'close'):
             notifier.close()
         lock.close()
+        prelock.close()

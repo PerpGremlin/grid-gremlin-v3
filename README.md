@@ -154,8 +154,8 @@ Optional round machinery: `trailing_stop_pct` (the venue trails the position fro
 the average — Bybit only, refused elsewhere, M11) · `repeat: true` re-anchors a new
 round at market, from flat only (M5) · `repeat_cooldown_seconds` waits that long
 **from the venue's timestamp of the TP fill** before the next round (M13) ·
-`reinvest: true` scales the next round's sizes by lifetime realized-net/capital,
-venue-derived, floored at 0 and capped at +20% — the watchdog ceiling's own
+`reinvest: true` scales the next round's sizes by realized-net/capital over the
+last 30 days of venue fills, floored at 0 and capped at +20% — the watchdog ceiling's own
 headroom (M12); off, you compound by editing `capital`, which is also the only
 path grids have. Restarts adopt the resting exits and never rewrite a live round
 (M6).
@@ -194,7 +194,10 @@ HL gets a resting reduce-only limit at the target, adopted by identity.
 Firing means: **flatten the grid's inventory at market, cancel every owned order,
 kill, never restart** (D1). The `min_position_base` floor **survives** — a stop closes
 what the grid built, not your stack (X6/D2). A position that goes flat by any hand
-other than the grid's own exits gets the same treatment (S7). Every kill event states
+other than the grid's own exits gets the same treatment (S7) — with one stated
+exception: a repeat martingale on Bybit cannot tell your manual close from its
+own hosted TP filling (both look identical in truth) and will open a new round;
+the watchdog's `assumes_sole_actor` is that assumption made explicit (M5a). Every kill event states
 what still rests on the venue (X4).
 
 `server_side: true` (Bybit derivatives only, and only with `watch: mark_price`):

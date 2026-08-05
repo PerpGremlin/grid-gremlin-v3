@@ -96,7 +96,8 @@ class FakeVenue:
             self.stop_book.append({'orderId': f's{self._sid}',
                                    'stopOrderType': 'PartialTakeProfit',
                                    'triggerPrice': take_profit,
-                                   'qty': tp_size})
+                                   'qty': tp_size,
+                                   'positionIdx': position_idx})
         elif take_profit is not None:
             self.tp_calls = getattr(self, 'tp_calls', [])
             self.tp_calls.append(float(take_profit))
@@ -111,6 +112,14 @@ class FakeVenue:
             self.sl_calls = getattr(self, 'sl_calls', [])
             self.sl_calls.append((float(stop_loss),
                                   float(sl_size) if sl_size else None))
+            if sl_size is not None:            # partial mode STACKS a row
+                self._sid = getattr(self, '_sid', 0) + 1
+                self.stop_book = getattr(self, 'stop_book', [])
+                self.stop_book.append({'orderId': f's{self._sid}',
+                                       'stopOrderType': 'PartialStopLoss',
+                                       'triggerPrice': stop_loss,
+                                       'qty': sl_size,
+                                       'positionIdx': position_idx})
             if self.position:
                 self.position['stopLoss'] = stop_loss
 

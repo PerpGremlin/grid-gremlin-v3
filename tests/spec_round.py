@@ -114,8 +114,11 @@ def spec_M5_repeat_reanchors_a_new_round_at_market():
     venue.position = None                             # TP hit: flat
     venue.mark = 61000.0
     result = bot.cycle()
+    assert result == {'round': 'cleanup'}             # H4b: E2 across rounds —
+    assert venue.orders == []                         # stale ladder gone FIRST
+    result = bot.cycle()
     assert result == {'round_started': 2}
-    assert any(' repeat ' in ln for ln in lines)
+    assert sum(' repeat ' in ln for ln in lines) == 1     # H4a: once, not 1/cycle
     assert float(venue.position['avgPrice']) == 61000.0   # anchored at market
     assert bot.alive
 
@@ -329,17 +332,20 @@ def spec_M12_reinvest_scales_the_base_from_lifetime_fills():
     venue, lines = FakeVenue(), []
     bot = Bot(_cfg(repeat=True, reinvest=True), ADAPTER, venue,
               Notifier(sink=lines.append), gen_seed=1)
+    import time as _t
     link = f'{bot.botid}-1-x'
-    # one closed round: bought 0.1 @ 50000, sold 0.1 @ 51000 -> +100 net on
-    # capital 1000 -> factor 1.1
+    now_ms = int(_t.time() * 1000)
+    # one closed round INSIDE the 30d window: bought 0.1 @ 50000, sold 0.1 @
+    # 51000 -> +100 net on capital 1000 -> factor 1.1
     venue.fills_history = lambda mt, sym, a, b: _histfills(
-        (1_000, 'buy', 50000.0, 0.1, 0.0, link),
-        (2_000, 'sell', 51000.0, 0.1, 0.0, link))
+        (now_ms - 2_000, 'buy', 50000.0, 0.1, 0.0, link),
+        (now_ms - 1_000, 'sell', 51000.0, 0.1, 0.0, link))
     bot.cycle()                                    # opens round 1, scaled
     qty = float(venue.position['size'])
     base = 1000.0 / 60000.0                        # unscaled base qty
     assert abs(qty - ADAPTER.round_qty(base * 1.1)) < 1e-9
-    assert any('reinvest: sizes x1.1' in ln for ln in lines)
+    assert abs(bot._scale - 1.1) < 1e-9            # lazy-derived, silently —
+    # the ship event belongs to round COMPLETIONS (H4a: once per round)
 
 
 def spec_M12_the_factor_caps_at_the_watchdog_headroom():
