@@ -255,15 +255,49 @@ class Bot:
                 else 0.0
         return min(max(0.0, 1.0 + net / self.cfg['capital']), 1.2)
 
-    def _round_targets(self, basis, held):
-        """M4/D23: targets from average entry; tranches share ONE position."""
+    def _round_targets(self, basis, held, mark=None):
+        """M4/D23: targets from average entry; tranches share ONE position.
+        A tranche the mark has already PASSED is done (filled, or owed at
+        better-than-target) — it is filtered out and the remaining shares
+        renormalise over what is still held, so a filled tranche is never
+        re-placed below mark (the venue refuses those, correctly). An empty
+        return means every target is met: the caller closes the remainder."""
         tranches = self.cfg.get('take_profit_tranches')
         if not tranches:
             return [(self._round_target(basis), abs(held))]
-        adapter, sign = self.adapter, \
-            (1.0 if self.cfg['side'] == 'long' else -1.0)
-        return [(adapter.round_price(basis * (1.0 + sign * t['at_avg_pct'])),
-                 adapter.round_qty(abs(held) * t['share'])) for t in tranches]
+        adapter, long = self.adapter, self.cfg['side'] == 'long'
+        sign = 1.0 if long else -1.0
+        priced = [(adapter.round_price(basis * (1.0 + sign * t['at_avg_pct'])),
+                   t['share']) for t in tranches]
+        if mark is not None:
+            priced = [(p, sh) for p, sh in priced
+                      if (p > mark if long else p < mark)]
+        if not priced:
+            return []
+        total = sum(sh for _, sh in priced)
+        return [(p, adapter.round_qty(abs(held) * sh / total))
+                for p, sh in priced]
+
+    def _close_remainder_at_best(self, held, basis):
+        """M3 for a blown-through tranche round: every target already met —
+        close what remains, marketable at the DEEPEST target (fills at
+        target or better)."""
+        cfg, adapter = self.cfg, self.adapter
+        long = cfg['side'] == 'long'
+        sign = 1.0 if long else -1.0
+        prices = [adapter.round_price(basis * (1.0 + sign * t['at_avg_pct']))
+                  for t in cfg['take_profit_tranches']]
+        best = max(prices) if long else min(prices)
+        self._gen += 1
+        self.client.place_order(
+            cfg['market_type'], cfg['symbol'], self._exit_side,
+            adapter.fmt_qty(abs(held)), adapter.fmt_price(best),
+            self._make_link(0),
+            adapter.position_idx(self._exit_side, True) or 0,
+            reduce_only=True, post_only=False, borrow=self._borrow)
+        self.notify.event('tp', self.botid,
+                          f'every tranche target met — closing the remainder '
+                          f'at {best:.10g} or better')
 
     def _maintain_partial_tps(self, truth, targets, idx):
         """D23 hosted: tranche TPs live on the venue's conditional book —
@@ -451,10 +485,13 @@ class Bot:
         # holding: the round is never without a venue-resting exit
         # (M3/D21/D23 — tranches are the same law, split into shares)
         self._maintain_trailing(truth, basis, held, idx)
-        targets = self._round_targets(basis, held)
         hosted = getattr(self.client, 'hosts_position_tp', True)
-        if len(targets) > 1:
+        if self.cfg.get('take_profit_tranches'):
+            targets = self._round_targets(basis, held, truth['mark'])
             try:
+                if not targets:
+                    self._close_remainder_at_best(held, basis)
+                    return {'round': 'closing'}
                 if hosted:
                     self._maintain_partial_tps(truth, targets, idx)
                 else:
@@ -462,6 +499,7 @@ class Bot:
             except VenueError as e:
                 self.notify.event('warn', self.botid, f'tp: {e}')
             return None
+        targets = self._round_targets(basis, held)
         target = targets[0][0]
         tp_order = None
         if hosted:
