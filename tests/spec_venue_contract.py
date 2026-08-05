@@ -178,3 +178,47 @@ def spec_C7_a_coin_missing_from_the_universe_refuses_by_name():
         assert 'XRP' in str(e)
     else:
         raise AssertionError('a missing coin did not refuse')
+
+
+# --- the watch's finding: 429s climb a patient ladder, not a single retry ----
+
+def spec_E7_hl_info_reads_ride_out_a_429_burst():
+    import urllib.error
+    from gridgremlin.exchange.hyperliquid.client import InfoClient
+    calls = {'n': 0}
+    slept = []
+
+    class Fake429:
+        pass
+    c = InfoClient(env='testnet')
+
+    def flaky(body, retry_429=True):
+        return InfoClient._http(c, body, retry_429)
+    import urllib.request as _ur
+    real_open, real_sleep = _ur.urlopen, __import__('time').sleep
+
+    class Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return b'{"ok": 1}'
+
+    def fake_open(req, timeout=None):
+        calls['n'] += 1
+        if calls['n'] <= 2:
+            raise urllib.error.HTTPError(req.full_url, 429, 'Too Many', {},
+                                         None)
+        return Resp()
+    _ur.urlopen = fake_open
+    __import__('time').sleep = slept.append
+    try:
+        out = c._http({'type': 'meta'})
+    finally:
+        _ur.urlopen = real_open
+        __import__('time').sleep = real_sleep
+    assert out == {'ok': 1} and calls['n'] == 3
+    assert slept == [2.0, 4.0]                   # the ladder, not one retry

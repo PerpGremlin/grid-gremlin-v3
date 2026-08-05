@@ -40,17 +40,21 @@ class InfoClient:
         req = urllib.request.Request(self.base + '/info',
                                      data=json.dumps(body).encode(),
                                      headers={'Content-Type': 'application/json'})
-        try:
-            with urllib.request.urlopen(req, timeout=15) as resp:
-                return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and retry_429:
-                # the venue's public budget IS the pace: sleep to the window
-                # and take the cycle late rather than losing it (E7)
+        # the venue's public budget IS the pace (E7): a 429 sleeps up the
+        # ladder and takes the cycle late; only a persistent one raises.
+        # One 2s retry was not enough under 1s polling (the watch's finding:
+        # an isolated 429 every ~15 cycles).
+        for wait in (2.0, 4.0, 8.0) if retry_429 else ():
+            try:
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    return json.loads(resp.read().decode())
+            except urllib.error.HTTPError as e:
+                if e.code != 429:
+                    raise
                 import time as _t
-                _t.sleep(2.0)
-                return self._http(body, retry_429=False)
-            raise
+                _t.sleep(wait)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return json.loads(resp.read().decode())
 
     def _user(self):
         if not self.address:
