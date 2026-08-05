@@ -208,3 +208,51 @@ def spec_R2_spot_base_coin_fees_are_quote_normalised():
     fills = read_fills(SpotExec(), 'spot', 'LTCUSDT', 0, 1000)
     assert abs(fills[0]['fee'] - 0.05) < 1e-12      # 0.001 LTC @ 50 -> quote
     assert abs(fills[1]['fee'] - 0.052) < 1e-12     # already quote: untouched
+
+
+# --- R6: the activity layer — same fills, no new state -----------------------
+
+def spec_R6_every_realisation_is_a_trip():
+    b = new_book()
+    apply_fill(b, 'buy', 100.0, 1.0, 0.0)
+    apply_fill(b, 'sell', 102.0, 1.0, 0.0)       # trip 1 (+2, flat)
+    apply_fill(b, 'buy', 101.0, 1.0, 0.0)
+    apply_fill(b, 'sell', 100.0, 0.5, 0.0)       # trip 2 — underwater churn
+    assert b['trips'] == 2                       # counted even at a loss
+    assert abs(b['realized'] - (2.0 - 0.5)) < 1e-9
+
+
+def spec_R6_rounds_close_on_flat_and_carry_their_pnl():
+    b = new_book()
+    link = 'x'
+    apply_fill(b, 'buy', 100.0, 1.0, 0.0, entry_side='buy', rung=0)
+    apply_fill(b, 'buy', 99.0, 1.0, 0.0, entry_side='buy', rung=1)   # SO 1
+    apply_fill(b, 'buy', 98.0, 2.0, 0.0, entry_side='buy', rung=2)   # SO 2
+    apply_fill(b, 'sell', 100.0, 4.0, 0.0, entry_side='buy')         # TP: flat
+    apply_fill(b, 'buy', 100.0, 1.0, 0.0, entry_side='buy', rung=0)
+    apply_fill(b, 'sell', 101.0, 1.0, 0.0, entry_side='buy')         # round 2
+    assert b['rounds'] == 2
+    assert b['so_fills'] == 2 and b['max_depth'] == 2
+    # round 1: avg (100+99+196)/4 = 98.75 -> +5; round 2: +1
+    assert abs(b['round_pnl_sum'] - 6.0) < 1e-9
+
+
+def spec_R6_depth_resets_between_rounds():
+    b = new_book()
+    apply_fill(b, 'buy', 100.0, 1.0, 0.0, entry_side='buy', rung=0)
+    apply_fill(b, 'buy', 99.0, 1.0, 0.0, entry_side='buy', rung=3)
+    apply_fill(b, 'sell', 101.0, 2.0, 0.0, entry_side='buy')
+    apply_fill(b, 'buy', 100.0, 1.0, 0.0, entry_side='buy', rung=0)
+    apply_fill(b, 'buy', 99.5, 1.0, 0.0, entry_side='buy', rung=1)
+    apply_fill(b, 'sell', 101.0, 2.0, 0.0, entry_side='buy')
+    assert b['max_depth'] == 3                   # the high-water survives
+    assert b['_round_depth'] == 0                # but the round gauge reset
+
+
+def spec_R6_the_ledger_threads_rungs_from_links():
+    fills = [_fill(1, 'buy', 100.0, 1.0, link='linBTCUSDTl-0-aa'),
+             _fill(2, 'buy', 99.0, 1.0, link='linBTCUSDTl-2-ab'),
+             _fill(3, 'sell', 101.0, 2.0, link='linBTCUSDTl-0-ac')]
+    b = ledger(fills, ['linBTCUSDTl'],
+               entry_sides={'linBTCUSDTl': 'buy'})['linBTCUSDTl']
+    assert b['so_fills'] == 1 and b['max_depth'] == 2 and b['rounds'] == 1

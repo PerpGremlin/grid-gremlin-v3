@@ -255,7 +255,12 @@ profit, average-cost), **fees**, the open remainder at its average cost,
 market-order identity landed (I5) — appear in an `unowned` bucket per symbol
 rather than disappearing (R3). Read-only: safe to run any time,
 anywhere, alongside a live fleet (R4). A venue that cannot be reached is
-skipped with a warning; unknown marks print `—`, never a guess (R5).
+skipped with a warning; unknown marks print `—`, never a guess (R5). Below the
+money table, the **activity layer** (R6): grids show round **trips** and
+profit-per-trip (losses counted — underwater churn is visible); martingales
+show completed **rounds**, average realized per round, **safety orders used**,
+and the **max depth** ever reached — the martingale's true risk gauge. All
+derived from the same venue fills; nothing is counted in memory.
 
 ## 10. Backtesting
 
