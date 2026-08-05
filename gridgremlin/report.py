@@ -78,15 +78,17 @@ def total_pnl(book, mark):
 
 def _bybit_pull(rows, since_ms, now_ms):
     from .exchange.bybit.client import Client
-    from .exchange.bybit.truth import read_fills, read_symbol_truth
+    from .exchange.bybit.truth import read_fills
     client = Client()
     fills, marks = [], {}
     for category, symbol in sorted({(r['market_type'], r['symbol'])
                                     for r in rows}):
         fills += read_fills(client, category, symbol, since_ms, now_ms)
         try:
-            marks[symbol] = read_symbol_truth(client, category,
-                                              symbol)['mark']
+            # the CLIENT method, not the raw reader — it knows spot truth
+            # needs the instrument's base coin (V6)
+            marks[symbol] = client.read_symbol_truth(category,
+                                                     symbol)['mark']
         except (VenueError, OSError):
             marks[symbol] = None
     return fills, marks
