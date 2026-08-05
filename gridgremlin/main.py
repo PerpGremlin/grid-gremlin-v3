@@ -241,6 +241,7 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         poll = poll_seconds or fleet['poll_seconds']
         n = 0
         failing = 0
+        lost_warn_t = 0.0
         while cycles is None or n < cycles:
             try:
                 wallets = {v: c.read_wallet() for v, c in clients.items()}  # E8
@@ -263,7 +264,8 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
                 # No snapshot is written, so a persistent problem still
                 # raises the watchdog's staleness page.
                 failing += 1
-                if failing == 1 or failing % 120 == 0:
+                if time.time() - lost_warn_t >= 300.0:   # one page per 5 min,
+                    lost_warn_t = time.time()            # not one per loss
                     import traceback
                     traceback.print_exc()
                     notifier.event('warn', 'fleet',
