@@ -55,6 +55,7 @@ def read_positions(result):
                     'liq_price': _f(p.get('liqPrice')) or None,
                     'stop_loss': _f(p.get('stopLoss')) or None,
                     'take_profit': _f(p.get('takeProfit')) or None,
+                    'trailing_stop': _f(p.get('trailingStop')) or None,
                     'leverage': _f(p.get('leverage')),
                     'unrealised_pnl': _f(p.get('unrealisedPnl'))}
     return out
@@ -104,7 +105,7 @@ def read_spot_position(wallet, base_coin, dust=0.0):
                 'side': 'Buy' if size > 0 else 'Sell',   # D24: negative = short
                 'size': abs(size),
                 'avg_entry': None, 'liq_price': None, 'stop_loss': None,
-                'take_profit': None, 'leverage': None,
+                'take_profit': None, 'trailing_stop': None, 'leverage': None,
                 'unrealised_pnl': None}}
 
 

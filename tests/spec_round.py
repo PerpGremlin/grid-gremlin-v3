@@ -214,3 +214,79 @@ def spec_I5_the_base_order_carries_an_owned_link():
     bot = _bot(venue, lines)
     assert bot.cycle() == {'round_started': 1}
     assert rung_of(venue.market_links[0], bot.botid) == 0
+
+
+# --- D23: tranches — the same exit law, split into shares --------------------
+
+def _tranche_cfg(**over):
+    row = {'strategy': 'martingale', 'market_type': 'linear',
+           'symbol': 'BTCUSDT', 'side': 'long', 'capital': 1000.0,
+           'leverage': 10, 'base_order_size': 1000.0,
+           'safety_order_size': 1000.0, 'order_size_multiplier': 2.0,
+           'deviation_pct': 0.01, 'deviation_step_multiplier': 2.0,
+           'max_averaging_orders': 3,
+           'take_profit_tranches': [{'at_avg_pct': 0.01, 'share': 0.5},
+                                    {'at_avg_pct': 0.02, 'share': 0.5}]}
+    row.update(over)
+    return validate_config(row)
+
+
+def spec_D23_hosted_tranches_rest_on_the_conditional_book():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()                                    # base at market
+    bot.cycle()                                    # tranches maintained
+    book = venue.stop_orders('linear', 'BTCUSDT')
+    assert len(book) == 2
+    prices = sorted(float(o['triggerPrice']) for o in book)
+    assert prices == [60600.0, 61200.0]            # +1% and +2% of 60000
+    qtys = {o['qty'] for o in book}
+    assert qtys == {'0.008'}                       # half of 0.016 each
+    n = len(book)
+    bot.cycle()                                    # level-triggered: no churn
+    assert len(venue.stop_orders('linear', 'BTCUSDT')) == n
+
+
+def spec_D23_tranches_reanchor_when_the_average_moves():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()
+    bot.cycle()
+    venue.position = dict(venue.position, size='0.032', avgPrice='59500')
+    bot.cycle()                                    # deepen: re-anchored
+    book = venue.stop_orders('linear', 'BTCUSDT')
+    assert len(book) == 2
+    assert sorted(float(o['triggerPrice']) for o in book) == [60095.0, 60690.0]
+    assert {o['qty'] for o in book} == {'0.016'}
+
+
+def spec_D23_the_hostless_venue_gets_a_tranche_ladder():
+    venue, lines = FakeHLRound(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()
+    bot.cycle()
+    from gridgremlin.apply import rung_of
+    exits = [o for o in venue.orders
+             if o['reduce_only'] and o['side'] == 'Sell'
+             and rung_of(o['link_id'], bot.botid) == 0]
+    assert len(exits) == 2
+    assert sorted(o['price'] for o in exits) == [60600.0, 61200.0]
+    n = len(venue.orders)
+    bot.cycle()                                    # adopted by identity
+    assert len(venue.orders) == n
+
+
+def spec_D23_trailing_rides_the_venue_once_per_round():
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(take_profit_tranches=None,
+                           take_profit_avg_pct=0.01,
+                           trailing_stop_pct=0.01),
+              ADAPTER, venue, Notifier(sink=lines.append), gen_seed=1)
+    bot.cycle()
+    bot.cycle()
+    assert venue.trail_calls == [600.0]            # 1% of the 60000 basis
+    bot.cycle()                                    # venue holds it: no re-set
+    assert venue.trail_calls == [600.0]

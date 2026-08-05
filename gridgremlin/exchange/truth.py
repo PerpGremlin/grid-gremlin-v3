@@ -6,7 +6,8 @@ ORDER_KEYS = ('order_id', 'link_id', 'side', 'price', 'qty', 'cum_exec_qty',
               'reduce_only', 'status', 'position_idx', 'order_type',
               'updated_time_ms')
 POSITION_KEYS = ('position_idx', 'side', 'size', 'avg_entry', 'liq_price',
-                 'stop_loss', 'take_profit', 'leverage', 'unrealised_pnl')
+                 'stop_loss', 'take_profit', 'trailing_stop', 'leverage',
+                 'unrealised_pnl')
 WALLET_KEYS = ('equity', 'available', 'mm_rate', 'im_rate', 'maint_margin',
                'coins')
 

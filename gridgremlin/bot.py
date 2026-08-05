@@ -160,6 +160,104 @@ class Bot:
             else basis * (1.0 - pct)
         return self.adapter.round_price(raw)
 
+    def _round_targets(self, basis, held):
+        """M4/D23: targets from average entry; tranches share ONE position."""
+        tranches = self.cfg.get('take_profit_tranches')
+        if not tranches:
+            return [(self._round_target(basis), abs(held))]
+        adapter, sign = self.adapter, \
+            (1.0 if self.cfg['side'] == 'long' else -1.0)
+        return [(adapter.round_price(basis * (1.0 + sign * t['at_avg_pct'])),
+                 adapter.round_qty(abs(held) * t['share'])) for t in tranches]
+
+    def _maintain_partial_tps(self, truth, targets, idx):
+        """D23 hosted: tranche TPs live on the venue's conditional book —
+        level-triggered, re-anchored whenever the average moves."""
+        cfg, adapter = self.cfg, self.adapter
+        want = {(adapter.fmt_price(p), adapter.fmt_qty(q))
+                for p, q in targets if q > 0}
+        have = {}
+        for o in self.client.stop_orders(cfg['market_type'], cfg['symbol']):
+            if 'TakeProfit' in (o.get('stopOrderType') or ''):
+                key = (adapter.fmt_price(float(o.get('triggerPrice') or 0)),
+                       adapter.fmt_qty(float(o.get('qty') or 0)))
+                have[key] = o
+        for key, o in have.items():
+            if key not in want:
+                try:
+                    self.client.cancel_order(cfg['market_type'], cfg['symbol'],
+                                             o['orderId'])
+                except VenueError as e:
+                    if e.kind != 'gone':
+                        raise
+        placed = 0
+        for p, q in targets:
+            key = (adapter.fmt_price(p), adapter.fmt_qty(q))
+            if q <= 0 or key in have:
+                continue
+            self.client.set_trading_stop(cfg['market_type'], cfg['symbol'],
+                                         idx, take_profit=adapter.fmt_price(p),
+                                         tp_size=adapter.fmt_qty(q))
+            placed += 1
+        if placed:
+            self.notify.event('tp', self.botid,
+                              f'{placed} tranche TP(s) resting venue-side')
+
+    def _maintain_resting_exits(self, truth, targets):
+        """D23 on the hostless venue: the tranche ladder IS several D21
+        exits — rung 0, reduce-only, diff-shielded, adopted by identity."""
+        cfg, adapter = self.cfg, self.adapter
+        want = {(adapter.fmt_price(p), adapter.fmt_qty(q))
+                for p, q in targets if q > 0}
+        have = {}
+        for o in truth['orders']:
+            if (o['reduce_only'] and o['side'] == self._exit_side
+                    and rung_of(o['link_id'], self.botid) == 0):
+                have[(adapter.fmt_price(o['price']),
+                      adapter.fmt_qty(o['qty']))] = o
+        for key, o in have.items():
+            if key not in want:
+                try:
+                    self.client.cancel_order(cfg['market_type'], cfg['symbol'],
+                                             o['order_id'])
+                except VenueError as e:
+                    if e.kind != 'gone':
+                        raise
+        placed = 0
+        for p, q in targets:
+            key = (adapter.fmt_price(p), adapter.fmt_qty(q))
+            if q <= 0 or key in have:
+                continue
+            self._gen += 1
+            self.client.place_order(
+                cfg['market_type'], cfg['symbol'], self._exit_side,
+                adapter.fmt_qty(q), adapter.fmt_price(p), self._make_link(0),
+                adapter.position_idx(self._exit_side, True) or 0,
+                reduce_only=True, post_only=False, borrow=self._borrow)
+            placed += 1
+        if placed:
+            self.notify.event('tp', self.botid,
+                              f'{placed} tranche exit(s) resting')
+
+    def _maintain_trailing(self, truth, basis, held, idx):
+        """D23: trailing rides the venue or does not exist. Set once per
+        round; the venue moves it from there."""
+        pct = self.cfg.get('trailing_stop_pct')
+        if not pct or not held or basis is None:
+            return
+        if truth['positions'].get(idx, {}).get('trailing_stop'):
+            return
+        dist = self.adapter.round_price(basis * pct)
+        try:
+            self.client.set_trading_stop(
+                self.cfg['market_type'], self.cfg['symbol'], idx,
+                trailing_stop=self.adapter.fmt_price(dist))
+            self.notify.event('tp', self.botid,
+                              f'trailing stop riding the venue, {dist:.10g} '
+                              'behind')
+        except VenueError as e:
+            self.notify.event('warn', self.botid, f'trailing: {e}')
+
     def _martingale_round(self, truth, held, basis):
         """M3/M5/M6. Returns a dict to end the cycle early, None to continue
         to the ladder plan."""
@@ -195,9 +293,21 @@ class Bot:
             self._last_pos = 0.0
             return {'round_started': self._round + 1}
 
-        # holding: the round is never without a venue-resting exit (M3/D21)
-        target = self._round_target(basis)
+        # holding: the round is never without a venue-resting exit
+        # (M3/D21/D23 — tranches are the same law, split into shares)
+        self._maintain_trailing(truth, basis, held, idx)
+        targets = self._round_targets(basis, held)
         hosted = getattr(self.client, 'hosts_position_tp', True)
+        if len(targets) > 1:
+            try:
+                if hosted:
+                    self._maintain_partial_tps(truth, targets, idx)
+                else:
+                    self._maintain_resting_exits(truth, targets)
+            except VenueError as e:
+                self.notify.event('warn', self.botid, f'tp: {e}')
+            return None
+        target = targets[0][0]
         tp_order = None
         if hosted:
             venue_tp = truth['positions'].get(idx, {}).get('take_profit')

@@ -22,6 +22,7 @@ GRID_KEYS = COMMON_KEYS + (
     'assumed_avg_entry', 'min_position_base', 'max_position_base',
     'spot_borrow', 'spot_leverage', 'seed')
 MARTINGALE_KEYS = COMMON_KEYS + (
+    'take_profit_tranches', 'trailing_stop_pct',
     'base_order_size', 'safety_order_size', 'order_size_multiplier',
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
@@ -282,6 +283,33 @@ def validate_grid(row, where='row'):
     return cfg
 
 
+def _validate_tranches(v, where):
+    """D23: shares of one position, ascending targets, summing to one."""
+    if v is None:
+        return None
+    if not isinstance(v, list) or not v:
+        _refuse(f"{where}: 'take_profit_tranches' must be a non-empty list")
+    out, last = [], 0.0
+    for i, t in enumerate(v):
+        w2 = f'{where}.take_profit_tranches[{i}]'
+        if not isinstance(t, dict):
+            _refuse(f'{w2}: each tranche is {{at_avg_pct, share}}')
+        _reject_unknown(t, ('at_avg_pct', 'share'), w2)
+        pct = _fraction(t, 'at_avg_pct', w2)
+        share = _num(t, 'share', w2, least=0.0, least_open=True, most=1.0)
+        if pct is None or share is None or share <= 0:
+            _refuse(f'{w2}: at_avg_pct and share are required, share > 0')
+        if pct <= last:
+            _refuse(f"{where}: tranches must ascend in 'at_avg_pct'")
+        last = pct
+        out.append({'at_avg_pct': pct, 'share': share})
+    total = sum(t['share'] for t in out)
+    if abs(total - 1.0) > 1e-6:
+        _refuse(f'{where}: tranche shares sum to {total:.10g} — they are '
+                'shares of ONE position, they must sum to 1')
+    return out
+
+
 def validate_martingale(row, where='row'):
     _reject_unknown(row, MARTINGALE_KEYS, where)
     cfg = {k: v for k, v in row.items() if not k.startswith('_')}
@@ -314,9 +342,20 @@ def validate_martingale(row, where='row'):
                                        least=1, most=50, required=True,
                                        integer=True)
     cfg['take_profit_avg_pct'] = _fraction(cfg, 'take_profit_avg_pct', where)
-    if cfg['take_profit_avg_pct'] is None:
-        _refuse(f"{where}: 'take_profit_avg_pct' is required — a round is "
-                'never without an exit (M3)')
+    cfg['take_profit_tranches'] = _validate_tranches(
+        cfg.get('take_profit_tranches'), where)
+    if cfg['take_profit_avg_pct'] is None and not cfg['take_profit_tranches']:
+        _refuse(f"{where}: 'take_profit_avg_pct' (or 'take_profit_tranches') "
+                'is required — a round is never without an exit (M3)')
+    if cfg['take_profit_avg_pct'] is not None and cfg['take_profit_tranches']:
+        _refuse(f"{where}: 'take_profit_avg_pct' and 'take_profit_tranches' "
+                'are two answers to one question — pick one (D23)')
+    t = _fraction(cfg, 'trailing_stop_pct', where)
+    if t is not None:
+        if cfg['venue'] == 'hyperliquid':
+            _refuse(f"{where}: 'trailing_stop_pct' needs a venue that hosts "
+                    'trailing — not hyperliquid this phase (D23)')
+        cfg['trailing_stop_pct'] = t
     w = _fraction(cfg, 'place_within_pct', where)
     cfg['place_within_pct'] = 0.05 if w is None else w
     cfg['repeat'] = _flag(cfg, 'repeat')

@@ -49,6 +49,10 @@
       "min": 0,
       "max": 120
     },
+    "linADAUSDTl": {
+      "min": 0,
+      "max": 17969
+    },
     "linDOGEUSDTl": {
       "min": 0,
       "max": 72000
