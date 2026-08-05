@@ -132,6 +132,23 @@ stands unless the owner corrects it.
   reduce-only ladder where it doesn't (HL: partial TPs are simply several
   rung-0-style exits at tranche prices). Staged next; D15's list shrinks.
 
+- **D24 — Margin spot as the unhedgeable linear perp (2026-08-05).** The owner's
+  framing, confirmed: "as long as margin is on, you can always sell more than you
+  hold and go negative on a product." `spot_borrow: true` sends the venue's
+  leverage flag on every spot order; the position is the **signed** base balance
+  (negative = short, side Sell); the dust rule applies symmetrically around zero;
+  shorts are legal for spot **only** under borrow; the ladder sizes against
+  `capital × spot_leverage`; interest is venue-side (auto-borrow/auto-repay —
+  read, never modelled). Capability-complete; the soak exercises a borrow-long
+  first (the owner does not foresee spot shorts, but wants the option).
+- **D25 — The armed switch (2026-08-05).** Mainnet exists behind a double safety:
+  the fleet file must declare `"allow_mainnet": true` AND the launch must pass
+  `--allow-mainnet`; either alone refuses, naming the missing half. Owner's
+  words: *"keep it off as a toggle so [cloners] dont try to clone my repo and
+  lose money immediately… i know that testnet/demo=true does this, but think of
+  it like wearing a helmet and armour."* Supersedes the testnet-only HL
+  constructor refusal (F5 → F7); the demo fleet still never carries the flag.
+
 *Source documents: the owner's response file (local), the 2026-08-04 Q&A, and the
 2026-08-05 morning directives. Scrutiny was invited; scrutiny applied is recorded
 inline above.*

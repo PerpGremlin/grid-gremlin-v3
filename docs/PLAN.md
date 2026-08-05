@@ -213,6 +213,14 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: the inverse bot rests its ladder and the readout can
       account it ✓
 
+- [x] **29 — the armed switch (D25/F7)** *(PR #45)*
+      mainnet exists, cold: fleet-file `allow_mainnet` AND `--allow-mainnet`,
+      either alone refuses naming the missing half; HL's testnet-only
+      constructor refusal becomes the same double safety. PROMOTION.md is
+      the checklist (evidence gate, key ceremony, cutover order).
+      done when: both refusal paths and the armed path are specced; no
+      fleet file in the repo carries the flag ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

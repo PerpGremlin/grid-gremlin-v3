@@ -22,10 +22,22 @@ BYBIT_LINK_LIMIT = 36
 CEILING_MULTIPLE = 1.5      # F2: a watchdog ceiling beyond this is decorative
 
 
-def refuse_mainnet(client):
-    """F5: there is no mainnet path in v3 — not a flag, an absence."""
-    if client.env == 'mainnet':
-        raise ConfigError('v3 has no mainnet path — refuse (D19/F5)')
+def refuse_mainnet(client, fleet_allows=False, run_allows=False):
+    """F7 (D25): mainnet fires only with BOTH safeties off — the fleet file
+    declares `"allow_mainnet": true` (reviewed, committed intent) AND the
+    launch passes `--allow-mainnet` (operator intent, per start). Either
+    alone refuses. The demo/testnet env flags are the helmet; this is the
+    armour — a cloned repo cannot reach real money by accident."""
+    if client.env != 'mainnet':
+        return
+    missing = []
+    if not fleet_allows:
+        missing.append('\'"allow_mainnet": true\' in the fleet file')
+    if not run_allows:
+        missing.append('--allow-mainnet on the launch')
+    if missing:
+        raise ConfigError('mainnet is double-safetied (D25) — missing '
+                          + ' AND '.join(missing))
 
 
 def check_watchdog_coverage(bots_caps, watchdog_cfg):
@@ -68,19 +80,21 @@ def snapshot_row(bots, wallet, now):
                      for b in bots}}
 
 
-def build_fleet(fleet_path, notifier):
+def build_fleet(fleet_path, notifier, allow_mainnet=False):
     load_env()
     fleet = validate_fleet(json.loads(Path(fleet_path).read_text()))
     clients, bots, identities = {}, [], []
     for cfg in fleet['bots']:
         venue = cfg['venue']
         if venue not in clients:
+            armed = fleet.get('allow_mainnet', False) and allow_mainnet
             if venue == 'hyperliquid':
                 from .exchange.hyperliquid.venue import HLVenueClient
-                clients[venue] = HLVenueClient()      # testnet-only (F5)
+                clients[venue] = HLVenueClient(allow_mainnet=armed)
             else:
                 clients[venue] = WriteClient()
-                refuse_mainnet(clients[venue])
+            refuse_mainnet(clients[venue], fleet.get('allow_mainnet', False),
+                           allow_mainnet)
         client = clients[venue]
         if venue == 'hyperliquid':
             # _entry refuses BY NAME — a coin the venue removed must say so
@@ -193,10 +207,11 @@ def make_notifier():
 
 
 def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
-        snapshot=None, snapshot_every=60, lock_path=None):
+        snapshot=None, snapshot_every=60, lock_path=None, allow_mainnet=False):
     load_env()
     notifier = make_notifier()
-    fleet, clients, bots = build_fleet(fleet_path, notifier)
+    fleet, clients, bots = build_fleet(fleet_path, notifier,
+                                       allow_mainnet=allow_mainnet)
     lock_tag = '+'.join(f'{v}.{c.env}' for v, c in sorted(clients.items()))
     lock = acquire_fleet_lock(lock_path or f'/tmp/gridgremlin.{lock_tag}.lock')
     try:
