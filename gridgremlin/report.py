@@ -26,13 +26,16 @@ def owner_of(link_id, botids):
 
 def new_book():
     return {'fills': 0, 'bought': 0.0, 'sold': 0.0, 'realized': 0.0,
-            'fees': 0.0, 'position': 0.0, 'avg_cost': 0.0}
+            'fees': 0.0, 'position': 0.0, 'avg_cost': 0.0, 'inverse': False}
 
 
-def apply_fill(book, side, price, qty, fee):
-    """R2: average-cost accounting — a reduce realises, a flip re-anchors."""
+def apply_fill(book, side, price, qty, fee, inverse=False):
+    """R2: average-cost accounting — a reduce realises, a flip re-anchors.
+    A4's unit law holds here too: an inverse book realises in the BASE coin
+    (qty is $1 contracts), a linear/spot book in the quote coin."""
     signed = qty if side == 'buy' else -qty
     pos = book['position']
+    book['inverse'] = inverse
     if abs(pos) < EPS or (pos > 0) == (signed > 0):
         total = abs(pos) + qty
         book['avg_cost'] = (book['avg_cost'] * abs(pos) + price * qty) / total
@@ -40,7 +43,11 @@ def apply_fill(book, side, price, qty, fee):
     else:
         closed = min(abs(pos), qty)
         held = 1.0 if pos > 0 else -1.0
-        book['realized'] += (price - book['avg_cost']) * closed * held
+        if inverse:
+            book['realized'] += closed * (1.0 / book['avg_cost']
+                                          - 1.0 / price) * held
+        else:
+            book['realized'] += (price - book['avg_cost']) * closed * held
         book['position'] = pos + signed
         if qty - closed > EPS:
             book['avg_cost'] = price
@@ -52,26 +59,41 @@ def apply_fill(book, side, price, qty, fee):
     return book
 
 
-def ledger(fills, botids):
+def ledger(fills, botids, inverse_ids=()):
     """R1/R3: time-ordered fills -> books keyed by botid, or by
     ('unowned', symbol) — external activity is reported, never dropped."""
     books = {}
     for f in sorted(fills, key=lambda f: f['time_ms']):
         key = owner_of(f['link_id'], botids) or ('unowned', f['symbol'])
         apply_fill(books.setdefault(key, new_book()),
-                   f['side'], f['price'], f['qty'], f['fee'])
+                   f['side'], f['price'], f['qty'], f['fee'],
+                   inverse=key in inverse_ids)
     return books
+
+
+def unreal_pnl(book, mark):
+    """Mark-to-average on the open remainder, in the book's own coin (A4)."""
+    if abs(book['position']) < EPS:
+        return 0.0
+    if mark is None:
+        return None
+    if book.get('inverse'):
+        return book['position'] * (1.0 / book['avg_cost'] - 1.0 / mark)
+    return (mark - book['avg_cost']) * book['position']
 
 
 def total_pnl(book, mark):
     """R5: grid profit (realized - fees) plus mark-to-average on the open
-    remainder; an unknown mark yields None, never a guess."""
+    remainder; an unknown mark yields None, never a guess. Inverse books
+    are BASE-coin throughout and convert to quote AT MARK for display."""
     net = book['realized'] - book['fees']
-    if abs(book['position']) < EPS:
-        return net
-    if mark is None:
+    u = unreal_pnl(book, mark)
+    if u is None:
         return None
-    return net + (mark - book['avg_cost']) * book['position']
+    total = net + u
+    if book.get('inverse'):
+        return total * mark if mark is not None else None
+    return total
 
 
 # --- venue pulls (reads only) ------------------------------------------------
@@ -120,13 +142,18 @@ def _n(v, nd=2):
 
 
 def _row(name, book, mark):
-    unreal = (None if abs(book['position']) < EPS or mark is None
-              else (mark - book['avg_cost']) * book['position'])
+    inv = book.get('inverse')
+    scale = (mark if inv and mark is not None else 1.0)
+    unreal = unreal_pnl(book, mark)
+    if inv and mark is None:
+        unreal = None
     open_at = ('flat' if abs(book['position']) < EPS
                else f"{book['position']:.10g}@{book['avg_cost']:,.6g}")
+    def usd(v):
+        return None if v is None else v * scale
     return (f"{name:<18}{book['fills']:>6}"
-            f"{_n(book['realized']):>12}{_n(book['fees']):>10}"
-            f"{open_at:>20}{_n(unreal):>12}"
+            f"{_n(usd(book['realized'])):>12}{_n(usd(book['fees'])):>10}"
+            f"{open_at:>20}{_n(usd(unreal)):>12}"
             f"{_n(total_pnl(book, mark)):>12}")
 
 
@@ -143,11 +170,13 @@ def main(argv):
     fleet = validate_fleet(json.loads(Path(argv[0]).read_text()))
     now_ms = int(time.time() * 1000)
     since_ms = now_ms - int(hours * 3600 * 1000)
-    by_venue, symbol_of = {}, {}
+    by_venue, symbol_of, inverse_ids = {}, {}, set()
     for cfg in fleet['bots']:
         by_venue.setdefault(cfg['venue'], []).append(cfg)
         botid = make_botid(cfg['market_type'], cfg['symbol'], cfg['side'])
         symbol_of[botid] = cfg['symbol']
+        if cfg['market_type'] == 'inverse':
+            inverse_ids.add(botid)
     botids = list(symbol_of)
     fills, marks = [], {}
     for venue, rows in sorted(by_venue.items()):
@@ -160,7 +189,7 @@ def main(argv):
             continue
         fills += got
         marks.update(m)
-    books = ledger(fills, botids)
+    books = ledger(fills, botids, inverse_ids)
     print(f'last {hours:g}h · grid profit = realized − fees (D8) · '
           f'total adds mark-to-average on the open remainder')
     print(f"{'bot':<18}{'fills':>6}{'realized':>12}{'fees':>10}"
