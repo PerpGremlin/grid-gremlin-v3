@@ -36,5 +36,14 @@ counts (amends/cancels/skips = churn) · the watchdog record (breaches, kills).
 6. **Weighted vs equal rungs** — the weighted seeded SOL long vs equal-sized
    peers. Metric: grid profit per capital-day; inventory utilisation.
 
+7. **Inverse mechanics** — the BTC-margined BTCUSD grid. Metric: fill/churn
+   parity with the linear BTC grids; base-coin PnL sanity in the readout (A4).
+8. **Margin spot** — the ADA borrow-long (2x). Metric: does the venue borrow
+   flag change fill behaviour or fees vs the plain-spot LTC grid; interest
+   drag visible in total P&L.
+9. **The full martingale stack** — the ADA tranche+trailing+reinvest+cooldown
+   martingale. Metric: tranche fill quality (both halves?), trailing
+   interference, reinvest factor per round; clock: 10 completed rounds.
+
 Anything measured that this file doesn't list gets added here first — the
 doctrine is the experiment registry.

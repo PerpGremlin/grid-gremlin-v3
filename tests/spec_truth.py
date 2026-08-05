@@ -331,3 +331,12 @@ def spec_D24_spot_bodies_carry_the_borrow_flag():
     assert w.bodies[0]['isLeverage'] == 1        # margin trade
     assert w.bodies[1]['isLeverage'] == 0        # plain spot, stated
     assert w.bodies[2]['isLeverage'] == 1
+
+
+def spec_V3_truth_reads_are_pure_reads():
+    """Two identical reads return identical truth — no read mutates cache
+    state another read depends on (the HL cache coupling, retired)."""
+    c = SpotClient()
+    kw = dict(base_coin='LTC', dust=0.00001)
+    assert (read_symbol_truth(c, 'spot', 'LTCUSDT', **kw)
+            == read_symbol_truth(c, 'spot', 'LTCUSDT', **kw))

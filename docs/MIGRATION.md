@@ -73,7 +73,7 @@ the skeleton; listed so it isn't reinvented).
 | `take_profit_price` | RETIRE | dead in v2 (N0e); absolute TP leaves entirely | D11; M5 |
 | `repeat` | KEEP | round looping; refused with nothing now (absolute TP gone) | M5 |
 | — | NEW | `base_order_size`, `safety_order_size`, `deviation_pct`, `deviation_step_multiplier` | D11 |
-| — | DEFER | partial TPs, trailing TP, signal start-conditions, reinvest, cooldown tuning | D15 |
+| — | DEFER | signal start-conditions only (owner does their own TA); partials/trailing built via D23, reinvest/cooldown via D26 | D15; D23; D26 |
 
 ## 4. Fleet, watchdog, CLI
 

@@ -3,9 +3,9 @@
 **Status: decided, 2026-08-04 — every former ⚠ DECIDE is resolved; the record of who
 decided what is `DECISIONS.md` (D-numbers cited inline). Numbering is stable** — cite
 IDs in reviews, commits, and conversation. Each line is one statement that is true or
-false, with its source (an incident, a decision, or a study — see `research/`). The
-`test:` column stays empty until the slice that builds it lands; then the spec test is
-named after the ID.
+false, with its source (an incident, a decision, or a study — see `research/`). The linkage
+to the suite is the NAME: each spec function carries the ID it pins
+(`spec_G7_...`), greppable in both directions.
 
 Rules of this file: one sentence per invariant · unit named where one exists · nothing
 enters the code that isn't stated here first · nothing is stated here that a spec can't
@@ -144,8 +144,9 @@ eventually pin (T1).
 - **M8** The martingale has no range bounds: ladder depth derives from the deviation
   schedule × `max_averaging_orders`, and the risk is stated as the required-capital
   number at load. The grid keeps its bounds. *(D13)*
-- **M9** Staged beyond the skeleton, not in it: signal start conditions, profit
-  reinvest. *(D15; partial TPs and trailing left this list via D23 → M10/M11)*
+- **M9** Staged beyond the skeleton, not in it: signal start conditions (owner-
+  deferred — they do their own TA). *(D15; partials/trailing left via D23 → M10/M11;
+  reinvest and the cooldown left via D26 → M12/M13)*
 - **M10** A round's exit may be TRANCHED (D23): shares of one position at ascending
   targets, summing to one, every price re-anchored from the average as fills deepen —
   venue-hosted partial TPs where the venue hosts them, several D21 resting exits
@@ -304,8 +305,9 @@ eventually pin (T1).
 
 ## T — testing meta-invariants
 
-- **T1** Every invariant in this file has a spec named after its ID; a spec that passes
-  with the behaviour sabotaged is a defect. *(audit 3.8)*
+- **T1** Every invariant in this file has a spec named after its ID — or after the
+  D-number that minted it (both namespaces are stable; D23's specs pin M10/M11).
+  A spec that passes with the behaviour sabotaged is a defect. *(audit 3.8)*
 - **T2** Every loop is driven at least two iterations by some spec. *(the fleet-loop
   NameError that no spec caught)*
 - **T3** The backtester drives the real `plan()`; fills require trade-through, not
