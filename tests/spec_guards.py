@@ -199,3 +199,28 @@ def spec_B7_backoff_event_is_anti_spammed():
     margins = [ln for ln in lines if ' margin ' in ln]
     assert len(margins) == 7
     assert len(backoffs) == 5                         # silent once at the ceiling
+
+
+# --- B5 covers ERRORING creates too (the 170037 warn-per-cycle incident) -----
+
+def spec_B5_a_rung_whose_create_errors_cools_instead_of_spamming():
+    from gridgremlin.exchange.errors import VenueError
+    venue, lines = FakeVenue(), []
+
+    class Refusing(type(venue)):
+        pass
+    calls = {'n': 0}
+    real = venue.place_order
+
+    def refusing(*a, **kw):
+        calls['n'] += 1
+        raise VenueError('bybit /v5/order/create: retCode 170037: not opened',
+                         kind='other')
+    venue.place_order = refusing
+    bot = _bot(venue, lines)
+    for _ in range(6):
+        bot.cycle()
+    warns = sum('place:' in ln for ln in lines)
+    assert calls['n'] <= 12                       # strikes, then COOLED —
+    assert warns <= 12                            # never one per rung forever
+    assert any(' skip ' in ln for ln in lines)    # the cooldown is visible

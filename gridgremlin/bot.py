@@ -731,10 +731,15 @@ class Bot:
                                   f"{want['side']}@{want['price']:.10g} "
                                   f"x {want['qty']:.10g}")
             except VenueError as e:
-                if e.kind == 'margin':
+                if e.kind == 'margin':   # account-level: B7's backoff, never
                     self.notify.event('margin', self.botid, str(e))
-                    self._do_backoff(now)
+                    self._do_backoff(now)              # a rung-flap matter
                     break
+                # rung-level failure: an ATTEMPT — placed-but-not-resting
+                # strikes the flap next cycle (B5), so a rung that fails
+                # repeatedly COOLS instead of warning once per cycle (the
+                # 170037 incident: ~1500 warns before the switch was found)
+                placed_now.add(key)
                 if e.kind not in ('ro_capacity', 'post_only_reject'):
                     self.notify.event('warn', self.botid, f'place: {e}')
 

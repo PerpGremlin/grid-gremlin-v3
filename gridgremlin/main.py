@@ -134,6 +134,13 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
         identities.append((bot.botid, bot_identity(cfg, adapter)))
         if venue == 'bybit' and cfg['market_type'] == 'linear':
             client.ensure_hedge_mode(cfg['market_type'], cfg['symbol'])
+        elif (venue == 'bybit' and cfg['market_type'] == 'spot'
+                and cfg.get('spot_borrow')):
+            try:
+                client.ensure_collateral(spec['base_coin'])
+            except VenueError as e:
+                notifier.event('warn', cfg['symbol'],
+                               f'collateral switch deferred: {e}')
         elif venue == 'hyperliquid':
             try:
                 client.update_leverage(client._entry(cfg['symbol'])[0],
