@@ -139,6 +139,22 @@
       }
     },
     {
+      "_note": "D24 margin spot, first live exercise: borrow-long, the venue leverage flag on every order",
+      "market_type": "spot",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "capital": 1500,
+      "spot_borrow": true,
+      "spot_leverage": 2,
+      "lower": 0.155,
+      "upper": 0.23,
+      "rungs": 16,
+      "stop": {
+        "watch": "mark_price",
+        "level": 0.148
+      }
+    },
+    {
       "_note": "looping martingale, gentle multiplier, widening steps",
       "strategy": "martingale",
       "market_type": "linear",

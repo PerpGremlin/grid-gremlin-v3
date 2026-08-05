@@ -204,7 +204,11 @@ eventually pin (T1).
   `marketUnit=baseCoin` so qty is base-denominated on both sides. A residue below
   the venue's minimum order qty is FLAT, never a position — spot fees settle in
   the base coin, so a full exit always leaves an unsellable shaving. *(the
-  8.85e-06 LTC dust, 2026-08-05)*
+  8.85e-06 LTC dust, 2026-08-05)* Under D24 the balance is SIGNED: negative is a
+  short (side Sell), the dust rule is symmetric around zero, every order carries
+  the venue's borrow flag (`isLeverage`), shorts are legal only under
+  `spot_borrow`, and sizing flows the one normal path (`leverage :=
+  spot_leverage`).
 
 ## C — config doctrine
 

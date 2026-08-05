@@ -56,7 +56,8 @@ class HLVenueClient(ExchangeClient):
         return hl_truth.read_symbol_truth(self, symbol)
 
     def place_order(self, market_type, symbol, side, qty, price, link_id,
-                    position_idx=0, reduce_only=False, post_only=True):
+                    position_idx=0, reduce_only=False, post_only=True,
+                    borrow=False):
         asset, _ = self._entry(symbol)
         return super().place_order(asset, side, qty, price,
                                    order_link_id=link_id,
@@ -85,7 +86,7 @@ class HLVenueClient(ExchangeClient):
             order_id=int(order_id), reduce_only=match['reduce_only'])
 
     def place_market(self, market_type, symbol, side, qty, position_idx=0,
-                     reduce_only=False, link_id=None):
+                     reduce_only=False, link_id=None, borrow=False):
         """HL has no market type: an aggressive IOC limit is the idiom."""
         asset, entry = self._entry(symbol)
         adapter = self._adapter(symbol)

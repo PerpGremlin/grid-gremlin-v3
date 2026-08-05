@@ -41,6 +41,10 @@
       "min": 0,
       "max": 83.7
     },
+    "spoADAUSDTl": {
+      "min": 0,
+      "max": 19209
+    },
     "linSOLUSDTs": {
       "min": 0,
       "max": 120

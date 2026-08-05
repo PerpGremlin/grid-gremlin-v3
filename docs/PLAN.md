@@ -221,6 +221,15 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: both refusal paths and the armed path are specced; no
       fleet file in the repo carries the flag ✓
 
+- [x] **30 — margin spot (D24)** *(PR #46)*
+      the unhedgeable linear perp: signed balance is the position (negative
+      = short), dust symmetric around zero, `isLeverage` on every spot
+      order, shorts legal only under borrow, `leverage := spot_leverage`.
+      An ADA borrow-long joins the demo soak (capability-complete; shorts
+      wait for the owner to want one).
+      done when: the borrow bot's ladder rests with the venue flag set and
+      the validator refuses every half-configuration ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing
