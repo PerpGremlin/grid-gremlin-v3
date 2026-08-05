@@ -149,6 +149,15 @@ stands unless the owner corrects it.
   it like wearing a helmet and armour."* Supersedes the testnet-only HL
   constructor refusal (F5 → F7); the demo fleet still never carries the flag.
 
+- **D26 — Reinvest and the round cooldown (2026-08-05).** Reinvest is a per-bot
+  toggle — the owner: risk might not always make reinvesting smart. On, the
+  martingale auto-compounds at round boundaries from lifetime venue fills
+  (capped at the watchdog's own +20% headroom); off, and for grids always, the
+  manual path is editing `capital` — deliberate, ceiling reviewed together
+  (the range review suggests when). The cooldown anchors to the venue's TP-fill
+  timestamp. Signal start-conditions: deferred by the owner ("i usually do my
+  own TA to enter, even with bots").
+
 *Source documents: the owner's response file (local), the 2026-08-04 Q&A, and the
 2026-08-05 morning directives. Scrutiny was invited; scrutiny applied is recorded
 inline above.*

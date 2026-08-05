@@ -154,6 +154,10 @@ class Client:
                       'orderFilter': 'StopOrder', 'limit': 50}, signed=True)
         return r.get('list', [])
 
+    def fills_history(self, market_type, symbol, since_ms, now_ms):
+        from . import truth as _t
+        return _t.read_fills(self, market_type, symbol, since_ms, now_ms)
+
     def read_wallet(self):
         from . import truth as _t
         return _t.read_wallet(self.wallet_balance())

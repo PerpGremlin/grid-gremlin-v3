@@ -147,7 +147,8 @@ def spec_S6_the_reset_list_is_complete_and_documented():
     documented = {'_last_pos', '_gen', '_held_ref', '_placed_last', '_flap',
                   '_cooldown', '_backoff', '_backoff_until', '_backoff_emitted',
                   '_exit_links_last', '_uncovered_warned', '_anomaly_warned',
-                  '_anchor', '_round'}
+                  '_anchor', '_round',
+                  '_scale', '_cool_until'}   # M12/M13: reset AND venue-recomputed
     state = {k for k, v in vars(bot).items()
              if k.startswith('_') and not callable(v)
              and k not in ('_now', '_entry_side', '_exit_side', '_min_gap',

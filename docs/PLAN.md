@@ -248,6 +248,15 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: the live stop-fire below proves the whole chain across a
       restart ✓
 
+- [x] **33 — reinvest + the round cooldown (D26, SPEC M12/M13)** *(PR #52)*
+      `reinvest: true` compounds the round's sizes from lifetime venue
+      fills (floored at 0, capped at the watchdog's +20% headroom);
+      `repeat_cooldown_seconds` anchors to the venue's TP-fill timestamp.
+      Both restart-proof because both re-derive from the exchange. Grids
+      keep the manual path (edit capital, deliberately).
+      done when: cooling and scaled rounds are specced and the ADA
+      martingale soaks both ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

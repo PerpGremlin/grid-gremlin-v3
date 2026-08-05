@@ -195,7 +195,9 @@
         { "at_avg_pct": 0.02, "share": 0.5 }
       ],
       "trailing_stop_pct": 0.008,
-      "repeat": true
+      "repeat": true,
+      "repeat_cooldown_seconds": 600,
+      "reinvest": true
     },
     {
       "_note": "classic doubler, one round only",

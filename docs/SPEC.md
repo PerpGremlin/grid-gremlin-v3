@@ -153,6 +153,16 @@ eventually pin (T1).
 - **M11** Trailing rides the venue or does not exist: set once per round from the
   average, the venue moves it from there; refused where the venue cannot host it.
   *(D23)*
+- **M12** Reinvest is a toggle (D26): on, the round's sizes scale by
+  1 + lifetime-realized-net/capital — derived from the bot's own venue fills, so
+  restarts change nothing — floored at 0 (losses shrink, never grow) and CAPPED at
+  1.2, the watchdog ceiling's own headroom (F2); beyond +20% the owner raises
+  `capital` in config, ceiling reviewed together. Grids reinvest only by that
+  manual path; the key refuses on a grid, naming it.
+- **M13** The round cooldown anchors to the VENUE's timestamp of the TP fill, never
+  a process clock — `repeat_cooldown_seconds` after the last owned fill; a restart
+  re-derives it; refused without `repeat`. *(D26 — "so martingale bots dont just
+  spam an entry immediately after an exit")*
 
 ## S — start states
 
