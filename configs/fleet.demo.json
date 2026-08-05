@@ -1,6 +1,9 @@
 {
   "_note": "Bybit DEMO measurement fleet: hedge pairs, parameter A/Bs (hysteresis on/off, weighted vs equal, seed), and two martingales incl. a looper.",
-  "preflight": { "probe": true, "max_failed_bots": 0 },
+  "preflight": {
+    "probe": true,
+    "max_failed_bots": 0
+  },
   "watchdog": "configs/watchdog.demo.json",
   "poll_seconds": 5,
   "bots": [
@@ -27,24 +30,24 @@
       "split_hysteresis_rungs": 0.3
     },
     {
-      "_note": "hedge of the BTC long",
+      "_note": "hedge of the BTC long \u2014 leverage matches the big leg (venue requires equal buy/sell); capital scaled so notional is unchanged (2000x75 = the old 6000x25)",
       "market_type": "linear",
       "symbol": "BTCUSDT",
       "side": "short",
-      "capital": 6000,
-      "leverage": 25,
+      "capital": 2000,
+      "leverage": 75,
       "lower": 62000,
       "upper": 66000,
       "rungs": 41,
       "split_hysteresis_rungs": 0.3
     },
     {
-      "_note": "hedge of the ETH short",
+      "_note": "hedge of the ETH short \u2014 leverage matches the big leg; capital scaled, notional unchanged (2727.27x55 = the old 6000x25)",
       "market_type": "linear",
       "symbol": "ETHUSDT",
       "side": "long",
-      "capital": 6000,
-      "leverage": 25,
+      "capital": 2727.27,
+      "leverage": 55,
       "lower": 1780,
       "upper": 1960,
       "rungs": 41,
@@ -192,8 +195,14 @@
       "deviation_step_multiplier": 1.5,
       "max_averaging_orders": 3,
       "take_profit_tranches": [
-        { "at_avg_pct": 0.01, "share": 0.5 },
-        { "at_avg_pct": 0.02, "share": 0.5 }
+        {
+          "at_avg_pct": 0.01,
+          "share": 0.5
+        },
+        {
+          "at_avg_pct": 0.02,
+          "share": 0.5
+        }
       ],
       "trailing_stop_pct": 0.008,
       "repeat": true,
