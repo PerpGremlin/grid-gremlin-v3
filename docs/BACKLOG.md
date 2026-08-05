@@ -6,8 +6,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 1. Engine — staged by decision (D15, owner may pull any forward)
 
-- **Partial TPs** — take profit in tranches instead of one whole-position exit.
-- **Trailing TP** — let the target follow price once reached.
 - **Signal start-conditions** — a round opens on an external signal, not
   immediately (3Commas-style deal-start).
 - **Profit reinvest** — fold realised profit back into `capital` instead of
@@ -15,21 +13,19 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 - **Cooldown-between-rounds tuning** — `repeat` today restarts a martingale
   round on the next cycle; a configurable pause may belong here.
 
-## 2. Engine — deferred, not yet decided
-
-- **Margin spot** — the owner trades it and wants the capability as an option.
-  The vocabulary already validates (`spot_borrow`, `spot_leverage`); no write
-  path sends the venue's `isLeverage` flag yet. Direction under discussion
-  2026-08-05: model a borrowed short as an "unhedgeable linear perp"
-  (negative base balance = short position), longs borrow quote via the
-  leverage flag. Decision pass (D24) freezes the semantics before code.
-
-## 3. Built but not yet exercised live
+## 2. Built but not yet exercised live
 
 - **`watch: position_sl` and server-side partial SL** (X2/X3) — specced and
-  shipped; no soak bot has yet fired one live end-to-end.
+  shipped; no soak bot has yet fired one live end-to-end. A deliberate live
+  stop-fire is also a PROMOTION.md evidence-gate item.
+- **Margin-spot SHORT** (D24) — capability-complete and specced; one config
+  row away whenever the owner wants it exercised.
+- **HL tranches live** (D23/M10) — specced both ways; the HL fleet's margin
+  is too committed for a second martingale until the AVAX round closes.
+- **HL kline fetch + martingale backtests** — the backtest CLI serves Bybit
+  grids only (T3 replays plan_grid); both refusals name themselves.
 
-## 4. Owner-gated — not buildable, only decidable
+## 3. Owner-gated — not buildable, only decidable
 
 - **Promotion sign-off** — the path is built cold (D25/F7, PR #45) and
   `docs/PROMOTION.md` is the checklist (evidence gate, key ceremony, cutover

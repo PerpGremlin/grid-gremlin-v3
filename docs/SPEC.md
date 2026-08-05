@@ -276,7 +276,9 @@ eventually pin (T1).
   rung parses), deduped by execution id (I4), every cursor followed to the end or
   refused (E5) — never a local guess of what filled. *(the exchange is the state)*
 - **R2** Per-bot profit is average-cost accounting over time-ordered fills: a reduce
-  realises against the basis, a flip re-anchors at the flip price.
+  realises against the basis, a flip re-anchors at the flip price — in the
+  contract's own PnL coin (A4): base for inverse, quote elsewhere. *(the
+  −121,570 phantom, 2026-08-05)*
 - **R3** Fills owned by no bot are reported in their own bucket, never dropped —
   external activity on the account must be visible. *(F6's other half)*
 - **R4** The readout is read-only by construction: no write surface appears in its
