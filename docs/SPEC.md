@@ -251,6 +251,12 @@ eventually pin (T1).
   owned orders are cancelled. *(the cancel_all divergence, CONCEPTS §12·N1)*
 - **X6** Stop scope is grid inventory only: the `min_position` floor core survives a
   stop. *(D2)*
+- **X7** A fired stop survives the process: the tombstone is durable BEFORE the
+  flatten (a crash mid-stop stays dead), a tombstoned botid builds dead-and-visible
+  (F4), and revival is a deliberate operator act — delete the entry, never automatic.
+  The one narrow local durable fact E3 permits: the exchange cannot express "this
+  bot's stop fired". *(the undesigned fifth start state, ALIGNMENT — closed
+  2026-08-05)*
 
 ## F — fleet and operations
 

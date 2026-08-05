@@ -96,7 +96,7 @@
       "seed": true
     },
     {
-      "_note": "A/B: half-band hysteresis, tight window",
+      "_note": "DELIBERATE X1/X7 STOP-FIRE TEST 2026-08-05 (owner-authorized): level set past mark so the stop fires on cycle one; the XRP experiment clock is sacrificed and restarts after",
       "market_type": "linear",
       "symbol": "XRPUSDT",
       "side": "short",
@@ -106,7 +106,11 @@
       "upper": 1.15,
       "rungs": 21,
       "split_hysteresis_rungs": 0.15,
-      "place_within_pct": 0.03
+      "place_within_pct": 0.03,
+      "stop": {
+        "watch": "mark_price",
+        "level": 1.05
+      }
     },
     {
       "_note": "inverse, live for the first time in v3: BTC-margined, qty in $1 contracts (A4)",

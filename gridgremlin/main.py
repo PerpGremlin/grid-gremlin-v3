@@ -16,6 +16,7 @@ from .exchange.bybit.truth import parse_instrument, read_wallet
 from .exchange.errors import VenueError
 from .exchange.env import load_env
 from .ladder import grid_rungs, position_cap
+from .tombstones import Tombstones
 from .watchdog import validate_watchdog
 
 BYBIT_LINK_LIMIT = 36
@@ -83,6 +84,7 @@ def snapshot_row(bots, wallet, now):
 def build_fleet(fleet_path, notifier, allow_mainnet=False):
     load_env()
     fleet = validate_fleet(json.loads(Path(fleet_path).read_text()))
+    tombs = Tombstones(fleet.get('tombstones') or 'logs/tombstones.json')
     clients, bots, identities = {}, [], []
     for cfg in fleet['bots']:
         venue = cfg['venue']
@@ -111,7 +113,17 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
             adapter = adapter_for(cfg['market_type'], spec)
         cfg['funding_interval_minutes'] = spec['funding_interval_minutes']
         check_placeable(cfg, adapter)
-        bot = Bot(cfg, adapter, client, notifier, gen_seed=int(time.time()))
+        bot = Bot(cfg, adapter, client, notifier, gen_seed=int(time.time()),
+                  tombstones=tombs)
+        if tombs.has(bot.botid):
+            # X7: a fired stop survives the process. Dead AND visible (F4);
+            # revival = the operator deletes the tombstone entry, on purpose.
+            bot.alive = False
+            notifier.event('warn', bot.botid,
+                           'tombstoned — a stop fired '
+                           f'({tombs.reason(bot.botid)}); remove the entry '
+                           f"from {fleet.get('tombstones') or 'logs/tombstones.json'} "
+                           'to revive, deliberately')
         limit = 16 if venue == 'hyperliquid' else BYBIT_LINK_LIMIT
         chars = 4 if venue == 'hyperliquid' else 10
         check_link_fits(bot.botid, cfg.get('rungs', 99), limit, gen_chars=chars)
