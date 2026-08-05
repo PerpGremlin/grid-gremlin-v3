@@ -7,7 +7,8 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 ## 1. Engine — staged by decision (D15, owner may pull any forward)
 
 - **Signal start-conditions** — a round opens on an external signal, not
-  immediately (3Commas-style deal-start).
+  immediately. Owner 2026-08-05: flagged for LATER — they do their own TA to
+  enter, even with bots.
 - **Profit reinvest** — fold realised profit back into `capital` instead of
   letting it idle.
 - **Cooldown-between-rounds tuning** — `repeat` today restarts a martingale
@@ -15,9 +16,11 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 2. Built but not yet exercised live
 
-- **`watch: position_sl` and server-side partial SL** (X2/X3) — specced and
-  shipped; no soak bot has yet fired one live end-to-end. A deliberate live
-  stop-fire is also a PROMOTION.md evidence-gate item.
+- **`watch: position_sl` and server-side partial SL** (X2/X3) — X1's
+  bot-side fire is PROVEN live (the 2026-08-05 deliberate test, incl. the X7
+  tombstone across restarts). Remaining: a server-side SL actually
+  triggering venue-side (the revived XRP short now carries one), and a
+  `position_sl` watch adoption.
 - **Margin-spot SHORT** (D24) — capability-complete and specced; one config
   row away whenever the owner wants it exercised.
 - **HL tranches live** (D23/M10) — specced both ways; the HL fleet's margin

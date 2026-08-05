@@ -5,6 +5,44 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-08-05 — the day the safety systems earned their names
+
+**Done.** Slices 26-32 in one day, all owner-directed: the backtest CLI on
+fresh venue bars (A6 refused the first draft — the sabotage spec defending the
+architecture against its author); 1s polling (D22 — the venue's rate budget is
+the pace, WS wake dies by decision); inverse live (a BTC-margined BTCUSD grid;
+A4's maths with money-shaped numbers); the armed switch (D25/F7 — mainnet
+exists, cold, double-safetied, PROMOTION.md is the checklist); margin spot
+(D24 — the signed balance IS the position, an ADA borrow-long soaking);
+martingale tranches + trailing (D23/M10/M11 — hosted on Bybit's conditional
+book, several D21 exits on HL; an ADA tranche martingale opened round one with
+its trailing stop riding the venue). The readout caught its own inverse-unit
+bug (linear math on $1 contracts: a −121,570 phantom for a −1.59 truth — A4
+reaches the ledger now).
+
+**The stop-fire test (owner-authorized).** Preparing it exposed the gap that
+mattered: alive=False lived only in memory — a restart would have revived a
+stopped bot straight back into the market, ALIGNMENT's undesigned fifth start
+state. SPEC X7: a tombstone durable BEFORE the flatten, dead-and-visible at
+build, revival only by deliberate operator act. Then the live fire, XRP short:
+stop hit on cycle one → flattened 1334.1 at market → 6 owned orders cancelled
+→ kill paged with the residue stated → tombstone written → and on the second
+restart the bot BUILT DEAD, naming its tombstone. PROMOTION's "a stop has
+fired end-to-end live" box: ticked. XRP revived deliberately with a fresh
+clock and a server-side stop so X3 stays exercised.
+
+**Broke / caught.** Two overnight TLS resets each killed the HL process — E7
+now holds at the fleet loop (a failed read costs the cycle, never the
+process). Spot fee dust (8.85e-06 LTC) counted as "holding" — flat below the
+venue minimum now, symmetric around zero. One staging error shipped specs
+without their code for one commit — caught by the box suite, fixed in the
+next.
+
+**Next.** Reinvest + round-cooldown design discussion with the owner; signal
+starts deferred (owner does their own TA); soak clocks run.
+
+---
+
 ## 2026-08-04 — phase 2 opens: the readout finds its first bug, and a venue moves the ground
 
 **Done.** `BACKLOG.md` (the ledger of what v3 doesn't do; items leave only via
