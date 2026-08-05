@@ -282,15 +282,15 @@ class WriteClient(Client):
 
     def read_symbol_truth(self, market_type, symbol, funding_interval=480.0):
         from . import truth as _t
-        base_coin = None
+        base_coin, dust = None, 0.0
         if market_type == 'spot':
             # memo of immutable instrument metadata, not venue state (V3-safe)
-            memo = getattr(self, '_base_coins', None) or {}
+            memo = getattr(self, '_spot_specs', None) or {}
             if symbol not in memo:
                 memo[symbol] = _t.parse_instrument(
-                    market_type,
-                    self.instruments_info(market_type, symbol))['base_coin']
-                self._base_coins = memo
-            base_coin = memo[symbol]
+                    market_type, self.instruments_info(market_type, symbol))
+                self._spot_specs = memo
+            base_coin = memo[symbol]['base_coin']
+            dust = memo[symbol]['min_qty']       # below this: unsellable, flat
         return _t.read_symbol_truth(self, market_type, symbol, funding_interval,
-                                    base_coin=base_coin)
+                                    base_coin=base_coin, dust=dust)

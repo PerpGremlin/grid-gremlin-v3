@@ -204,19 +204,37 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
                                 else ship_orders)
         poll = poll_seconds or fleet['poll_seconds']
         n = 0
+        failing = 0
         while cycles is None or n < cycles:
-            wallets = {v: c.read_wallet() for v, c in clients.items()}   # E8
-            wallet = {'equity': sum(w['equity'] for w in wallets.values()),
-                      'mm_rate': max((w['mm_rate'] or 0.0)
-                                     for w in wallets.values())}
-            for bot in bots:
-                counts = bot.cycle(equity=wallets[bot.cfg['venue']]['equity'])
-                if counts is not None:
-                    print(f"cycle {n} {bot.botid}: {counts}", flush=True)
-            if snapshot and n % snapshot_every == 0:
-                row = snapshot_row(bots, wallet, time.time())
-                with open(snapshot, 'a') as f:
-                    f.write(json.dumps(row) + '\n')
+            try:
+                wallets = {v: c.read_wallet() for v, c in clients.items()}  # E8
+                wallet = {'equity': sum(w['equity'] for w in wallets.values()),
+                          'mm_rate': max((w['mm_rate'] or 0.0)
+                                         for w in wallets.values())}
+                for bot in bots:
+                    counts = bot.cycle(
+                        equity=wallets[bot.cfg['venue']]['equity'])
+                    if counts is not None:
+                        print(f"cycle {n} {bot.botid}: {counts}", flush=True)
+                if snapshot and n % snapshot_every == 0:
+                    row = snapshot_row(bots, wallet, time.time())
+                    with open(snapshot, 'a') as f:
+                        f.write(json.dumps(row) + '\n')
+            except (VenueError, OSError) as e:
+                # E7 at the loop: a failed read (or an ambiguous write — the
+                # next truth read reconciles it) costs THIS CYCLE, never the
+                # process. No snapshot is written, so a persistent outage
+                # still raises the watchdog's staleness page.
+                failing += 1
+                if failing == 1 or failing % 120 == 0:
+                    notifier.event('warn', 'fleet',
+                                   f'cycle {n} lost ({failing} in a row): {e}')
+            else:
+                if failing:
+                    notifier.event('fleet', 'fleet',
+                                   f'venue readable again after {failing} '
+                                   'lost cycle(s)')
+                failing = 0
             if not any(b.alive for b in bots):
                 print('all bots dead — fleet exits', flush=True)
                 return 0

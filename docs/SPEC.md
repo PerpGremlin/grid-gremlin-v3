@@ -28,7 +28,11 @@ eventually pin (T1).
 - **E6** The engine reacts to error *kinds*, never venue codes; `ambiguous` means "the
   write may have landed" and defers to the next truth read.
 - **E7** No error kind kills: every kind maps to retry, backoff, skip, or warn;
-  stand-down happens only by stop rule or operator.
+  stand-down happens only by stop rule or operator. This holds at the fleet loop
+  too: a failed read or venue error costs the cycle, never the process — no
+  snapshot is written for a lost cycle, so a persistent outage still raises the
+  watchdog's staleness page. *(two overnight TLS resets killed the HL unit,
+  2026-08-05)*
 - **E8** Unknown is not flat: a failed startup read refuses to trade. *(nautilus TAKE)*
 
 ## A — contract maths (the adapter seam)
@@ -197,7 +201,10 @@ eventually pin (T1).
   keeps no basis (spot; v2's demo lesson — the reason the field exists),
   `assumed_avg_entry` serves; a venue-reported basis always overrules the config.
   Spot write bodies carry no positionIdx/reduceOnly, and market orders pin
-  `marketUnit=baseCoin` so qty is base-denominated on both sides.
+  `marketUnit=baseCoin` so qty is base-denominated on both sides. A residue below
+  the venue's minimum order qty is FLAT, never a position — spot fees settle in
+  the base coin, so a full exit always leaves an unsellable shaving. *(the
+  8.85e-06 LTC dust, 2026-08-05)*
 
 ## C — config doctrine
 

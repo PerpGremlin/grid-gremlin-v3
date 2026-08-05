@@ -87,14 +87,16 @@ def read_orders(client, category, symbol):
                      kind='partial_read')
 
 
-def read_spot_position(wallet, base_coin):
+def read_spot_position(wallet, base_coin, dust=0.0):
     """V6: spot's 'position' is the wallet's base-coin holding, synthesized
     into the one position shape. The venue keeps no basis: avg_entry is None
     and the adoption family runs ref-only (G6's no-basis arm) unless the
-    config states `assumed_avg_entry`."""
+    config states `assumed_avg_entry`. A residue below `dust` (the venue's
+    min order qty) is FLAT — spot fees settle in the base coin, so a full
+    exit leaves an unsellable shaving that must never count as holding."""
     coin = wallet['coins'].get(base_coin) or {}
     size = coin.get('wallet_balance', 0.0)
-    if size <= 0:
+    if size <= 0 or size < dust:
         return {}
     return {0: {'position_idx': 0, 'side': 'Buy', 'size': size,
                 'avg_entry': None, 'liq_price': None, 'stop_loss': None,
@@ -103,7 +105,7 @@ def read_spot_position(wallet, base_coin):
 
 
 def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.0,
-                      base_coin=None):
+                      base_coin=None, dust=0.0):
     """V1/V2: the one truth shape; funding normalised to per-hour at read.
     V6: spot has no position endpoint — the wallet holding is the position."""
     t = client.tickers(market_type, symbol)
@@ -116,7 +118,7 @@ def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.
             raise TruthError(f'{symbol}: spot truth needs base_coin — refuse, '
                              'never guess (E8)')
         positions = read_spot_position(read_wallet(client.wallet_balance()),
-                                       base_coin)
+                                       base_coin, dust=dust)
     else:
         positions = read_positions(client.position_list(market_type, symbol))
     return validate_truth({
