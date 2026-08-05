@@ -279,6 +279,31 @@ funding, max drawdown, trips, and what the run ends holding.
 - Renames follow the `capital` pattern: old key refused with the migration stated,
   the whole seam changes in one commit (C2).
 
+## 12. Working with an agent (recommended)
+
+This system is built and operated the way it reads: a human making every
+decision that matters, an AI agent doing the building, testing, and watching at
+machine speed. The decisions file is the human's voice; the spec suite is what
+keeps the agent honest. It is a genuinely better division of labour than either
+party alone, and this repo is set up so you can reproduce it.
+
+The full shape uses a workstation plus a VPS: the fleet runs unattended on the
+box (`ops/` — units, watchdog, alerts), the box carries its own read-only agent
+layer (triage on failure, the Telegram relay, the daily range review), and a
+workstation agent session does the hands-on work — config edits, PRs, deploys,
+investigation — with the human deciding and merging.
+
+**No VPS? Start with one agent in one terminal.** Run the fleet in one shell,
+and an agentic CLI (this repo was built with Claude Code) in a second, opened
+at the repo root. Even read-only it will earn its keep: ask it to validate and
+explain a fleet file before you run it, read the readout and the logs, explain
+any warn verbatim, or run a backtest on your proposed grid. Give it guardrails
+the way this repo gives its own agents guardrails: `ops/triage-settings.json`
+is a ready-made read-only cage (`claude --settings ops/triage-settings.json`),
+the suite must be green before anything merges, and the mainnet double-safety
+(see Safety) is never the agent's to arm. The one rule that transfers above
+all: the agent proposes and builds — the human decides, and reads everything.
+
 ## The deeper story
 
 | read | to learn |
