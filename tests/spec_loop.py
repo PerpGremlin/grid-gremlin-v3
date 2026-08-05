@@ -249,3 +249,29 @@ def spec_telegram_close_flushes_and_failure_keeps_the_buffer():
                          clock=lambda: 0.0, sink=lambda line: None)
     m.event('warn', 'a', 'z')
     assert m._buffer                          # kept for the next attempt
+
+
+def spec_net_weather_never_reaches_the_phone():
+    """Owner 2026-08-05: TG is for real warnings, TPs, SLs and grid functions
+    — network hiccups are the terminal's business."""
+    lines = []
+    n = Notifier(sink=lines.append)
+    n.event('net', 'fleet', 'cycle 5 lost (1 in a row): reset')
+    assert lines[-1].startswith('[log] net fleet:')
+    sent = []
+    from gridgremlin.events import TelegramNotifier
+    t = TelegramNotifier('tok', 'chat', transport=sent.append,
+                         clock=lambda: 0.0, sink=lines.append)
+    t.event('net', 'fleet', 'venue readable again after 1 lost cycle(s)')
+    t.close()
+    assert sent == []                       # nothing buffered, nothing sent
+    t.event('kill', 'botx', 'stop fired')
+    assert sent and 'stop fired' in sent[0]  # real events still page
+
+
+def spec_fleet_events_do_not_stutter():
+    lines = []
+    Notifier(sink=lines.append).event('fleet', 'fleet', '12 bot(s) on demo')
+    assert lines[-1] == '[ship] fleet: 12 bot(s) on demo'
+    Notifier(sink=lines.append is None or lines.append).event('fill', 'botA', 'x')
+    assert lines[-1] == '[ship] fill botA: x'

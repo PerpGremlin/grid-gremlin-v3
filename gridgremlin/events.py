@@ -1,7 +1,9 @@
 # The event vocabulary. Order mechanics are logged, not shipped, unless asked.
 EVENT_KINDS = ('fleet', 'start', 'seed', 'skip', 'placed', 'cancel', 'amend', 'fill',
-               'exit', 'tp', 'repeat', 'funding', 'margin', 'backoff', 'warn', 'kill', 'dryrun')
+               'exit', 'tp', 'repeat', 'funding', 'margin', 'backoff', 'warn', 'kill',
+               'net', 'dryrun')
 ORDER_KINDS = ('placed', 'cancel', 'amend', 'skip')
+LOG_ONLY_KINDS = ('net',)    # network weather: the terminal's business, never the phone's
 
 
 class Notifier:
@@ -10,8 +12,10 @@ class Notifier:
         self.sink = sink or (lambda line: print(line, flush=True))
 
     def event(self, kind, botid, text):
-        route = 'log' if kind in ORDER_KINDS and not self.ship_orders else 'ship'
-        self.sink(f'[{route}] {kind} {botid}: {text}')
+        route = 'log' if ((kind in ORDER_KINDS and not self.ship_orders)
+                          or kind in LOG_ONLY_KINDS) else 'ship'
+        label = kind if botid == kind else f'{kind} {botid}'   # no "fleet fleet"
+        self.sink(f'[{route}] {label}: {text}')
 
 
 class TelegramNotifier(Notifier):
@@ -42,7 +46,8 @@ class TelegramNotifier(Notifier):
 
     def event(self, kind, botid, text):
         super().event(kind, botid, text)
-        if kind in ORDER_KINDS and not self.ship_orders:
+        if (kind in ORDER_KINDS and not self.ship_orders) \
+                or kind in LOG_ONLY_KINDS:
             return
         self._buffer.append(f'{kind} {botid}: {text}')
         # a kill page must not sit in the buffer until some later event

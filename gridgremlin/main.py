@@ -343,12 +343,12 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
                     lost_warn_t = time.time()            # not one per loss
                     import traceback
                     traceback.print_exc()
-                    notifier.event('warn', 'fleet',
+                    notifier.event('net', 'fleet',
                                    f'cycle {n} lost ({failing} in a row): '
                                    f'{type(e).__name__}: {e}')
             else:
                 if failing:
-                    notifier.event('fleet', 'fleet',
+                    notifier.event('net', 'fleet',
                                    f'venue readable again after {failing} '
                                    'lost cycle(s)')
                 failing = 0

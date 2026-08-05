@@ -236,8 +236,10 @@ rejected by the exchange, never taker-filled. HL testnet funds come from the fau
 
 `[ship]` events reach Telegram (when keys are set): `fleet start seed fill exit tp
 repeat funding margin backoff warn kill`. `[log]` events stay in the terminal:
-`placed cancel amend skip` — order mechanics never page a human. Everything prints
-locally either way; the terminal is the audit trail.
+`placed cancel amend skip` (order mechanics) and `net` (network weather — lost
+cycles and their recoveries; the loop absorbs them and the phone never hears
+about them). Everything prints locally either way; the terminal is the audit
+trail.
 
 ## 9. Reading the results
 
