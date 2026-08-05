@@ -222,3 +222,16 @@ def spec_E7_a_failed_read_costs_a_cycle_never_the_process():
     assert rc == 0 and calls['n'] == 3             # cycle 2 lost, 3 still ran
     assert any('cycle 1 lost' in e for e in events)
     assert any('readable again after 1' in e for e in events)
+
+
+def spec_F5_no_repo_fleet_file_ever_carries_the_mainnet_flag():
+    import json
+    from pathlib import Path
+    configs = Path(__file__).resolve().parent.parent / 'configs'
+    checked = 0
+    for f in sorted(configs.glob('*.json')):
+        data = json.loads(f.read_text())
+        assert not (isinstance(data, dict) and data.get('allow_mainnet')), \
+            f'{f.name} carries allow_mainnet — the armour ships OFF (F5/F7)'
+        checked += 1
+    assert checked >= 4                    # both fleets, both watchdogs

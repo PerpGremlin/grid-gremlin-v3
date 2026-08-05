@@ -28,7 +28,7 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
 STOP_KEYS = ('watch', 'level', 'server_side')
-FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit', 'allow_mainnet',
+FLEET_KEYS = ('bots', 'poll_seconds', 'allow_mainnet',
               'tombstones',
               'notify_orders', 'watchdog')
 
@@ -132,7 +132,7 @@ def _enum(row, key, where, allowed, default=None):
 
 
 def _flag(row, key):
-    """M16's lesson: coerce booleans unconditionally, never inside an `if`."""
+    """Config-study M16's lesson: coerce booleans unconditionally, never inside an `if`."""
     return bool(row.get(key, False))
 
 
@@ -203,7 +203,7 @@ def validate_grid(row, where='row'):
     if cfg['market_type'] == 'spot' and cfg.get('leverage') is not None:
         _refuse(f"{where}: spot does not take 'leverage' — borrow sizing is "
                 "'spot_leverage' under 'spot_borrow' (D24)")
-    cfg['strategy'] = 'grid'  # normalised back for BOTH strategies (config M14)
+    cfg['strategy'] = 'grid'  # normalised back for BOTH strategies (config study M14)
 
     capital = _num(cfg, 'capital', where, least=0.0, least_open=True, required=True)
     leverage = _num(cfg, 'leverage', where, least=1.0, most=125.0)
@@ -425,7 +425,6 @@ def validate_fleet(data, where='fleet'):
         'watchdog': data.get('watchdog'),
         'poll_seconds': _num(data, 'poll_seconds', where, least=0.0,
                              least_open=True) or 5.0,
-        'cancel_orders_on_exit': _flag(data, 'cancel_orders_on_exit'),
         'notify_orders': _flag(data, 'notify_orders'),
         'allow_mainnet': _flag(data, 'allow_mainnet'),   # D25: half of the safety
         'tombstones': data.get('tombstones'),            # X7 path (default logs/)

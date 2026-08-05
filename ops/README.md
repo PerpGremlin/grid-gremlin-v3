@@ -5,7 +5,7 @@ box holds the filled-in copies; this directory holds the shape, so the setup
 survives the box. Placeholder paths only — the public-repo hygiene rule bars
 real ones.
 
-## The four layers (v2's doctrine, carried)
+## The layers (v2's four, carried, plus two)
 
 1. `Restart=always` — crashes recover themselves.
 2. `OnFailure` → a rate-limited Telegram alert (one page per 30 min max — see
@@ -41,8 +41,9 @@ real ones.
 ## Install
 
 ```
-# fill the {{PLACEHOLDERS}}, one set per fleet, then:
-cp *.service *.timer ~/.config/systemd/user/
+# fill the {{PLACEHOLDERS}} in ops/systemd/*.template, one set per fleet,
+# save each WITHOUT the .template suffix, then:
+cp grid-gremlin3-*.service grid-gremlin3-*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 systemctl --user enable --now grid-gremlin3-<fleet>.service
 systemctl --user enable --now grid-gremlin3-<fleet>-watchdog.timer

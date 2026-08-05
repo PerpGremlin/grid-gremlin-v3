@@ -1,4 +1,5 @@
-# Fleet build and run (SPEC E8, F1-F5, I2, I3, C5, C6). No mainnet path.
+# Fleet build and run (SPEC E8, F1-F7, I2, I3, C5, C6). Mainnet is
+# double-safetied (F7), never an accident.
 import fcntl
 import json
 import time

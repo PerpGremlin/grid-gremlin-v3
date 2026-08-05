@@ -5,8 +5,8 @@ vocabulary-first: one set of names shared by code, config, docs, and tests. Ever
 below is pinned by the spec suite (`docs/SPEC.md`, IDs cited like `G7`); if this page
 and the code ever disagree, a spec is failing somewhere and the code is right.
 
-**Status: feature-complete, demo/testnet phase. There is no mainnet path in this
-codebase — not a flag, an absence.**
+**Status: feature-complete, demo/testnet soak phase.** This software places real
+orders on real venues. Read the Safety section before anything else.
 
 ---
 
@@ -25,9 +25,9 @@ Create `.env` in the repo root (gitignored — a commit is a publication):
 ```
 BYBIT_API_KEY=...          # demo-account keys
 BYBIT_API_SECRET=...
-BYBIT_DEMO=true            # demo | testnet | (mainnet refused)
+BYBIT_DEMO=true            # demo | testnet | mainnet (double-gated, see Safety)
 HL_ACCOUNT_ADDRESS=0x...   # the wallet whose account is read
-HL_TESTNET=true            # mainnet is unconstructible this phase
+HL_TESTNET=true            # testnet; mainnet is double-gated (see Safety)
 HL_PRIVATE_KEY=0x...       # a TESTNET agent/API wallet key — never a main key
 TELEGRAM_BOT_TOKEN=...     # optional: shipped events go to your phone
 TELEGRAM_CHAT_ID=...
@@ -45,8 +45,25 @@ python3 -m gridgremlin.watchdog configs/watchdog.demo.json   # one-line verdict
 ```
 
 CLI flags: `--cycles N` (finite run), `--interval S` (override poll),
-`--snapshot PATH`, `--snapshot-every N` (cycles, default 60). Ctrl+C leaves orders
-resting — that is the feature, not a bug (see §5).
+`--snapshot PATH`, `--snapshot-every N` (cycles, default 60), `--allow-mainnet`
+(half of the safety below). Ctrl+C leaves orders resting — that is the feature,
+not a bug (see §5). The deploy doctrine is `--interval 1` (D22): the venue's own
+rate budget is the real pace, so 1 means "as fast as the venue permits".
+
+## Safety — the helmet and the armour
+
+By default this engine can only reach **demo and testnet** venues: the env flags
+(`BYBIT_DEMO=true`, `HL_TESTNET=true`) select paper venues — that is the helmet.
+**Real funds are double-gated on top (F7/D25) — the armour.** Mainnet fires only
+when BOTH of these are true, per launch:
+
+1. the fleet file declares `"allow_mainnet": true` — committed, reviewed intent;
+2. the command line passes `--allow-mainnet` — operator intent, every start.
+
+Either alone refuses, naming the missing half. **No fleet file in this repository
+carries the flag, ever** — cloning this repo cannot reach real money by accident,
+and arming it is a deliberate two-step act. The promotion checklist (evidence
+gate, key ceremony, cutover) is [docs/PROMOTION.md](docs/PROMOTION.md).
 
 ## 2. The fleet file
 
@@ -57,12 +74,14 @@ A JSON object (or a bare list of rows, treated as `{"bots": [...]}`):
   "watchdog": "configs/watchdog.demo.json",
   "poll_seconds": 5,
   "notify_orders": false,
-  "cancel_orders_on_exit": false,
   "bots": [ { ...rows... } ]
 }
 ```
 
-`watchdog` is **required** — nothing trades unwatched (F1). Unknown keys are refused
+`watchdog` is **required** — nothing trades unwatched (F1). Optional fleet keys:
+`allow_mainnet` (half of the Safety gate, never set in this repo),
+`tombstones` (path of the stop-fire tombstone file, default
+`logs/tombstones.json` — see §6). Unknown keys are refused
 everywhere, including inside nested objects; a misspelling gets a did-you-mean hint;
 old v2 key names get their migration stated. **One bad row refuses the whole fleet**
 (C6) — no silent skips. Keys starting `_` are comments.
@@ -80,10 +99,11 @@ old v2 key names get their migration stated. **One bad row refuses the whole fle
 | key | meaning |
 |---|---|
 | `venue` | `bybit` (default) or `hyperliquid` |
-| `market_type` | `linear` / `inverse` / `spot` — picks the contract maths |
-| `side` | `long` / `short` (spot cannot short) |
+| `market_type` | `linear` / `inverse` / `spot` — picks the contract maths. Inverse: qty is $1 contracts, PnL in the BASE coin (A4), margined in it too |
+| `side` | `long` / `short` (a spot short only under `spot_borrow`, D24) |
 | `capital` | quote margin you commit; exposure = capital × leverage, derived and printed — never set `notional` yourself |
-| `leverage` | 1–125, validated; also asserted on the venue at build |
+| `leverage` | 1–125, validated; also asserted on the venue at build. **Spot refuses this key** — spot sizing is `spot_leverage` under borrow |
+| `spot_borrow` / `spot_leverage` | spot only, together or refused (D24): every order carries the venue's borrow flag, sizing = capital × spot_leverage (1–10), and the position is the SIGNED wallet balance — negative is a short |
 | `lower` / `upper` | the range. Rungs are computed once; **price never moves them** (G1) |
 | `rungs` **or** `spacing_pct` | give exactly one; the other derives, and the stored spacing is the gap the lattice actually has (G2) |
 | `spacing_type` | `percent` (geometric, default) / `fixed` (arithmetic) |
@@ -120,13 +140,28 @@ each safety order is `order_size_multiplier` × the previous one, resting
 the validator expands the whole series and **refuses a ladder the capital cannot
 carry, stating the number** (M2).
 
-The round's only exit is a whole-position take-profit at `take_profit_avg_pct` above
-**average entry**, held on the venue and re-set as fills deepen (M4). A round is never
-without an exit (M3): a target the market already ran through closes at
-target-or-better. `repeat: true` re-anchors a new round at market — from flat only
-(M5). Restarts adopt the resting TP and never rewrite a live round (M6).
+The round's exit measures from **average entry**, re-anchored as fills deepen (M4),
+and a round is never without one (M3) — a target the market already ran through
+closes at target-or-better. Two shapes, pick ONE:
 
-Martingale is **Bybit linear only** this phase (HL cannot host the venue-side TP).
+- `take_profit_avg_pct` — the whole position at one target;
+- `take_profit_tranches` — shares of the position at ascending targets, e.g.
+  `[{"at_avg_pct": 0.01, "share": 0.5}, {"at_avg_pct": 0.02, "share": 0.5}]`
+  (shares must sum to 1). Hosted on Bybit's conditional book; on HL each tranche
+  is its own resting reduce-only exit (M10).
+
+Optional round machinery: `trailing_stop_pct` (the venue trails the position from
+the average — Bybit only, refused elsewhere, M11) · `repeat: true` re-anchors a new
+round at market, from flat only (M5) · `repeat_cooldown_seconds` waits that long
+**from the venue's timestamp of the TP fill** before the next round (M13) ·
+`reinvest: true` scales the next round's sizes by lifetime realized-net/capital,
+venue-derived, floored at 0 and capped at +20% — the watchdog ceiling's own
+headroom (M12); off, you compound by editing `capital`, which is also the only
+path grids have. Restarts adopt the resting exits and never rewrite a live round
+(M6).
+
+Martingale runs on **both venues** (D21): Bybit hosts the position-TP natively;
+HL gets a resting reduce-only limit at the target, adopted by identity.
 
 ## 5. Running, restarting, stopping the process
 
@@ -162,19 +197,27 @@ what the grid built, not your stack (X6/D2). A position that goes flat by any ha
 other than the grid's own exits gets the same treatment (S7). Every kill event states
 what still rests on the venue (X4).
 
-`server_side: true` (Bybit derivatives only): the venue hosts the stop, partial-sized
-to the grid's inventory, following the position as it grows — it survives the process
-dying. The strongest option; use it when the venue allows.
+`server_side: true` (Bybit derivatives only, and only with `watch: mark_price`):
+the venue hosts the stop, partial-sized to the grid's inventory, following the
+position as it grows — it survives the process dying. The strongest option; use it
+when the venue allows.
+
+**After a stop fires — the tombstone (X7).** The botid is written to
+`logs/tombstones.json` BEFORE the flatten, so a stopped bot stays stopped through
+any restart or crash: at build it comes up dead-and-visible, warning with its
+reason. Revival is deliberate: delete its entry from the file, then restart. There
+is no automatic path back — that is the point.
 
 ## 7. Venues and tiers
 
 | | Bybit | Hyperliquid |
 |---|---|---|
-| tiers | demo (default) / testnet; **mainnet refused** | testnet only; **mainnet unconstructible** |
+| tiers | demo (default) / testnet / mainnet | testnet / mainnet |
+| mainnet | **double-gated** (see Safety): fleet `allow_mainnet` AND `--allow-mainnet` | same double gate |
 | markets | linear, inverse, spot | linear perps |
 | wallet | unified account read | unified/spot-aware read (faucet USDC counted correctly) |
 | stops | all watches; `server_side` on derivatives | `mark_price`/`account_equity`; `position_sl` inert; no `server_side` |
-| martingale | linear only | not this phase |
+| martingale | linear (native position-TP) | linear (resting reduce-only exit, D21) |
 | orders | post-only limits, everything | same (Alo), signed EIP-712, agent key |
 
 Every order the engine places is post-only (G13's venue backstop): a crossing order is
@@ -204,7 +247,19 @@ rather than disappearing (R3). Read-only: safe to run any time,
 anywhere, alongside a live fleet (R4). A venue that cannot be reached is
 skipped with a warning; unknown marks print `—`, never a guess (R5).
 
-## 10. Development
+## 10. Backtesting
+
+```
+python3 -m gridgremlin.backtest_cli configs/fleet.demo.json --bot linSOLUSDTl \
+        --days 7 [--bar-minutes 60] [--fee 0.0002] [--funding 0]
+```
+
+Fetches real venue klines (public data, no keys) and replays the SAME `plan_grid`
+the live engine runs (T3) — fills require trade-through, never touch. Bybit grids
+only; HL bots and martingales are refused by name. Prints grid profit, fees,
+funding, max drawdown, trips, and what the run ends holding.
+
+## 11. Development
 
 - `python3 tests/run.py` — a spec is a `spec_*` function in `tests/spec_*.py`; its
   name carries the SPEC ID it pins (`spec_G7_...`). An error is a failure, never a
@@ -223,7 +278,9 @@ skipped with a warning; unknown marks print `—`, never a guess (R5).
 | [docs/DECISIONS.md](docs/DECISIONS.md) | the owner's twenty decisions |
 | [docs/MIGRATION.md](docs/MIGRATION.md) | every v2 name → its v3 fate |
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | the dissection of v2 that started it all |
-| [docs/PLAN.md](docs/PLAN.md) | the sixteen build slices, all ticked |
+| [docs/PLAN.md](docs/PLAN.md) | every build slice, phases 1 and 2 |
+| [docs/PROMOTION.md](docs/PROMOTION.md) | how v3 reaches real funds — the checklist |
+| [ops/README.md](ops/README.md) | the deploy layer: units, alerts, triage, relay, range review |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
 | [docs/SOAK.md](docs/SOAK.md) | the experiment registry and its call conditions |
 | [docs/research/](docs/research/) | the evidence trail |

@@ -4,7 +4,7 @@
 sixteen slices are buildable in order.** One slice = one PR = one working session; "do
 slice N" is a complete instruction because everything a slice needs is here and in
 `SPEC.md`. A slice is done when its `done when` line is observably true and the whole
-suite is green. Checkboxes and SPEC's `test:` column update **in the same PR** as the
+suite is green. Checkboxes and the ID-named specs land **in the same PR** as the
 work — these files never describe a state the repo isn't in.
 
 Build direction: pure core outward. No slice touches I/O until slice 6; nothing writes
@@ -257,7 +257,7 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: cooling and scaled rounds are specced and the ADA
       martingale soaks both ✓
 
-**Standing rules while building:** every PR updates this file and SPEC's `test:` column
+**Standing rules while building:** every PR updates this file and its ID-named specs
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing
 here reaches a venue with real funds until the owner promotes v3 explicitly.

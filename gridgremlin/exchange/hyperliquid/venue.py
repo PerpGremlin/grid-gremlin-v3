@@ -1,6 +1,6 @@
 # The HL venue facade: the same client surface the Bot drives on Bybit
 # (read_symbol_truth, read_wallet, place/cancel/amend, make_link). Writes sign
-# with the TESTNET agent key; mainnet is unconstructible (F5).
+# with the agent key; mainnet is double-safetied (F7), never a bare env flag.
 from ...adapters import _d
 from ..errors import VenueError
 from .adapters import HLPerpAdapter
