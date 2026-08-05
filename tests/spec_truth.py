@@ -273,3 +273,20 @@ def spec_V6_spot_write_bodies_carry_no_position_concepts():
     assert spot_market['marketUnit'] == 'baseCoin'
     assert 'positionIdx' not in spot_market
     assert lin['positionIdx'] == 1                   # perps unchanged
+
+
+def spec_V6_dust_below_the_venue_minimum_is_flat():
+    """Spot fees settle in the base coin: a full exit leaves a shaving the
+    venue itself will not accept as an order (found live 2026-08-05: a
+    8.85e-06 LTC residue warned 'nothing harvestable' forever)."""
+    class Dusty(SpotClient):
+        def wallet_balance(self):
+            return {'list': [{'totalEquity': '1000', 'coin': [
+                {'coin': 'LTC', 'walletBalance': '0.00000885',
+                 'equity': '0.0004', 'availableToWithdraw': '0.00000885'}]}]}
+    truth = read_symbol_truth(Dusty(), 'spot', 'LTCUSDT',
+                              base_coin='LTC', dust=0.00001)
+    assert truth['positions'] == {}
+    held = read_symbol_truth(SpotClient(), 'spot', 'LTCUSDT',
+                             base_coin='LTC', dust=0.00001)
+    assert held['positions'][0]['size'] == 2.5     # real holdings unaffected

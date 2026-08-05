@@ -160,3 +160,46 @@ def spec_decide_pages_new_reminds_on_interval_announces_recovery():
     assert pages == ['still breached — mmr: x']
     pages, state = decide(state, {}, now=2000.0, re_alert_seconds=1800)
     assert pages == ['recovered: mmr'] and state == {}
+
+
+# --- E7 at the loop: a failed read costs a cycle, never the process ----------
+# Two overnight TLS resets each killed the HL unit (2026-08-05); systemd
+# restarted it, but a restart resets in-memory state and fires the alarm.
+
+def spec_E7_a_failed_read_costs_a_cycle_never_the_process():
+    from gridgremlin import main as m
+    from gridgremlin.events import Notifier
+    calls = {'n': 0}
+
+    class Flaky:
+        env = 'demo'
+
+        def read_wallet(self):
+            calls['n'] += 1
+            if calls['n'] == 2:
+                raise OSError('[Errno 104] Connection reset by peer')
+            return {'equity': 1000.0, 'mm_rate': 0.01}
+
+    class IdleBot:
+        alive = True
+        cfg = {'venue': 'bybit'}
+        botid = 'idle'
+
+        def cycle(self, equity=None):
+            return None
+
+    events = []
+    saved = (m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock)
+    m.build_fleet = lambda p, notif: ({'notify_orders': False,
+                                       'poll_seconds': 0},
+                                      {'bybit': Flaky()}, [IdleBot()])
+    m.make_notifier = lambda: Notifier(sink=events.append)
+    m.load_env = lambda: None
+    m.acquire_fleet_lock = lambda path: open('/dev/null')
+    try:
+        rc = m.run('ignored', cycles=3, poll_seconds=0)
+    finally:
+        m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock = saved
+    assert rc == 0 and calls['n'] == 3             # cycle 2 lost, 3 still ran
+    assert any('cycle 1 lost' in e for e in events)
+    assert any('readable again after 1' in e for e in events)
