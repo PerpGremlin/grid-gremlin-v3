@@ -24,11 +24,14 @@ def detect_env():
 
 
 class InfoClient:
-    def __init__(self, env=None, address=None, transport=None):
+    def __init__(self, env=None, address=None, transport=None,
+                 allow_mainnet=False):
         self.env = env or detect_env()
-        if self.env == 'mainnet':
-            raise VenueError("v3's HL phase is testnet-only — the owner's live "
-                             'account stays untouched (F5, owner 2026-08-04)')
+        if self.env == 'mainnet' and not allow_mainnet:
+            raise VenueError('HL mainnet is double-safetied (D25): it needs '
+                             '\'"allow_mainnet": true\' in the fleet file AND '
+                             '--allow-mainnet on the launch — a bare env flag '
+                             'is never enough')
         self.base = BASE_URLS[self.env]
         self.address = address or os.environ.get('HL_ACCOUNT_ADDRESS', '')
         self._transport = transport or self._http

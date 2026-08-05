@@ -26,7 +26,7 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
 STOP_KEYS = ('watch', 'level', 'server_side')
-FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit',
+FLEET_KEYS = ('bots', 'poll_seconds', 'cancel_orders_on_exit', 'allow_mainnet',
               'notify_orders', 'watchdog')
 
 # C2 — renames. old key -> (new key, message).
@@ -365,6 +365,7 @@ def validate_fleet(data, where='fleet'):
                              least_open=True) or 5.0,
         'cancel_orders_on_exit': _flag(data, 'cancel_orders_on_exit'),
         'notify_orders': _flag(data, 'notify_orders'),
+        'allow_mainnet': _flag(data, 'allow_mainnet'),   # D25: half of the safety
     }
     fleet['bots'] = [validate_config(row, where=f'{where}.bots[{i}]')
                      for i, row in enumerate(bots)]

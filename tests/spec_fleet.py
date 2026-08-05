@@ -92,12 +92,31 @@ def spec_F4_dead_but_present_is_not_missing():
     assert 'missing:botA' in evaluate(cfg, gone, now=100.0, peak=5000.0)
 
 
-# --- F5: mainnet is an absence -----------------------------------------------
+# --- F7 (D25): mainnet is double-safetied ------------------------------------
 
-def spec_F5_mainnet_refuses_at_build():
+def spec_F7_mainnet_needs_both_safeties():
     class _Client:
         env = 'mainnet'
-    _refused(refuse_mainnet, _Client(), frag='no mainnet path')
+    _refused(refuse_mainnet, _Client(), frag='double-safetied')
+    try:
+        refuse_mainnet(_Client(), fleet_allows=True)      # file alone: refuse
+    except Exception as e:
+        assert '--allow-mainnet' in str(e)
+    else:
+        raise AssertionError('the fleet file alone armed mainnet')
+    try:
+        refuse_mainnet(_Client(), run_allows=True)        # launch alone: refuse
+    except Exception as e:
+        assert 'allow_mainnet' in str(e)
+    else:
+        raise AssertionError('the launch flag alone armed mainnet')
+    refuse_mainnet(_Client(), fleet_allows=True, run_allows=True)  # both: fires
+
+
+def spec_F7_demo_and_testnet_never_consult_the_safeties():
+    class _Demo:
+        env = 'demo'
+    refuse_mainnet(_Demo())                               # no safeties needed
 
 
 # --- F6 and the watchdog's own validator -------------------------------------
@@ -190,9 +209,9 @@ def spec_E7_a_failed_read_costs_a_cycle_never_the_process():
 
     events = []
     saved = (m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock)
-    m.build_fleet = lambda p, notif: ({'notify_orders': False,
-                                       'poll_seconds': 0},
-                                      {'bybit': Flaky()}, [IdleBot()])
+    m.build_fleet = lambda p, notif, **kw: ({'notify_orders': False,
+                                             'poll_seconds': 0},
+                                            {'bybit': Flaky()}, [IdleBot()])
     m.make_notifier = lambda: Notifier(sink=events.append)
     m.load_env = lambda: None
     m.acquire_fleet_lock = lambda path: open('/dev/null')

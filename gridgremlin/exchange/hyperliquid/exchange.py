@@ -38,8 +38,10 @@ def _kind_from_text(text):
 
 
 class ExchangeClient(InfoClient):
-    def __init__(self, env=None, address=None, private_key=None):
-        super().__init__(env=env, address=address)
+    def __init__(self, env=None, address=None, private_key=None,
+                 allow_mainnet=False):
+        super().__init__(env=env, address=address,
+                         allow_mainnet=allow_mainnet)
         self.private_key = private_key or os.environ.get('HL_PRIVATE_KEY')
         if not self.private_key:
             raise HLError(0, 'no signing key — set HL_PRIVATE_KEY in .env (an agent/API '

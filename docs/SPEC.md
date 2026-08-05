@@ -253,6 +253,11 @@ eventually pin (T1).
   write-only paths need it.
 - **F6** Every watchdog threshold documents its assumption set — including whether the
   grid is assumed to be the only actor on the account.
+- **F7** Mainnet is double-safetied (D25): it fires only when the fleet file declares
+  `"allow_mainnet": true` AND the launch passes `--allow-mainnet`. Either alone
+  refuses, naming the missing half. The demo/testnet env flags are the helmet; this
+  is the armour — a cloned repo cannot reach real money by accident. *(supersedes
+  F5's "no mainnet path"; F5's demo-fleet clause stands)*
 
 ## R — the readout
 

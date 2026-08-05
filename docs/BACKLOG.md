@@ -33,13 +33,10 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 4. Owner-gated — not buildable, only decidable
 
-- **Promotion criteria** — what the soak must show (duration, finding-rate
-  decay, incident-free watchdog record) before v3 touches real funds. Worth
-  writing down *before* the soak looks clean.
-- **The mainnet path** — deliberately unconstructible today (no flag, HL client
-  refuses the env). Building it is itself a gated, spec-pinned slice.
-- **v2 decommission** — cutover order for the parked v2 fleet, the relay
-  handover, and the key ceremony. A checklist to write with the owner.
+- **Promotion sign-off** — the path is built cold (D25/F7, PR #45) and
+  `docs/PROMOTION.md` is the checklist (evidence gate, key ceremony, cutover
+  incl. v2 decommission). What remains is the owner working the checklist
+  when the soak's evidence gate is met.
 
 ## Non-gaps — absent by decision, do not re-invent
 

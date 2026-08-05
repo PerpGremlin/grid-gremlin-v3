@@ -11,9 +11,13 @@ def main():
     p.add_argument('--interval', type=float, default=None)
     p.add_argument('--snapshot', default=None)
     p.add_argument('--snapshot-every', type=int, default=60)
+    p.add_argument('--allow-mainnet', action='store_true',
+                   help='half of the D25 double safety; the fleet file must '
+                        'ALSO declare "allow_mainnet": true')
     args = p.parse_args()
     return run(args.config, cycles=args.cycles, poll_seconds=args.interval,
-               snapshot=args.snapshot, snapshot_every=args.snapshot_every)
+               snapshot=args.snapshot, snapshot_every=args.snapshot_every,
+               allow_mainnet=args.allow_mainnet)
 
 
 if __name__ == '__main__':
