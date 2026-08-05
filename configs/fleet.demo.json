@@ -1,5 +1,6 @@
 {
   "_note": "Bybit DEMO measurement fleet: hedge pairs, parameter A/Bs (hysteresis on/off, weighted vs equal, seed), and two martingales incl. a looper.",
+  "preflight": { "probe": true, "max_failed_bots": 0 },
   "watchdog": "configs/watchdog.demo.json",
   "poll_seconds": 5,
   "bots": [

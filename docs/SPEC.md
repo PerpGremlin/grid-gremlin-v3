@@ -296,6 +296,15 @@ eventually pin (T1).
   is the armour — a cloned repo cannot reach real money by accident. *(supersedes
   F5's "no mainnet path"; F5's demo-fleet clause stands)*
 
+- **F8** The preflight (D27, optional): `probe` places ONE unfillable post-only
+  rehearsal order per bot at build and cancels it — the whole placement path
+  (auth, permissions, collateral, lot rules, the preconditions nobody published)
+  proven before any strategy order; the metadata half refuses what the venue's
+  catalogue already knows (a borrow bot on a coin whose `marginTrading` says no).
+  `max_failed_bots` is the tolerance: 0 refuses the fleet (D7); within tolerance
+  a failed bot builds dead-and-visible (F4) and the rest trade. *(the 170037
+  incident: ~1,500 runtime warns that should have been one build refusal)*
+
 ## R — the readout
 
 - **R1** Fill history is venue-derived and link-attributed (I1's rule: ours iff the

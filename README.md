@@ -79,9 +79,14 @@ A JSON object (or a bare list of rows, treated as `{"bots": [...]}`):
 ```
 
 `watchdog` is **required** — nothing trades unwatched (F1). Optional fleet keys:
-`allow_mainnet` (half of the Safety gate, never set in this repo),
+`allow_mainnet` (half of the Safety gate, never set in this repo) ·
 `tombstones` (path of the stop-fire tombstone file, default
-`logs/tombstones.json` — see §6). Unknown keys are refused
+`logs/tombstones.json` — see §6) ·
+`preflight` — `{"probe": true, "max_failed_bots": 0}`: the probe places one
+unfillable post-only rehearsal order per bot at build and cancels it, proving
+the whole placement path before any strategy order; a failing bot refuses the
+fleet at tolerance 0 (D7) or builds dead-and-visible within a higher tolerance
+(F8/D27). Unknown keys are refused
 everywhere, including inside nested objects; a misspelling gets a did-you-mean hint;
 old v2 key names get their migration stated. **One bad row refuses the whole fleet**
 (C6) — no silent skips. Keys starting `_` are comments.

@@ -60,6 +60,7 @@ class FakeVenue:
                             'side': side, 'price': float(price), 'qty': qty,
                             'reduce_only': reduce_only,
                             'position_idx': position_idx})
+        return {'orderId': f'o{self._oid}'}
 
     def cancel_order(self, category, symbol, order_id):
         self.orders = [o for o in self.orders if o['order_id'] != order_id]

@@ -276,3 +276,61 @@ def spec_E7_a_malformed_venue_response_also_costs_only_the_cycle():
         m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock = saved
     assert rc == 0 and calls['n'] == 4          # both bad cycles lost, not fatal
     assert any('ValueError' in e for e in events)
+
+
+# --- F8 (D27): the preflight — probe, metadata, tolerance --------------------
+
+def spec_F8_the_verdict_honours_the_tolerance():
+    from gridgremlin.main import preflight_verdict
+    preflight_verdict([], 0)                          # nothing failed: fine
+    preflight_verdict([('botA', 'x')], 1)             # within tolerance
+    try:
+        preflight_verdict([('botA', 'collateral'), ('botB', 'y')], 1)
+    except Exception as e:
+        assert 'botA' in str(e) and 'botB' in str(e) and 'tolerance 1' in str(e)
+    else:
+        raise AssertionError('over-tolerance failures did not refuse')
+
+
+def _probe_bot(venue):
+    import sys
+    from pathlib import Path as _P
+    sys.path.insert(0, str(_P(__file__).parent))
+    from spec_loop import ADAPTER, _cfg
+    from gridgremlin.bot import Bot
+    from gridgremlin.events import Notifier
+    return Bot(_cfg(), ADAPTER, venue, Notifier(sink=lambda l: None),
+               gen_seed=1)
+
+
+def spec_F8_the_probe_rests_far_post_only_then_cancels():
+    from spec_loop import FakeVenue
+    from gridgremlin.main import probe_bot
+    venue = FakeVenue(mark=60000.0)
+    bot = _probe_bot(venue)
+    assert probe_bot(bot) is None                     # the rehearsal passed
+    assert venue.orders == []                         # and left NOTHING behind
+    assert venue.market_links == [] if hasattr(venue, 'market_links') else True
+
+
+def spec_F8_a_refusing_venue_names_the_reason():
+    from spec_loop import FakeVenue
+    from gridgremlin.main import probe_bot
+    from gridgremlin.exchange.errors import VenueError
+
+    class Refusing(FakeVenue):
+        def place_order(self, *a, **kw):
+            raise VenueError('retCode 170037: ADA has not opened collateral '
+                             'settings', kind='other')
+    reason = probe_bot(_probe_bot(Refusing(mark=60000.0)))
+    assert reason and '170037' in reason
+
+
+def spec_F8_margin_trading_metadata_is_captured():
+    from gridgremlin.exchange.bybit.truth import parse_instrument
+    info = {'symbol': 'ADAUSDT', 'status': 'Trading', 'baseCoin': 'ADA',
+            'marginTrading': 'none',
+            'priceFilter': {'tickSize': '0.0001'},
+            'lotSizeFilter': {'basePrecision': '0.01', 'minOrderQty': '0.01',
+                              'minOrderAmt': '5'}}
+    assert parse_instrument('spot', info)['margin_trading'] == 'none'

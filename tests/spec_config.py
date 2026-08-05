@@ -295,3 +295,19 @@ def spec_D23_tranche_shares_sum_to_one_and_ascend():
 def spec_D23_trailing_refuses_the_hostless_venue():
     _refused(_mrow(take_profit_avg_pct=0.01, venue='hyperliquid',
                    trailing_stop_pct=0.01), 'hosts trailing')
+
+
+def spec_F8_preflight_validates_and_defaults_off():
+    fleet = validate_fleet({'watchdog': 'w.json', 'bots': [dict(ROW)]})
+    assert fleet['preflight'] == {'probe': False, 'max_failed_bots': 0}
+    fleet = validate_fleet({'watchdog': 'w.json', 'bots': [dict(ROW)],
+                            'preflight': {'probe': True,
+                                          'max_failed_bots': 2}})
+    assert fleet['preflight']['probe'] is True
+    try:
+        validate_fleet({'watchdog': 'w.json', 'bots': [dict(ROW)],
+                        'preflight': {'probes': True}})
+    except ConfigError as e:
+        assert 'probes' in str(e)
+    else:
+        raise AssertionError('unknown preflight key accepted')
