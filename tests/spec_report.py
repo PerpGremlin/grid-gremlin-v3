@@ -167,3 +167,23 @@ def spec_R1_hl_fills_decode_the_cloid():
     assert xrp['link_id'] == 'linXRPl-0-ab' and xrp['side'] == 'buy'
     assert xrp['exec_id'] == '42'
     assert fills[0]['side'] == 'sell' and fills[0]['link_id'] == ''
+
+
+# --- A4 reaches the readout: inverse books realise in the BASE coin ----------
+
+def spec_R2_an_inverse_book_realises_in_base_coin():
+    b = new_book()
+    apply_fill(b, 'buy', 50000.0, 1000, 0.0, inverse=True)   # $1000 contracts
+    apply_fill(b, 'sell', 62500.0, 1000, 0.0, inverse=True)
+    assert abs(b['realized'] - 1000 * (1 / 50000 - 1 / 62500)) < 1e-12   # BTC
+    assert abs(b['realized'] - 0.004) < 1e-9
+
+
+def spec_R5_inverse_total_converts_to_quote_at_mark():
+    b = new_book()
+    apply_fill(b, 'buy', 50000.0, 1000, 0.0, inverse=True)
+    from gridgremlin.report import unreal_pnl
+    u = unreal_pnl(b, 62500.0)
+    assert abs(u - 0.004) < 1e-9                       # base coin
+    assert abs(total_pnl(b, 62500.0) - 250.0) < 1e-6   # $ at mark
+    assert total_pnl(b, None) is None                  # open + no mark
