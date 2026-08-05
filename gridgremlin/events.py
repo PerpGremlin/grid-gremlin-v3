@@ -52,7 +52,8 @@ class TelegramNotifier(Notifier):
                 or kind in LOG_ONLY_KINDS:
             return
         prefix = f'{icon} ' if icon else ''
-        self._buffer.append(f'{prefix}{kind} {botid}: {text}')
+        label = kind if botid == kind else f'{kind} {botid}'   # phone too:
+        self._buffer.append(f'{prefix}{label}: {text}')        # no "fleet fleet"
         # a kill page must not sit in the buffer until some later event
         # arrives (the audit's M6) — it flushes NOW, rate limit or not
         self._maybe_flush(force=(kind == 'kill'))
