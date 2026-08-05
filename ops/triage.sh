@@ -14,11 +14,13 @@ LOG="$REPO/logs/triage-$FLEET.log"
 STAMP="$REPO/logs/$FLEET-triage.stamp"
 
 case "$FLEET" in
-    demo) DESC="Bybit DEMO fleet — test funds, no real money"
+    demo) LABEL="🟠⚫ Bybit"
+          DESC="Bybit DEMO fleet — test funds, no real money"
           UNIT=grid-gremlin3-demo
           FLOG=logs/fleet-demo.log
           SNAP=logs/snapshots-demo.jsonl ;;
-    hl)   DESC="Hyperliquid TESTNET fleet — mock USDC only"
+    hl)   LABEL="🟢🟢 Hyperliquid"
+          DESC="Hyperliquid TESTNET fleet — mock USDC only"
           UNIT=grid-gremlin3-hl
           FLOG=logs/fleet-hl-testnet.log
           SNAP=logs/snapshots-hl-testnet.jsonl ;;
@@ -65,11 +67,11 @@ echo "$(stamp) triage($FLEET): starting" >> "$LOG"
 
 CLAUDE="${CLAUDE_BIN:-$(command -v claude || true)}"
 if [ -z "$CLAUDE" ] || [ ! -x "$CLAUDE" ]; then
-    tg "[v3 $FLEET] Triage unavailable: claude CLI not found (set CLAUDE_BIN in .env). Fleet is down — please SSH in."
+    tg "$LABEL v3 $FLEET: triage unavailable — claude CLI not found (set CLAUDE_BIN in .env). Fleet is down; please SSH in."
     exit 0
 fi
 if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-    tg "[v3 $FLEET] Triage unavailable: CLAUDE_CODE_OAUTH_TOKEN is not set in .env. Fleet is down — please SSH in."
+    tg "$LABEL v3 $FLEET: triage unavailable — CLAUDE_CODE_OAUTH_TOKEN is not set in .env. Fleet is down; please SSH in."
     exit 0
 fi
 
@@ -99,12 +101,12 @@ RC=$?
 
 if [ $RC -ne 0 ] || [ -z "$OUT" ]; then
     echo "$(stamp) triage($FLEET): claude exited $RC, no usable output" >> "$LOG"
-    tg "[v3 $FLEET] fleet DOWN. Automated triage failed (claude exit $RC) — no diagnosis. Please SSH in: journalctl --user -u $UNIT -n 200"
+    tg "$LABEL v3 $FLEET: fleet DOWN. Automated triage failed (claude exit $RC) — no diagnosis. Please SSH in: journalctl --user -u $UNIT -n 200"
     exit 0
 fi
 
 echo "$(stamp) triage($FLEET): ---" >> "$LOG"
 printf '%s\n' "$OUT" >> "$LOG"
-tg "[v3 $FLEET] fleet DOWN — triage:
+tg "$LABEL v3 $FLEET fleet DOWN — triage:
 
 $OUT"

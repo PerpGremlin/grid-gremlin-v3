@@ -8,7 +8,7 @@ EnvironmentFile={{REPO_DIR}}/.env
 # StartLimitIntervalSec=0, EVERY failed restart re-triggers OnFailure — a
 # venue outage became one Telegram page per retry, all night. First failure
 # pages immediately; repeats are swallowed for 1800s.
-ExecStart=/bin/sh -c 'stamp={{REPO_DIR}}/logs/{{FLEET}}-failed.stamp; now=$$(date +%%s); last=$$(cat "$$stamp" 2>/dev/null || echo 0); [ $$((now - last)) -lt 1800 ] && exit 0; echo "$$now" > "$$stamp"; curl -s -m 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" --data-urlencode text="[v3 {{FLEET}}] the fleet is down (page repeats at most every 30 min). Triage follows. See: journalctl --user -u grid-gremlin3-{{FLEET}} -n 200"'
+ExecStart=/bin/sh -c 'stamp={{REPO_DIR}}/logs/{{FLEET}}-failed.stamp; now=$$(date +%%s); last=$$(cat "$$stamp" 2>/dev/null || echo 0); [ $$((now - last)) -lt 1800 ] && exit 0; echo "$$now" > "$$stamp"; curl -s -m 20 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" --data-urlencode chat_id="${TELEGRAM_CHAT_ID}" --data-urlencode text="{{LABEL}} v3 {{FLEET}}: the fleet is down (page repeats at most every 30 min). Triage follows. See: journalctl --user -u grid-gremlin3-{{FLEET}} -n 200"'
 # Layer 2b: read-only Claude triage — its own 30-min stamp, absorbs re-triggers
 # while running, degrades to a "triage unavailable" page if CLI/token missing.
 ExecStart={{REPO_DIR}}/ops/triage.sh {{FLEET}}

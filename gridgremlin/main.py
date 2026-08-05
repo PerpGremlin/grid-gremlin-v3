@@ -8,10 +8,11 @@ from pathlib import Path
 from .apply import bot_identity, check_fleet_unique, check_link_fits
 from .adapters import adapter_for
 from .bot import Bot
-from .config import ConfigError, check_placeable, validate_fleet
+from .config import (ConfigError, VENUE_ICONS, check_placeable,
+                     validate_fleet)
 import os
 
-from .events import Notifier, TelegramNotifier
+from .events import Notifier, TelegramNotifier, VenueNotifier
 from .exchange.bybit.client import WriteClient
 from .exchange.bybit.truth import parse_instrument, read_wallet
 from .exchange.errors import VenueError
@@ -80,6 +81,11 @@ def snapshot_row(bots, wallet, now):
             'bots': {b.botid: {'alive': b.alive,
                                'position': b._last_pos or 0.0}
                      for b in bots}}
+
+
+def _vn(notifier, venue):
+    """Label a fleet-level event with its venue for the phone (owner ask)."""
+    return VenueNotifier(notifier, VENUE_ICONS.get(venue, ''))
 
 
 def preflight_verdict(failures, tolerance):
@@ -177,7 +183,7 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
             # X7: a fired stop survives the process. Dead AND visible (F4);
             # revival = the operator deletes the tombstone entry, on purpose.
             bot.alive = False
-            notifier.event('warn', bot.botid,
+            _vn(notifier, venue).event('warn', bot.botid,
                            'tombstoned — a stop fired '
                            f'({tombs.reason(bot.botid)}); remove the entry '
                            f"from {fleet.get('tombstones') or 'logs/tombstones.json'} "
@@ -193,15 +199,16 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
             try:
                 client.ensure_collateral(spec['base_coin'])
             except VenueError as e:
-                notifier.event('warn', cfg['symbol'],
-                               f'collateral switch deferred: {e}')
+                _vn(notifier, venue).event('warn', cfg['symbol'],
+                                           f'collateral switch deferred: {e}')
         elif venue == 'hyperliquid':
             try:
                 client.update_leverage(client._entry(cfg['symbol'])[0],
                                        int(cfg['leverage']))
             except VenueError as e:
-                notifier.event('warn', cfg['symbol'],
-                               f'leverage assert deferred (venue hiccup): {e}')
+                _vn(notifier, venue).event(
+                    'warn', cfg['symbol'],
+                    f'leverage assert deferred (venue hiccup): {e}')
         bots.append(bot)
     _ensure_symbol_capacity(clients, bots, notifier)
     check_fleet_unique(identities)
@@ -216,8 +223,8 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
         if reason is not None:
             failures.append((b.botid, reason))
             b.alive = False
-            notifier.event('warn', b.botid,
-                           f'preflight FAILED — building dead: {reason}')
+            _vn(notifier, b.cfg['venue']).event(
+                'warn', b.botid, f'preflight FAILED — building dead: {reason}')
     preflight_verdict(failures, pf.get('max_failed_bots', 0))
     if not fleet.get('watchdog'):
         raise ConfigError("the fleet has no 'watchdog' config — nothing "
@@ -230,17 +237,20 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
                 for b in bots]
         check_watchdog_coverage(caps, wd)
     envs = ', '.join(f'{v}:{c.env}' for v, c in clients.items())
-    notifier.event('fleet', 'fleet',
-                   f'{len(bots)} bot(s) on {envs}: '
-                   + ', '.join(b.botid for b in bots))
-    _project_margin(clients, fleet['bots'], notifier)
+    fleet_n = (_vn(notifier, next(iter(clients))) if len(clients) == 1
+               else notifier)                     # single-venue fleet: labeled
+    fleet_n.event('fleet', 'fleet',
+                  f'{len(bots)} bot(s) on {envs}: '
+                  + ', '.join(b.botid for b in bots))
+    _project_margin(clients, fleet['bots'], fleet_n)
     return fleet, clients, bots
 
 
-def _ensure_symbol_capacity(clients, bots, notifier):
+def _ensure_symbol_capacity(clients, bots, base_notifier):
     """Hedge-aware, ONCE per (venue, symbol): the risk tier fits the SUM of
     both legs' ladders (a small hedge leg must never downgrade the big one —
     the 110048 incident), and buy/sell leverage are set per leg."""
+    notifier = _vn(base_notifier, 'bybit')       # this function IS bybit-only
     groups = {}
     for b in bots:
         if b.cfg['venue'] == 'bybit' and b.cfg['market_type'] == 'linear':

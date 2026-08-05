@@ -288,3 +288,13 @@ def spec_venue_icon_reaches_the_phone_never_the_terminal():
     t.close()
     assert lines[-1] == '[ship] fill botA: position 0 -> 1'   # no icon here
     assert sent and sent[-1].startswith('X Y fill botA:')      # icon here
+
+
+def spec_the_phone_never_stutters_either():
+    sent = []
+    from gridgremlin.events import TelegramNotifier
+    t = TelegramNotifier('tok', 'chat', transport=sent.append,
+                         clock=lambda: 100.0, sink=lambda l: None)
+    t.event('fleet', 'fleet', '12 bot(s) on demo', icon='I Venue')
+    t.close()
+    assert sent[-1] == 'I Venue fleet: 12 bot(s) on demo'
