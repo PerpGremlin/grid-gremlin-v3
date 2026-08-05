@@ -146,6 +146,14 @@ class Client:
         return self.get('/v5/execution/list', params, signed=True)
 
 
+    def stop_orders(self, category, symbol):
+        """D23: the conditional book — partial TPs live here, not in order
+        truth (V5 keeps them out of the diff on purpose)."""
+        r = self.get('/v5/order/realtime',
+                     {'category': category, 'symbol': symbol,
+                      'orderFilter': 'StopOrder', 'limit': 50}, signed=True)
+        return r.get('list', [])
+
     def read_wallet(self):
         from . import truth as _t
         return _t.read_wallet(self.wallet_balance())
@@ -228,13 +236,19 @@ class WriteClient(Client):
         return self.post('/v5/order/create', body)
 
     def set_trading_stop(self, category, symbol, position_idx,
-                         take_profit=None, stop_loss=None, sl_size=None):
+                         take_profit=None, stop_loss=None, sl_size=None,
+                         tp_size=None, trailing_stop=None):
         body = {'category': category, 'symbol': symbol,
                 'positionIdx': position_idx,
-                'tpslMode': 'Partial' if sl_size else 'Full'}
+                'tpslMode': 'Partial' if (sl_size or tp_size) else 'Full'}
         if take_profit is not None:
             body['takeProfit'] = take_profit
             body['tpTriggerBy'] = 'MarkPrice'
+            if tp_size is not None:
+                body['tpSize'] = tp_size
+                body['tpOrderType'] = 'Market'
+        if trailing_stop is not None:
+            body['trailingStop'] = trailing_stop
         if stop_loss is not None:
             body['stopLoss'] = stop_loss
             body['slTriggerBy'] = 'MarkPrice'

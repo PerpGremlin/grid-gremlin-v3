@@ -63,6 +63,11 @@ class FakeVenue:
 
     def cancel_order(self, category, symbol, order_id):
         self.orders = [o for o in self.orders if o['order_id'] != order_id]
+        self.stop_book = [o for o in getattr(self, 'stop_book', [])
+                          if o['orderId'] != order_id]
+
+    def stop_orders(self, category, symbol):
+        return list(getattr(self, 'stop_book', []))
 
     def amend_order(self, category, symbol, order_id, qty):
         for o in self.orders:
@@ -83,12 +88,25 @@ class FakeVenue:
                          'leverage': '10', 'unrealisedPnl': '0'}
 
     def set_trading_stop(self, category, symbol, position_idx,
-                         take_profit=None, stop_loss=None, sl_size=None):
-        if take_profit is not None:
+                         take_profit=None, stop_loss=None, sl_size=None,
+                         tp_size=None, trailing_stop=None):
+        if take_profit is not None and tp_size is not None:      # D23 partial
+            self._sid = getattr(self, '_sid', 0) + 1
+            self.stop_book = getattr(self, 'stop_book', [])
+            self.stop_book.append({'orderId': f's{self._sid}',
+                                   'stopOrderType': 'PartialTakeProfit',
+                                   'triggerPrice': take_profit,
+                                   'qty': tp_size})
+        elif take_profit is not None:
             self.tp_calls = getattr(self, 'tp_calls', [])
             self.tp_calls.append(float(take_profit))
             if self.position:
                 self.position['takeProfit'] = take_profit
+        if trailing_stop is not None:
+            self.trail_calls = getattr(self, 'trail_calls', [])
+            self.trail_calls.append(float(trailing_stop))
+            if self.position:
+                self.position['trailingStop'] = trailing_stop
         if stop_loss is not None:
             self.sl_calls = getattr(self, 'sl_calls', [])
             self.sl_calls.append((float(stop_loss),

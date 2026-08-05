@@ -230,6 +230,15 @@ start-conditions, profit reinvest, cooldown tuning.
       done when: the borrow bot's ladder rests with the venue flag set and
       the validator refuses every half-configuration ✓
 
+- [x] **31 — martingale tranches + trailing (D23)** *(PR #47)*
+      SPEC M10/M11: `take_profit_tranches` (shares of one position,
+      ascending, sum 1) hosted on Bybit's conditional book / resting as
+      several D21 exits on HL; `trailing_stop_pct` rides the venue, once
+      per round, refused where unhostable. An ADA tranche+trailing
+      martingale joins the demo soak.
+      done when: tranches rest, re-anchor on deepen, and never churn on a
+      quiet cycle — both venue styles specced ✓
+
 **Standing rules while building:** every PR updates this file and SPEC's `test:` column
 · public-repo hygiene sweep before every push (see CLAUDE.md) · suite green at merge,
 no exceptions for config changes (broken twice in v2, both times by configs) · nothing

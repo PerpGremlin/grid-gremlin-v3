@@ -261,3 +261,37 @@ def spec_martingale_rows_validate_with_their_own_keyset():
     assert cfg['strategy'] == 'martingale'
     assert cfg['ladder_total_notional'] == 800.0
     _refused({'strategy': 'martingale', 'symbol': 'ETHUSDT'})  # side etc. required
+
+
+def _mrow(**over):
+    row = dict(strategy='martingale', market_type='linear', symbol='BTCUSDT',
+               side='long', capital=1000, base_order_size=100,
+               safety_order_size=100, deviation_pct=0.01,
+               max_averaging_orders=2)
+    row.update(over)
+    return row
+
+
+def spec_D23_tranches_and_single_tp_are_one_question():
+    _refused(_mrow(take_profit_avg_pct=0.01,
+                   take_profit_tranches=[{'at_avg_pct': 0.01, 'share': 1.0}]),
+             'pick one')
+    _refused(_mrow(), 'never without an exit')
+
+
+def spec_D23_tranche_shares_sum_to_one_and_ascend():
+    _refused(_mrow(take_profit_tranches=[
+        {'at_avg_pct': 0.01, 'share': 0.5},
+        {'at_avg_pct': 0.02, 'share': 0.4}]), 'sum to')
+    _refused(_mrow(take_profit_tranches=[
+        {'at_avg_pct': 0.02, 'share': 0.5},
+        {'at_avg_pct': 0.01, 'share': 0.5}]), 'ascend')
+    cfg = validate_config(_mrow(take_profit_tranches=[
+        {'at_avg_pct': 0.01, 'share': 0.5},
+        {'at_avg_pct': 0.02, 'share': 0.5}]))
+    assert len(cfg['take_profit_tranches']) == 2
+
+
+def spec_D23_trailing_refuses_the_hostless_venue():
+    _refused(_mrow(take_profit_avg_pct=0.01, venue='hyperliquid',
+                   trailing_stop_pct=0.01), 'hosts trailing')

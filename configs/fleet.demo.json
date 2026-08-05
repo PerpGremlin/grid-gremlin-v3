@@ -172,6 +172,27 @@
       "repeat": true
     },
     {
+      "_note": "D23 live: tranche TPs (half at +1%, half at +2%) + venue trailing",
+      "strategy": "martingale",
+      "market_type": "linear",
+      "symbol": "ADAUSDT",
+      "side": "long",
+      "capital": 3000,
+      "leverage": 10,
+      "base_order_size": 500,
+      "safety_order_size": 500,
+      "order_size_multiplier": 1.5,
+      "deviation_pct": 0.01,
+      "deviation_step_multiplier": 1.5,
+      "max_averaging_orders": 3,
+      "take_profit_tranches": [
+        { "at_avg_pct": 0.01, "share": 0.5 },
+        { "at_avg_pct": 0.02, "share": 0.5 }
+      ],
+      "trailing_stop_pct": 0.008,
+      "repeat": true
+    },
+    {
       "_note": "classic doubler, one round only",
       "strategy": "martingale",
       "market_type": "linear",

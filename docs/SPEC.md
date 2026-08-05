@@ -144,8 +144,15 @@ eventually pin (T1).
 - **M8** The martingale has no range bounds: ladder depth derives from the deviation
   schedule × `max_averaging_orders`, and the risk is stated as the required-capital
   number at load. The grid keeps its bounds. *(D13)*
-- **M9** Staged beyond the skeleton, not in it: partial TPs, trailing TP, signal start
-  conditions, profit reinvest. *(D15)*
+- **M9** Staged beyond the skeleton, not in it: signal start conditions, profit
+  reinvest. *(D15; partial TPs and trailing left this list via D23 → M10/M11)*
+- **M10** A round's exit may be TRANCHED (D23): shares of one position at ascending
+  targets, summing to one, every price re-anchored from the average as fills deepen —
+  venue-hosted partial TPs where the venue hosts them, several D21 resting exits
+  where it does not. The same law as M3, split into shares.
+- **M11** Trailing rides the venue or does not exist: set once per round from the
+  average, the venue moves it from there; refused where the venue cannot host it.
+  *(D23)*
 
 ## S — start states
 

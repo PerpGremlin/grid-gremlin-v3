@@ -23,8 +23,6 @@ both cited here when they happen. Nothing on this list blocks the current soak.
   2026-08-05: model a borrowed short as an "unhedgeable linear perp"
   (negative base balance = short position), longs borrow quote via the
   leverage flag. Decision pass (D24) freezes the semantics before code.
-- **Martingale partial TPs + trailing** — decided (D23): venue-hosted on
-  Bybit, resting-ladder on HL. The next engine slice.
 
 ## 3. Built but not yet exercised live
 

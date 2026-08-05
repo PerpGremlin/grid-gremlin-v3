@@ -76,6 +76,7 @@ def read_positions(state, coin):
                   'liq_price': _f(p.get('liquidationPx')) or None,
                   'stop_loss': None,
                   'take_profit': None,
+                  'trailing_stop': None,
                   'leverage': _f((p.get('leverage') or {}).get('value')),
                   'unrealised_pnl': _f(p.get('unrealizedPnl'))}
     return out
