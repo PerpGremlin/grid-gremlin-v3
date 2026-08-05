@@ -1,5 +1,5 @@
 {
-  "tag": "\ud83d\udfe0\u26ab v3-demo",
+  "tag": "\ud83d\udfe0\u26ab Bybit v3-demo",
   "snapshot": "logs/snapshots-demo.jsonl",
   "state": "logs/watchdog-demo.state.json",
   "staleness_seconds": 1000,
