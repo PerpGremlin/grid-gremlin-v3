@@ -1,5 +1,5 @@
 {
-  "tag": "\ud83c\udf32 v3-hl-testnet",
+  "tag": "\ud83d\udfe2\ud83d\udfe9 v3-hl-testnet",
   "snapshot": "logs/snapshots-hl-testnet.jsonl",
   "state": "logs/watchdog-hl-testnet.state.json",
   "staleness_seconds": 1000,
