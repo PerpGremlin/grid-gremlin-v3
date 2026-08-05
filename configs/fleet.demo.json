@@ -109,6 +109,22 @@
       "place_within_pct": 0.03
     },
     {
+      "_note": "inverse, live for the first time in v3: BTC-margined, qty in $1 contracts (A4)",
+      "market_type": "inverse",
+      "symbol": "BTCUSD",
+      "side": "long",
+      "capital": 2000,
+      "leverage": 10,
+      "lower": 62000,
+      "upper": 66000,
+      "rungs": 21,
+      "split_hysteresis_rungs": 0.3,
+      "stop": {
+        "watch": "mark_price",
+        "level": 61500
+      }
+    },
+    {
       "_note": "the spot path's first live exercise: plain sells, wallet-derived holding (V6)",
       "market_type": "spot",
       "symbol": "LTCUSDT",

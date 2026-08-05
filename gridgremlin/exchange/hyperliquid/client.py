@@ -33,12 +33,21 @@ class InfoClient:
         self.address = address or os.environ.get('HL_ACCOUNT_ADDRESS', '')
         self._transport = transport or self._http
 
-    def _http(self, body):
+    def _http(self, body, retry_429=True):
         req = urllib.request.Request(self.base + '/info',
                                      data=json.dumps(body).encode(),
                                      headers={'Content-Type': 'application/json'})
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            return json.loads(resp.read().decode())
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and retry_429:
+                # the venue's public budget IS the pace: sleep to the window
+                # and take the cycle late rather than losing it (E7)
+                import time as _t
+                _t.sleep(2.0)
+                return self._http(body, retry_429=False)
+            raise
 
     def _user(self):
         if not self.address:

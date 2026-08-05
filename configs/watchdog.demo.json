@@ -33,6 +33,10 @@
       "min": 0,
       "max": 33456
     },
+    "invBTCUSDl": {
+      "min": 0,
+      "max": 24000
+    },
     "spoLTCUSDTl": {
       "min": 0,
       "max": 83.7

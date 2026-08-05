@@ -17,24 +17,17 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 ## 2. Engine — deferred, not yet decided
 
-- **Margin spot** — the owner trades Bybit margin spot often; the facility must
-  not be forgotten. The vocabulary already validates (`spot_borrow`,
-  `spot_leverage`, spot-only keys) but no write path sends the venue's
-  `isLeverage` flag, nothing sizes against borrowed collateral, and borrow
-  makes a spot *short* possible — today refused unconditionally. Needs a
-  decision pass before code.
-
-- **WS wake** — v2 woke on fill events in ~1s; v3 polls on `--interval`. Costs
-  nothing at 5s for wide grids; tight grids and martingale safety-order bursts
-  would feel it. Needs a decision on whether the added moving part pays.
-- **Backtest data fetch** — the backtester (T4-proven against v2) is
-  fixture-fed; a kline-fetch convenience would let it run on fresh venue data
-  from the CLI.
+- **Margin spot** — the owner trades it and wants the capability as an option.
+  The vocabulary already validates (`spot_borrow`, `spot_leverage`); no write
+  path sends the venue's `isLeverage` flag yet. Direction under discussion
+  2026-08-05: model a borrowed short as an "unhedgeable linear perp"
+  (negative base balance = short position), longs borrow quote via the
+  leverage flag. Decision pass (D24) freezes the semantics before code.
+- **Martingale partial TPs + trailing** — decided (D23): venue-hosted on
+  Bybit, resting-ladder on HL. The next engine slice.
 
 ## 3. Built but not yet exercised live
 
-- **Inverse** — the adapter and specs exist; no soak bot has traded an
-  inverse contract live. (Spot closed by the LTC grid, PR #37 / SPEC V6.)
 - **`watch: position_sl` and server-side partial SL** (X2/X3) — specced and
   shipped; no soak bot has yet fired one live end-to-end.
 
