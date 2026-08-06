@@ -457,3 +457,27 @@ def spec_M14_a_liquidated_round_stands_down_instead_of_re_entering():
     assert r == {'round': 'liquidation'}
     assert not bot.alive                           # D1: stands down
     assert not venue.position                      # never re-entered
+
+
+def spec_M15_the_round_anchor_is_recovered_from_the_venue():
+    """A restart mid-round must not re-anchor on the average entry: that
+    deepens every remaining rung AND un-suppresses rungs that already
+    filled, pushing past the validated capital (audit 2026-08-06)."""
+    from gridgremlin.ladder import anchor_from_rung
+    cfg = _cfg()
+    anchor = 60000.0
+    from gridgremlin.ladder import martingale_schedule
+    _, cumdev = martingale_schedule(cfg)[1]
+    resting = anchor * (1.0 - cumdev)                  # rung 1's true price
+    assert abs(anchor_from_rung(cfg, resting, 1) - anchor) < 1e-6
+    assert anchor_from_rung(cfg, resting, 0) is None   # rung 0 is the exit
+    venue, lines = FakeVenue(), []
+    bot = Bot(cfg, ADAPTER, venue, Notifier(sink=lines.append), gen_seed=1)
+    bot.cycle()                                        # base
+    bot.cycle()                                        # ladder rests
+    fresh = Bot(cfg, ADAPTER, venue, Notifier(sink=lines.append), gen_seed=2)
+    fresh._last_pos = float(venue.position['size'])
+    fresh.cycle()                                      # the restart
+    assert fresh._anchor is not None
+    assert abs(fresh._anchor - 60000.0) < 1.0          # recovered, not guessed
+    assert any('anchor recovered' in ln for ln in lines)

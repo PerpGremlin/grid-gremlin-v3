@@ -198,3 +198,22 @@ def spec_T3_kline_rows_reverse_to_oldest_first_bars():
     bars = parse_kline_rows(rows)
     assert [b['t'] for b in bars] == [1000, 2000]
     assert bars[0] == {'t': 1000, 'o': 60.0, 'h': 61.0, 'l': 59.0, 'c': 60.5}
+
+
+def spec_T3_inventory_is_kept_in_integer_steps_not_floats():
+    """float subtract-then-floor dropped a whole qty-step per iteration —
+    the exit ladder was fixed for this in slice 3; the backtester was not
+    (audit 2026-08-06). Inventory must land exactly on the step grid."""
+    from gridgremlin.adapters import LinearAdapter
+    A = LinearAdapter({'symbol': 'BTCUSDT', 'qty_step': 0.1,
+                       'price_tick': 0.1, 'min_qty': 0.1,
+                       'min_notional': None, 'settle_coin': 'USDT'})
+    assert A.round_qty(0.3 - 0.1) == 0.1        # the hazard, still true
+    cfg = _cfg(lower=90.0, upper=110.0, rungs=5, capital=300.0, leverage=1,
+               spacing_type='fixed')
+    r = backtest(cfg, A, [{'o': 100.0, 'h': 100.2, 'l': 89.0, 'c': 91.0},
+                          {'o': 91.0, 'h': 92.0, 'l': 88.0, 'c': 90.0}])
+    assert r['entry_fills'] >= 2                # a deep dip, many rungs
+    steps = r['held'] / 0.1
+    assert abs(steps - round(steps)) < 1e-9     # exactly on the grid
+    assert r['held'] > 0                        # and nothing evaporated

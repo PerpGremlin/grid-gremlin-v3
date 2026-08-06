@@ -111,9 +111,11 @@ def probe_bot(bot):
         mark = truth['mark']
         far = mark * (0.7 if cfg['side'] == 'long' else 1.3)
         price = adapter.round_price(far)
+        floor_notional = (adapter.min_notional or 0.0) * 1.05
         qty = adapter.round_qty(max(
             adapter.min_qty,
-            adapter.qty_from_notional(adapter.min_notional * 1.05, price)))
+            adapter.qty_from_notional(floor_notional, price)
+            if floor_notional else adapter.min_qty))
         bot._gen += 1
         r = client.place_order(
             cfg['market_type'], cfg['symbol'], bot._entry_side,
@@ -130,8 +132,8 @@ def probe_bot(bot):
                 if e.kind != 'gone':
                     raise
         return None
-    except (VenueError, OSError) as e:
-        return str(e)
+    except Exception as e:                                   # noqa: BLE001
+        return f'{type(e).__name__}: {e}'   # one bot fails, not the build
 
 
 def build_fleet(fleet_path, notifier, allow_mainnet=False):
@@ -168,6 +170,26 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
                                                             cfg['symbol']))
             adapter = adapter_for(cfg['market_type'], spec)
         cfg['funding_interval_minutes'] = spec['funding_interval_minutes']
+        if cfg.get('strategy') != 'martingale':
+            # B8 was pinned as a pure function and never wired to a call site
+            # (audit 2026-08-06): a grid whose gap sits inside the guard band
+            # churns forever, silently. It needs LIVE quotes, so it lands
+            # here — stated loudly, not refused on a transient spread.
+            try:
+                from .ladder import grid_rungs as _gr, spacing_clears_guard
+                t = client.read_symbol_truth(
+                    cfg['market_type'], cfg['symbol'],
+                    spec['funding_interval_minutes'])
+                ok, gap, guard = spacing_clears_guard(
+                    _gr(cfg, adapter), t['bid'], t['ask'])
+                if not ok:
+                    _vn(notifier, venue).event(
+                        'warn', cfg['symbol'],
+                        f'rung gap {gap:.10g} sits inside the cross guard '
+                        f'({guard:.10g}) — nearest rungs will be dropped '
+                        'every cycle; widen the range or cut rungs (B8)')
+            except (VenueError, OSError, KeyError, TypeError):
+                pass                    # a quote we cannot read is not a verdict
         if (cfg.get('spot_borrow')
                 and spec.get('margin_trading') not in (None, 'both',
                                                        'utaOnly')):

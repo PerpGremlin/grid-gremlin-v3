@@ -3,8 +3,9 @@ import time
 
 from .apply import diff, make_botid, make_link, pair_amends, rung_of
 from .exchange.errors import VenueError
-from .ladder import (grid_rungs, guard_band, lot, min_gap, plan_grid,
-                     plan_martingale, sellable_base, split)
+from .ladder import (anchor_from_rung, grid_rungs, guard_band, lot,
+                     min_gap, plan_grid, plan_martingale,
+                     sellable_base, split)
 from .window import window
 
 FLAT_CONFIRMATIONS = 3  # E9: consecutive flat reads before standing down
@@ -285,6 +286,14 @@ class Bot:
         for f in sorted(fills, key=lambda f: f['time_ms']):
             apply_fill(book, f['side'], f['price'], f['qty'], f['fee'],
                        inverse=inverse)
+        from .report import window_truncated
+        if window_truncated(book, self.cfg['side']):
+            # R7's honesty applied here: the window opened mid-round, so the
+            # ledger holds a phantom. Scaling on it is worse than not scaling.
+            self.notify.event('warn', self.botid,
+                              'reinvest: the fill window opened mid-round — '
+                              'holding sizes at 1.0 this round (M12)')
+            return 1.0
         net = book['realized'] - book['fees']
         if inverse:
             net = self.adapter.pnl_to_usd(net, fills[-1]['price']) if fills \
@@ -807,6 +816,23 @@ class Bot:
         if cfg['strategy'] == 'martingale':
             if cfg.get('reinvest') and self._scale is None:
                 self._scale = self._reinvest_scale(self._own_fills())
+            if self._anchor is None:
+                # M15: a restart mid-round must NOT re-anchor on the average
+                # entry — that deepens every remaining rung and un-suppresses
+                # rungs that already filled, pushing the position past the
+                # capital the validator approved. The venue still holds the
+                # answer: any resting safety order inverts to the anchor.
+                for o in truth['orders']:
+                    r = rung_of(o['link_id'], self.botid)
+                    if r and not o['reduce_only']:
+                        found = anchor_from_rung(cfg, o['price'], r)
+                        if found:
+                            self._anchor = adapter.round_price(found)
+                            self.notify.event(
+                                'repeat', self.botid,
+                                f'round anchor recovered from the venue: '
+                                f'{self._anchor:.10g} (M15)')
+                            break
             desired = plan_martingale(cfg, adapter, self._anchor or basis or ref,
                                       ref, held,
                                       scale=(self._scale

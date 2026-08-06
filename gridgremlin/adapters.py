@@ -77,7 +77,10 @@ class _Adapter:
     def meets_minimum(self, qty, price):
         if qty < self.min_qty:
             return False
-        if self.min_notional is not None and qty * price < self.min_notional:
+        # A4: for inverse, qty IS the USD notional (contracts x $1) —
+        # multiplying by price overstated it by a factor of price
+        notional = qty if self.market_type == 'inverse' else qty * price
+        if self.min_notional is not None and notional < self.min_notional:
             return False
         return True
 

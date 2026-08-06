@@ -162,3 +162,14 @@ def spec_E1_ladder_module_is_pure():
     for banned in ('urllib', 'socket', 'http', 'requests', 'time.', 'datetime',
                    'random'):
         assert banned not in src, f'ladder.py must stay pure: found {banned!r}'
+
+
+def spec_G6_the_fee_floor_matches_the_VENUE_round_trip():
+    """One constant could not serve both: spot charges ~0.1%/side, so a
+    0.1% floor rested exits that LOSE money (audit 2026-08-06)."""
+    from gridgremlin.ladder import exit_floor, fee_floor_for
+    assert fee_floor_for('spot') > fee_floor_for('linear')
+    perp = exit_floor('long', 50.0, 100.0, 'linear')
+    spot = exit_floor('long', 50.0, 100.0, 'spot')
+    assert spot > perp                          # spot must clear more
+    assert spot >= 100.0 * 1.002                # a 0.2% round trip, covered

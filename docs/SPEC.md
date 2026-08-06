@@ -69,7 +69,9 @@ eventually pin (T1).
   *(D5; CONCEPTS §12·N2)*
 - **G5** Entries rest only on the entry side of the split ref; exits only beyond the
   basis-protected floor.
-- **G6** The exit floor is `max(ref, basis × (1 + fee_floor))` — the grid never sells
+- **G6** The exit floor is `max(ref, basis × (1 + fee_floor))`, and the fee floor is
+  VENUE-SHAPED — spot charges roughly ten times a perp per side, so one constant
+  rested spot exits that lose money on a round trip *(audit 2026-08-06)* — the grid never sells
   below cost plus fees; the fee floor is a constant, not a knob.
 - **G7** An entry rung never re-arms while its lot is unexited — observable from arming
   order, entry side only. *(the owner's invariant; the stacking incident, 2026-08-02)*
@@ -118,8 +120,11 @@ eventually pin (T1).
   *(CONCEPTS §12·N9)*
 - **B7** Margin backoff halts growth only — cancels still run — doubling to a ceiling,
   retrying forever.
-- **B8** Spacing must clear the guard band with stated margin, checked at config time
-  against the true minimum gap, not the mean. *(the gold-grid measurement; strategy
+- **B8** Spacing must clear the guard band with stated margin, against the true
+  minimum gap, not the mean — checked at BUILD against live quotes (the guard
+  depends on the live spread), stated loudly rather than refused on a transient
+  widening. Pinned as a pure function with no call site for 30 slices *(audit
+  2026-08-06)*. *(the gold-grid measurement; strategy
   study D11)*
 - **B9** There is no configurable no-trade band: the dissolving suppression around an
   adopted basis emerges from G7 + G9 + G6 — entries release furthest-from-mark first as
@@ -170,6 +175,11 @@ eventually pin (T1).
 - **M11** Trailing rides the venue or does not exist: set once per round from the
   average, the venue moves it from there; refused where the venue cannot host it.
   *(D23)*
+- **M15** A round's anchor is recovered from the VENUE, never remembered: a
+  resting safety order's price and rung invert the deviation schedule back to the
+  base price. Re-anchoring on average entry after a restart deepens every remaining
+  rung and un-suppresses rungs that already filled — past the capital the validator
+  approved. *(audit 2026-08-06, demonstrated)*
 - **M14** A round that ended by liquidation, ADL, or an outside hand is NOT a
   completed round: the venue's own account of the closing fill decides, and anything
   but our own exit stands the bot down instead of re-entering. Silence from the venue
@@ -361,7 +371,8 @@ eventually pin (T1).
 - **T2** Every loop is driven at least two iterations by some spec. *(the fleet-loop
   NameError that no spec caught)*
 - **T3** The backtester drives the real `plan()`; fills require trade-through, not
-  touch; funding is modelled. *(freqtrade + passivbot studies)*
+  touch; funding is modelled; inventory is counted in integer qty-steps — float
+  subtract-then-floor drops a whole step per iteration *(audit 2026-08-06)*. *(freqtrade + passivbot studies)*
 - **T4** v3's `plan()` is diffed against v2's on identical fixtures before v3 places a
   single live order. *(the v1→v2 method)*
 - **T5** Docs cite spec IDs; no doc asserts behaviour a spec doesn't pin. *("prose rots;

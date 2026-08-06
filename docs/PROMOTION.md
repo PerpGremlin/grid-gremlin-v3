@@ -28,6 +28,8 @@ flag (F5) — a mainnet fleet file lives beside the box's `.env`, not in git.
       trigger.)
 - [ ] Restart continuity proven across a deploy on BOTH venues (S6, routine by
       now) and across one full box reboot.
+- [ ] A fresh multi-reviewer audit (see AUDIT-2026-08-06.md for the shape) run
+      against the code as it will actually run, with every HIGH fixed.
 - [ ] The readout's owned/unowned split is clean: no unexplained unowned fills
       in the promotion window (F6).
 
