@@ -41,6 +41,20 @@ def lot(cfg, adapter, split_ref):
     return adapter.round_qty(adapter.qty_from_notional(mean, split_ref))
 
 
+def trip_economics(rungs, maker_fee):
+    """G16, pure: (net_fraction, gap_fraction, round_trip_fee). A grid's
+    round trip earns one rung gap and pays the maker fee twice — if the
+    gap cannot clear that, every completed trip loses money."""
+    if len(rungs) < 2:
+        return None, None, None
+    gaps = [(b - a) / a for a, b in zip(rungs, rungs[1:]) if a > 0]
+    gap = min(gaps) if gaps else None
+    if gap is None:
+        return None, None, None
+    round_trip = 2.0 * (maker_fee or 0.0)
+    return gap - round_trip, gap, round_trip
+
+
 def fee_floor_for(market_type):
     """G6: the floor is the venue's ROUND TRIP plus margin — spot charges
     about ten times a perp per side, so one constant cannot serve both."""

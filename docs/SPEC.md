@@ -94,6 +94,16 @@ eventually pin (T1).
   split or the floor removed, the guard and the venue must still refuse. *(the owner's
   adoption concern, 2026-08-04; D6)*
 
+- **G15** A venue that reports no average entry (spot: the position IS a wallet
+  balance) still knows the cost — the basis is derived from its own fill history, so
+  the exit floor always has something to clear. Without it the floor collapses to the
+  split ref and exits rest at the very price the inventory was bought at: the grid
+  churns at zero spread and pays fees both ways. `assumed_avg_entry` wins when set.
+  *(measured live 2026-08-06: 17 LTC round trips, every buy and sell at one price)*
+- **G16** A grid whose rung gap cannot clear the venue's own round-trip fee loses on
+  every completed trip by construction — the build asks the venue what it charges and
+  says so, before a single order rests. *(the spot fee lesson, 2026-08-06)*
+
 ## W — the window
 
 - **W1** The window limits placement, never cancellation.
@@ -174,6 +184,9 @@ eventually pin (T1).
   re-anchor warns, 2026-08-05)*
 - **M11** Trailing rides the venue or does not exist: set once per round from the
   average, the venue moves it from there; refused where the venue cannot host it.
+  With tranches it arms only AFTER the first target fills — a trail tighter than
+  the first tranche closes the round before it can take profit. *(measured live
+  2026-08-06: 30 rounds averaging a small loss)*
   *(D23)*
 - **M15** A round's anchor is recovered from the VENUE, never remembered: a
   resting safety order's price and rung invert the deviation schedule back to the

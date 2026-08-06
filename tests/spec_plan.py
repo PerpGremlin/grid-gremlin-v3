@@ -173,3 +173,28 @@ def spec_G12_spot_exits_are_plain_sells():
     orders = plan_grid(cfg, spot, 2000.0, held_base=0.05, basis=1800.0)
     sells = [o for o in orders if o['side'] == 'Sell']
     assert sells and all(o['reduce_only'] is False for o in sells)
+
+
+# --- G15/G16: the basis-less venue, and a grid that cannot pay its fees -----
+
+def spec_G15_a_basisless_venue_never_rests_an_exit_at_the_entry_price():
+    """Spot reports no average entry, so the exit floor had nothing to clear
+    and exits rested at the very rung the inventory was bought at — 17 live
+    round trips at one price, fees paid both ways (measured 2026-08-06)."""
+    from gridgremlin.ladder import exit_floor
+    # with no basis the floor IS the ref: an exit at the ref is permitted
+    assert exit_floor('long', 44.27, None, 'spot') == 44.27
+    # with the derived basis it must clear cost + a spot round trip
+    floor = exit_floor('long', 44.27, 44.27, 'spot')
+    assert floor > 44.27 * 1.002          # 0.1%/side round trip, cleared
+
+
+def spec_G16_a_grid_that_cannot_clear_its_round_trip_is_named():
+    from gridgremlin.ladder import trip_economics
+    tight = [100.0, 100.05, 100.10]       # 0.05% gaps
+    net, gap, trip = trip_economics(tight, 0.001)      # spot maker 0.1%
+    assert gap < trip and net < 0         # every trip loses
+    wide = [100.0, 102.0, 104.04]         # 2% gaps
+    net, gap, trip = trip_economics(wide, 0.001)
+    assert net > 0 and abs(gap - 0.02) < 1e-9
+    assert trip_economics([100.0], 0.001) == (None, None, None)

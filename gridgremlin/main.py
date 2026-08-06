@@ -171,6 +171,28 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
             adapter = adapter_for(cfg['market_type'], spec)
         cfg['funding_interval_minutes'] = spec['funding_interval_minutes']
         if cfg.get('strategy') != 'martingale':
+            # G16: the venue's own fee schedule vs this grid's own spacing —
+            # a grid that cannot clear its round trip loses on every trip,
+            # and nothing else in the build would ever say so.
+            rates = getattr(client, 'fee_rates', None)
+            if rates is not None:
+                try:
+                    from .ladder import grid_rungs as _g16, trip_economics
+                    maker = rates(cfg['market_type'], cfg['symbol'])['maker']
+                    net, gap, trip = trip_economics(_g16(cfg, adapter), maker)
+                    if net is not None and net <= 0:
+                        _vn(notifier, venue).event(
+                            'warn', cfg['symbol'],
+                            f'EVERY ROUND TRIP LOSES: rung gap {gap:.4%} vs '
+                            f'round-trip fee {trip:.4%} — widen the range or '
+                            f'cut rungs (G16)')
+                    elif net is not None and net < trip:
+                        _vn(notifier, venue).event(
+                            'warn', cfg['symbol'],
+                            f'thin margin: rung gap {gap:.4%} barely clears '
+                            f'the {trip:.4%} round trip (net {net:.4%}/trip)')
+                except (VenueError, OSError, KeyError, TypeError):
+                    pass
             # B8 was pinned as a pure function and never wired to a call site
             # (audit 2026-08-06): a grid whose gap sits inside the guard band
             # churns forever, silently. It needs LIVE quotes, so it lands

@@ -481,3 +481,18 @@ def spec_M15_the_round_anchor_is_recovered_from_the_venue():
     assert fresh._anchor is not None
     assert abs(fresh._anchor - 60000.0) < 1.0          # recovered, not guessed
     assert any('anchor recovered' in ln for ln in lines)
+
+
+def spec_M11_trailing_waits_for_the_first_tranche():
+    """A trail tighter than the first tranche closed rounds before they
+    could take profit — 30 live rounds averaging a small loss (2026-08-06)."""
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(trailing_stop_pct=0.008), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    bot.cycle()                                   # base at 60000
+    bot.cycle()                                   # tranches rest
+    assert not getattr(venue, 'trail_calls', [])  # NOT armed yet
+    venue.mark = 60800.0                          # t1 (+1%) fires
+    venue.position = dict(venue.position, size='0.008')
+    bot.cycle()
+    assert venue.trail_calls                      # now it rides
