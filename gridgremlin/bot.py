@@ -832,7 +832,12 @@ class Bot:
                                   'halting this bot until an operator looks')
             return {'anomaly': True}
         if basis is None:              # a venue-reported basis overrules the
-            basis = cfg.get('assumed_avg_entry')   # config field (V6, from v2)
+            # G15: the config's stated cost first (V6, from v2), then the
+            # venue's own fill history — never nothing, or the exit floor is
+            # inert and a spot grid exits at the very rung it bought (36
+            # zero-spread round trips live before this call was WIRED; the
+            # function existed unwired — B8's failure mode in G15's coat).
+            basis = cfg.get('assumed_avg_entry') or self._derive_basis(held)
 
         reason = self._stop_hit(truth, equity)          # X1: before everything
         if reason:
@@ -870,8 +875,22 @@ class Bot:
                         f'confirming ({self._flat_streak}/'
                         f'{FLAT_CONFIRMATIONS}) before standing down (E9)')
                     return {'confirming_flat': self._flat_streak}
-                self._kill(truth, 'position closed externally (D1)')
-                return None
+                # M14's law, extended to grids: absence of a link proves
+                # nothing — a link vanishes the same way whether it FILLED
+                # or we CANCELLED it in the last replace. Ask the venue how
+                # the position actually closed before doing anything
+                # irreversible (live 2026-08-06: a bot's own exit fill read
+                # as an outside hand; tombstoned mid-session, healthy).
+                how = self._how_round_ended()
+                if how == 'exit':
+                    self._flat_streak = 0          # our exit filled: a trip
+                else:
+                    self._kill(truth,
+                               f"position closed by "
+                               f"{how or 'an unknown hand — the venue gave '
+                                        'no account of the closing fill'}"
+                               ' (D1)')
+                    return None
         if held:
             self._flat_streak = 0
 
