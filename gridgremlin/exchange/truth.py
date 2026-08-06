@@ -1,5 +1,5 @@
 # The truth contract, venue-neutral (SPEC V1). One schema, every venue.
-TRUTH_KEYS = ('symbol', 'market_type', 'mark', 'bid', 'ask', 'split_ref',
+TRUTH_KEYS = ('mark_is_mark', 'symbol', 'market_type', 'mark', 'bid', 'ask', 'split_ref',
               'funding_rate_hourly', 'next_funding_time_ms', 'orders',
               'positions')
 ORDER_KEYS = ('order_id', 'link_id', 'side', 'price', 'qty', 'cum_exec_qty',

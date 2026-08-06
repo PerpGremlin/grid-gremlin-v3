@@ -149,7 +149,8 @@ def spec_S6_the_reset_list_is_complete_and_documented():
                   '_exit_links_last', '_uncovered_warned', '_anomaly_warned',
                   '_anchor', '_round',
                   '_scale', '_cool_until',   # M12/M13: reset AND venue-recomputed
-                  '_unplaceable_warned', '_history_capped_warned'}
+                  '_unplaceable_warned', '_history_capped_warned',
+                  '_flat_streak', '_round_hwm'}
     state = {k for k, v in vars(bot).items()
              if k.startswith('_') and not callable(v)
              and k not in ('_now', '_entry_side', '_exit_side', '_min_gap',
@@ -187,6 +188,27 @@ def spec_S5_basis_beyond_range_no_exits_one_warning():
 
 # --- S7: involuntary flat is terminal ----------------------------------------
 
+def spec_E9_one_flat_read_is_never_enough_to_stand_down():
+    """An empty positions answer is indistinguishable from flat, and the
+    kill is irreversible — confirm across consecutive reads (E9)."""
+    venue, lines = FakeVenue(), []
+    venue.position = {'positionIdx': 1, 'side': 'Buy', 'size': '0.021',
+                      'avgPrice': '60000', 'leverage': '10',
+                      'unrealisedPnl': '0'}
+    bot = _bot(venue, lines)
+    bot.cycle()                                  # adopts, exits rest
+    venue.position = None                        # ONE degraded/flat read
+    assert bot.cycle() == {'confirming_flat': 1}
+    assert bot.alive and venue.orders            # nothing cancelled yet
+    venue.position = {'positionIdx': 1, 'side': 'Buy', 'size': '0.021',
+                      'avgPrice': '60000', 'leverage': '10',
+                      'unrealisedPnl': '0'}
+    bot.cycle()                                  # the read recovers
+    venue.position = None
+    assert bot.cycle() == {'confirming_flat': 1}  # streak RESET, not resumed
+    assert bot.alive
+
+
 def spec_S7_external_close_kills_cancels_and_states_the_residue():
     venue, lines = FakeVenue(), []
     venue.position = {'positionIdx': 1, 'side': 'Buy', 'size': '0.021',
@@ -196,7 +218,9 @@ def spec_S7_external_close_kills_cancels_and_states_the_residue():
     bot.cycle()                                # exits + entries rest
     assert venue.orders
     venue.position = None                      # a stop or manual close: no
-    assert bot.cycle() is None                 # owned exit disappeared
+    for _ in range(2):                         # owned exit disappeared;
+        assert bot.cycle()['confirming_flat']  # E9 confirms first
+    assert bot.cycle() is None                 # third read: stand down
     assert bot.alive is False
     assert venue.orders == []                  # X5: owned orders cancelled
     kill = next(ln for ln in lines if ' kill ' in ln)

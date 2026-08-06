@@ -120,6 +120,7 @@ def read_symbol_truth(client, coin):
         'symbol': coin,
         'market_type': 'linear',
         'mark': mark,
+        'mark_is_mark': mark is not None,
         'bid': bid,
         'ask': ask,
         'split_ref': (bid + ask) / 2.0 if bid and ask else mark,
