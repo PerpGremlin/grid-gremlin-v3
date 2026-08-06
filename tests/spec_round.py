@@ -521,3 +521,27 @@ def spec_M10_a_tranche_must_clear_the_mark_by_the_guard_band():
     bot._round_targets(basis, 0.016, mark=60599.0, guard=guard)
     again = bot._round_targets(basis, 0.016, mark=60000.0, guard=guard)
     assert not any(abs(p - 60600.0) < 1e-9 for p, _ in again)
+
+
+def spec_M3_a_covered_round_does_not_stack_another_exit():
+    """Once the high-water passes every tranche, the exits placed earlier
+    are still resting and will fill. Adding another reduce-only order on
+    top is refused for capacity (110017) and warned every cycle forever —
+    67 of them in ten minutes, live 2026-08-06."""
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()                                   # base
+    bot.cycle()                                   # tranches rest on the book
+    resting = len(venue.stop_orders('linear', 'BTCUSDT'))
+    assert resting == 2
+    venue.mark = 62000.0                          # mark blows past both
+    for _ in range(3):
+        bot.cycle()                               # covered: nothing stacked
+    assert not any('truncated' in ln or ' tp:' in ln for ln in lines)
+    assert len(venue.stop_orders('linear', 'BTCUSDT')) == resting
+    # but with NOTHING resting, the remainder genuinely does get closed
+    venue.stop_book = []
+    r = bot.cycle()
+    assert r == {'round': 'closing'}
+    assert any('every tranche target met' in ln for ln in lines)

@@ -367,6 +367,29 @@ class Bot:
         return [(p, adapter.round_qty(abs(held) * sh / total))
                 for p, sh in priced]
 
+    def _exits_cover(self, truth, held, idx, hosted):
+        """M3: is the position already covered by exits resting on the
+        venue? Hosted venues answer from the conditional book, others from
+        our own rung-0 reduce-only orders."""
+        want = abs(held)
+        if want <= 0:
+            return True
+        if hosted:
+            book = getattr(self.client, 'stop_orders', None)
+            if book is None:
+                return bool(truth['positions'].get(idx, {}).get('take_profit'))
+            resting = sum(
+                float(o.get('qty') or 0)
+                for o in book(self.cfg['market_type'], self.cfg['symbol'])
+                if 'TakeProfit' in (o.get('stopOrderType') or '')
+                and int(o.get('positionIdx') or 0) == idx)
+        else:
+            resting = sum(o['qty'] for o in truth['orders']
+                          if o['reduce_only'] and o['side'] == self._exit_side
+                          and rung_of(o['link_id'], self.botid) == 0)
+        # the venue rounds our shares, so a step of slack is expected
+        return resting >= want - max(self.adapter.qty_step, want * 1e-6)
+
     def _close_remainder_at_best(self, held, basis):
         """M3 for a blown-through tranche round: every target already met —
         close what remains, marketable at the DEEPEST target (fills at
@@ -616,14 +639,22 @@ class Bot:
             self._maintain_trailing(truth, basis, held, idx, armed=fired)
             try:
                 if not targets:
-                    self._close_remainder_at_best(held, basis)
-                    return {'round': 'closing'}
+                    # M3 asks for a venue-resting exit, not for a NEW one.
+                    # Once the high-water has passed every tranche, the
+                    # exits placed earlier are still resting and will fill —
+                    # adding another reduce-only order on top is refused for
+                    # capacity (110017) and warns every cycle forever.
+                    if not self._exits_cover(truth, held, idx, hosted):
+                        self._close_remainder_at_best(held, basis)
+                        return {'round': 'closing'}
+                    return None
                 if hosted:
                     self._maintain_partial_tps(truth, targets, idx)
                 else:
                     self._maintain_resting_exits(truth, targets)
             except VenueError as e:
-                self.notify.event('warn', self.botid, f'tp: {e}')
+                if e.kind != 'ro_capacity':      # the ladder ignores these too
+                    self.notify.event('warn', self.botid, f'tp: {e}')
             return None
         self._maintain_trailing(truth, basis, held, idx)
         targets = self._round_targets(basis, held)
