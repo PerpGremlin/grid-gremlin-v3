@@ -324,6 +324,7 @@ all: the agent proposes and builds — the human decides, and reads everything.
 | [docs/CONCEPTS.md](docs/CONCEPTS.md) | the dissection of v2 that started it all |
 | [docs/PLAN.md](docs/PLAN.md) | every build slice, phases 1 and 2 |
 | [docs/PROMOTION.md](docs/PROMOTION.md) | how v3 reaches real funds — the checklist |
+| [docs/AUDIT-2026-08-06.md](docs/AUDIT-2026-08-06.md) | three independent reviewers: what they found, what changed |
 | [ops/README.md](ops/README.md) | the deploy layer: units, alerts, triage, relay, range review |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
 | [docs/SOAK.md](docs/SOAK.md) | the experiment registry and its call conditions |

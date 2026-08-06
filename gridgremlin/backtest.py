@@ -9,7 +9,9 @@ def backtest(cfg, adapter, bars, fee_rate=0.0002, funding_rate_hourly=0.0,
              bar_hours=1.0):
     long = cfg['side'] == 'long'
     sign = 1.0 if long else -1.0
-    held, basis = 0.0, None
+    step = adapter.qty_step
+    held_steps = 0            # inventory in integer qty-steps: float
+    held, basis = 0.0, None   # subtract-then-floor loses a whole step
     realized = fees = funding = 0.0
     trips = entry_fills = 0
     peak = max_drawdown = 0.0
@@ -22,21 +24,24 @@ def backtest(cfg, adapter, bars, fee_rate=0.0002, funding_rate_hourly=0.0,
                 through = bar['l'] < o['price'] if long else bar['h'] > o['price']
                 if through:
                     total = (basis or 0.0) * held + o['price'] * o['qty']
-                    held = adapter.round_qty(held + o['qty'])
+                    held_steps += int(round(o['qty'] / step))
+                    held = held_steps * step
                     basis = total / held if held else None
                     fees += o['qty'] * o['price'] * fee_rate
                     entry_fills += 1
             else:                                               # exits
                 through = bar['h'] > o['price'] if long else bar['l'] < o['price']
                 if through and held > 0:
-                    qty = min(o['qty'], held)
+                    qty_steps = min(int(round(o['qty'] / step)), held_steps)
+                    qty = qty_steps * step
                     realized += adapter.realised_pnl(
                         basis, o['price'], qty) * (1.0 if long else -1.0)
-                    held = adapter.round_qty(held - qty)
+                    held_steps -= qty_steps
+                    held = held_steps * step
                     fees += qty * o['price'] * fee_rate
                     trips += 1
-        if held == 0:
-            basis = None
+        if held_steps == 0:
+            held, basis = 0.0, None
         if held and funding_rate_hourly:
             funding += sign * held * bar['c'] * funding_rate_hourly * bar_hours
         unreal = sign * held * (bar['c'] - basis) if basis else 0.0

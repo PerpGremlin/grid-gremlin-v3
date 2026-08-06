@@ -5,7 +5,8 @@
 import math
 from decimal import Decimal
 
-FEE_FLOOR_PCT = 0.001    # G6: an exit must clear costs; a constant, not a knob
+FEE_FLOOR_PCT = 0.001        # perps: ~0.02-0.055%/side, round trip covered
+SPOT_FEE_FLOOR_PCT = 0.0025  # spot: ~0.1%/side — a 0.001 floor sold at a LOSS    # G6: an exit must clear costs; a constant, not a knob
 CROSS_GUARD_BPS = 5.0    # B3/B8: one definition; the placer imports THIS one
 SPACING_GUARD_MULTIPLE = 3.0   # B8: spacing must clear the guard with margin
 
@@ -40,19 +41,26 @@ def lot(cfg, adapter, split_ref):
     return adapter.round_qty(adapter.qty_from_notional(mean, split_ref))
 
 
-def exit_floor(side, split_ref, basis):
+def fee_floor_for(market_type):
+    """G6: the floor is the venue's ROUND TRIP plus margin — spot charges
+    about ten times a perp per side, so one constant cannot serve both."""
+    return SPOT_FEE_FLOOR_PCT if market_type == 'spot' else FEE_FLOOR_PCT
+
+
+def exit_floor(side, split_ref, basis, market_type=None):
     """G6: the price an exit must clear; no basis -> the ref alone."""
     if basis is None or basis <= 0:
         return split_ref
+    pct = fee_floor_for(market_type)
     if side == 'long':
-        return max(split_ref, basis * (1.0 + FEE_FLOOR_PCT))
-    return min(split_ref, basis * (1.0 - FEE_FLOOR_PCT))
+        return max(split_ref, basis * (1.0 + pct))
+    return min(split_ref, basis * (1.0 - pct))
 
 
-def split(side, rungs, split_ref, basis=None):
+def split(side, rungs, split_ref, basis=None, market_type=None):
     """G5: entries strictly one side of the ref, exits strictly beyond the
     floor, nearest-first. Index 0 = lowest rung."""
-    floor = exit_floor(side, split_ref, basis)
+    floor = exit_floor(side, split_ref, basis, market_type)
     indexed = list(enumerate(rungs))
     if side == 'long':
         entries = [(i, p) for i, p in indexed if p < split_ref]
@@ -173,7 +181,8 @@ def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None,
     non-marketable by construction, B4 book-aware exits. Returns {rung, side,
     price, qty, reduce_only} dicts."""
     rungs = grid_rungs(cfg, adapter)
-    parts = split(cfg['side'], rungs, split_ref, basis)
+    parts = split(cfg['side'], rungs, split_ref, basis,
+                  cfg.get('market_type'))
     parts['exits'] = placeable_exits(cfg['side'], parts['exits'], bid, ask,
                                      resting_exit_rungs)
     lot_qty = lot(cfg, adapter, split_ref)
@@ -216,6 +225,19 @@ def martingale_schedule(cfg):
         cumdev += d * s ** i
         out.append((cfg['safety_order_size'] * k ** i, cumdev))
     return out
+
+
+def anchor_from_rung(cfg, price, rung):
+    """M15: invert the deviation schedule — a resting safety order at
+    rung n was priced anchor x (1 +/- cumdev_n), so the anchor is
+    recoverable from the venue instead of remembered."""
+    sched = martingale_schedule(cfg)
+    if rung is None or rung < 1 or rung >= len(sched):
+        return None
+    _, cumdev = sched[rung]
+    sign = -1.0 if cfg['side'] == 'long' else 1.0
+    factor = 1.0 + sign * cumdev
+    return price / factor if factor else None
 
 
 def plan_martingale(cfg, adapter, base_price, split_ref, held_base=0.0,
