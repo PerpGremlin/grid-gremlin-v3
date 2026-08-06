@@ -360,6 +360,12 @@ eventually pin (T1).
   module.
 - **R5** "Grid profit" is realized minus fees (D8); "total P&L" adds mark-to-average
   on the open remainder; an unknown mark yields no number, never a guess.
+- **R9** The readout counts SAME-RUNG exits: an exit filling at a price the book
+  entered at. It needs no basis, so a truncated window cannot fake it. Read it as a
+  RATIO, not a verdict — in a netted engine (G12) a rung legitimately flips between
+  entry and exit as the ref crosses it, and the basis floor (G6) keeps those trips
+  profitable against the average. A ratio near 1.0 means the floor is inert and the
+  bot is churning at zero spread. *(spot ran ~100% before G15; linear runs low)*
 - **R8** A forced close is a fill: liquidation (`BustTrade`) and auto-deleveraging
   (`AdlTrade`) move the position and realise the loss, so they enter the ledger like
   any other — funding and settlement rows still do not. *(audit 2026-08-06: the

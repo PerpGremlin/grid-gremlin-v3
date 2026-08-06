@@ -301,3 +301,22 @@ def spec_R7_a_mid_round_window_declares_itself():
     assert window_truncated(b, 'short') is False   # a short legitimately is
     flat = new_book()
     assert window_truncated(flat, 'long') is False
+
+
+def spec_R9_an_exit_at_a_price_we_bought_at_is_counted():
+    """The zero-spread signature, measured WITHOUT a basis: an exit filling
+    at a price the book entered at earns nothing and pays two fees. Needs no
+    average, so a truncated window cannot produce a false verdict (the exact
+    live pattern on the spot grids, 2026-08-06)."""
+    wash = new_book()
+    apply_fill(wash, 'buy', 44.27, 3.99, 0.18)
+    apply_fill(wash, 'sell', 44.27, 3.98, 0.18)      # same rung, both ways
+    assert wash['trips'] == 1 and wash['same_rung'] == 1
+    good = new_book()
+    apply_fill(good, 'buy', 44.27, 3.99, 0.18)
+    apply_fill(good, 'sell', 45.30, 3.98, 0.18)      # a real rung apart
+    assert good['trips'] == 1 and good['same_rung'] == 0
+    short = new_book()                                # shorts count too
+    apply_fill(short, 'sell', 100.0, 1.0, 0.0)
+    apply_fill(short, 'buy', 100.0, 1.0, 0.0)         # bought back at entry
+    assert short['same_rung'] == 1
