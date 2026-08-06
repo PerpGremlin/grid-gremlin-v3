@@ -49,6 +49,34 @@ value could change in some places."* That is the retro-rename the `capital`
 pattern (C2) exists to prevent — a product telling its users the number they
 had been reading may have meant something else. Settle the vocabulary first.
 
+### The best evidence is not from the commercial products
+
+A fourth reviewer read the open-source engines (freqtrade, OctoBot, Jesse,
+Nautilus, Hummingbot) at source rather than through their docs, and found this
+repo's thesis in the wild:
+
+**OctoBot renamed `ALLOW_WITHDRAWAL_KEYS` → `ALLOW_FUNDS_TRANSFER` and inverted
+the default in the same change.** The old name still sits in a public archived
+repository teaching the opposite behaviour. The reviewer's own assistant read
+the archived copy and reported the safety default **backwards** — a rotted name
+in a stale copy, believed, about a withdrawal permission on a live trading bot.
+That is more useful evidence than anything in the v2 audit, because it is
+someone else's failure, in public, with the artefact still there to point at,
+and because the way it was discovered *is the failure mode itself*.
+
+Two more, both from reading code rather than docs:
+
+- **`safe_dump` is not atomic.** It truncates in place and protects itself with
+  a `.back` sidecar and an exception handler — closing exactly one of the two
+  windows. SIGKILL, OOM and power loss are all still open. "Safe" in a function
+  name is a claim, and a claim needs a spec (T1).
+- **No double-start guard.** A second OctoBot instance fails to bind its UI
+  port, the UI thread logs and dies — **and the trading engine keeps running
+  headless.** Two engines on one account, one of them invisible. The port was
+  serving as an accidental mutex, and it failed open. This repo's F3 lock is
+  the same idea done deliberately; the lesson is that the guard belongs in the
+  *engine*, never in the UI.
+
 ## 2. Vocabulary rules (before any code)
 
 - **Never the bare word "profit".** Four quantities, four names, always
@@ -131,7 +159,12 @@ trading and holds keys.
   secrets file and say why.
 
 **And the control that dominates all of the above: refuse an over-privileged
-key.** Bybit's `GET /v5/user/query-api`, authenticated with the key being
+key** — which is not a new idea, and the prior art carries its own lesson.
+OctoBot already checks API key permissions at connection, on by default, and
+forked ccxt to add the `fetchPermissions` upstream lacks. But when an exchange
+does not support the check it **returns silently — fail-open**. Copy the check;
+close that hole. An unverifiable key is not a permitted key (E8: unknown is not
+flat). Bybit's `GET /v5/user/query-api`, authenticated with the key being
 checked, returns its permission set, read-only flag, IP allowlist and expiry.
 If it can withdraw, the panel refuses to start — not a warning banner, a
 refusal — and it re-checks at *every* startup, because permissions can be
@@ -160,7 +193,13 @@ other; the config file remains the source of truth.
   nothing. No auto-restart: restarting into an unknown order state can
   double-place.
 - Single-instance enforcement belongs **in the engine**, not the panel, so it
-  holds when the engine is started by other means.
+  holds when the engine is started by other means — demonstrated by OctoBot's
+  counterexample above, where the UI port was doing the job by accident and
+  failed open into two live engines.
+- **One file is the running configuration.** OctoBot's effective config is a
+  merge of two files, so neither shows what is actually running, and hand edits
+  made while running are discarded on the next UI save. A panel and a file that
+  both claim authorship will drift; the file wins here, always.
 
 ## 7. Phases
 
