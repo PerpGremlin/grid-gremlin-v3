@@ -237,7 +237,8 @@ def spec_X7_external_close_also_tombstones():
     venue.fill(buy['order_id'], buy['price'])
     bot.cycle()                                    # holding now
     venue.position = None                          # owner closes it by hand
-    bot.cycle()                                    # S7: kill
+    for _ in range(3):                             # E9: confirmed, not guessed
+        bot.cycle()
     assert not bot.alive
     assert Tombstones(tmp).has(bot.botid)
 

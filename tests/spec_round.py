@@ -398,3 +398,62 @@ def spec_M10_blown_through_closes_at_target_or_better():
              if o['side'] == 'Sell' and o['reduce_only']]
     assert sells and sells[-1]['price'] == 61200.0     # deepest target, or better
     assert any('every tranche target met' in ln for ln in lines)
+
+
+# --- the 2026-08-06 audit: the three martingale HIGHs, pinned --------------
+
+def spec_M12_a_total_loss_refuses_the_next_round():
+    """0.0 is a real factor, not 'unset' — truthiness re-entered at FULL
+    size after the capital was gone (audit H1)."""
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True, reinvest=True), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    link = f'{bot.botid}-1-x'
+    import time as _t
+    now = int(_t.time() * 1000)
+    venue.fills_history = lambda mt, sym, a, b: _histfills(
+        (now - 2000, 'buy', 60000.0, 1.0, 0.0, link),
+        (now - 1000, 'sell', 59000.0, 1.0, 0.0, link))   # -1000 on capital 1000
+    assert bot._reinvest_scale(bot._own_fills()) == 0.0
+    assert bot.cycle() == {'round': 'capital_exhausted'}
+    assert venue.position is None                        # nothing opened
+    assert any('consumed the capital' in ln for ln in lines)
+
+
+def spec_M10_a_fired_tranche_stays_fired_when_mark_retreats():
+    """'Passed' is monotone within a round — measured against the best mark
+    the round has seen (audit H2)."""
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()                                    # base at 60000
+    venue.mark = 60800.0                           # t1 (+1%) passed
+    venue.position = dict(venue.position, size='0.008')
+    bot.cycle()
+    venue.mark = 60300.0                           # price RETREATS below t1
+    bot.cycle()
+    book = venue.stop_orders('linear', 'BTCUSDT')
+    tps = [o for o in book if 'TakeProfit' in o['stopOrderType']]
+    assert len(tps) == 1                           # t1 does NOT resurrect
+    assert float(tps[0]['triggerPrice']) == 61200.0
+
+
+def spec_M14_a_liquidated_round_stands_down_instead_of_re_entering():
+    """A forced close is not a completed round (audit H3)."""
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True), ADAPTER, venue,
+              Notifier(sink=lines.append), gen_seed=1)
+    bot.cycle()                                    # round 1 opens
+    bot.cycle()
+    import time as _t
+    now = int(_t.time() * 1000)
+    venue.fills_history = lambda mt, sym, a, b: [
+        {'time_ms': now - 500, 'side': 'sell', 'price': 54000.0, 'qty': 0.016,
+         'fee': 0.0, 'link_id': '', 'symbol': 'BTCUSDT', 'exec_id': 'liq',
+         'market_type': 'linear', 'venue_closed': True,
+         'venue_kind': 'liquidation'}]
+    venue.position = None                          # wiped out
+    r = bot.cycle()
+    assert r == {'round': 'liquidation'}
+    assert not bot.alive                           # D1: stands down
+    assert not venue.position                      # never re-entered

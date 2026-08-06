@@ -28,12 +28,16 @@ def read_wallet(result):
     """One shape always — the empty account is not a second schema."""
     rows = result.get('list') or [{}]
     acct = rows[0]
+    raw_equity = acct.get('totalEquity')
+    # E8/E9: a hollow payload (empty list, blank field) is UNKNOWN, never
+    # zero — a zero equity fires every account_equity stop irreversibly.
+    equity = _f(raw_equity) if str(raw_equity or '').strip() else None
     coins = {c['coin']: {'wallet_balance': _f(c.get('walletBalance'), 0.0),
                          'equity': _f(c.get('equity'), 0.0),
                          'available': _f(c.get('availableToWithdraw'), 0.0)}
              for c in acct.get('coin', [])}
     return validate_wallet({
-        'equity': _f(acct.get('totalEquity'), 0.0),
+        'equity': equity,
         'available': _f(acct.get('totalAvailableBalance'), 0.0),
         'mm_rate': _f(acct.get('accountMMRate')),
         'im_rate': _f(acct.get('accountIMRate')),
@@ -116,6 +120,7 @@ def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.
     V6: spot has no position endpoint — the wallet holding is the position."""
     t = client.tickers(market_type, symbol)
     mark = _f(t.get('markPrice')) or _f(t.get('lastPrice'))
+    marked = t.get('markPrice') not in (None, '')   # M5: is it a MARK?
     bid, ask = _f(t.get('bid1Price')), _f(t.get('ask1Price'))
     rate = _f(t.get('fundingRate'))
     hours = max(funding_interval_minutes, 1.0) / 60.0
@@ -131,6 +136,7 @@ def read_symbol_truth(client, market_type, symbol, funding_interval_minutes=480.
         'symbol': symbol,
         'market_type': market_type,
         'mark': mark,
+        'mark_is_mark': marked,
         'bid': bid,
         'ask': ask,
         'split_ref': (bid + ask) / 2.0 if bid and ask else mark,
@@ -170,7 +176,13 @@ def read_fills(client, category, symbol, start_ms, end_ms):
                                           win_end, cursor)
             for e in page.get('list', []):
                 eid = e.get('execId')
-                if e.get('execType') != 'Trade' or not eid or eid in seen:
+                # R8: a forced close is a fill. BustTrade (liquidation) and
+                # AdlTrade (auto-deleveraging) move the position and realise
+                # the loss — dropping them hid both. Funding/settlement rows
+                # still never enter the ledger.
+                if (e.get('execType') not in ('Trade', 'BustTrade',
+                                              'AdlTrade')
+                        or not eid or eid in seen):
                     continue
                 seen.add(eid)
                 fee = _f(e.get('execFee'), 0.0)
@@ -185,15 +197,21 @@ def read_fills(client, category, symbol, start_ms, end_ms):
                 created = str(e.get('createType') or '')
                 stop_kind = str(e.get('stopOrderType') or '')
                 closed = _f(e.get('closedSize'), 0.0)
+                forced = e.get('execType') in ('BustTrade', 'AdlTrade')
                 fills.append({'exec_id': eid,
                               'time_ms': int(e.get('execTime') or 0),
                               'symbol': e.get('symbol'),
                               'market_type': category,
+                              # spot rows carry no closedSize (M5)
+                              'spot_row': category == 'spot',
                               'venue_closed': bool(
-                                  closed > 0 and (stop_kind or
-                                                  created.startswith('CreateBy'))
-                                  and created != 'CreateByUser'),
-                              'venue_kind': stop_kind or created,
+                                  forced or
+                                  ((closed > 0 or category == 'spot')
+                                   and (stop_kind
+                                        or created.startswith('CreateBy'))
+                                   and created != 'CreateByUser')),
+                              'venue_kind': ('liquidation' if forced
+                                             else (stop_kind or created)),
                               'side': 'buy' if e.get('side') == 'Buy'
                               else 'sell',
                               'price': _f(e.get('execPrice')),

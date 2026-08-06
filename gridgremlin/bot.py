@@ -7,6 +7,7 @@ from .ladder import (grid_rungs, guard_band, lot, min_gap, plan_grid,
                      plan_martingale, sellable_base, split)
 from .window import window
 
+FLAT_CONFIRMATIONS = 3  # E9: consecutive flat reads before standing down
 FLAP_LIMIT = 3          # B5: strikes before a (rung, side) cools
 FLAP_COOLDOWN = 60.0
 BACKOFF_BASE = 30.0     # B7: margin backoff, doubling to the ceiling
@@ -57,6 +58,8 @@ class Bot:
         self._cool_until = None        # M13: venue-anchored, recomputed on need
         self._unplaceable_warned = False
         self._history_capped_warned = False
+        self._flat_streak = 0          # E9: confirmations of 'flat'
+        self._round_hwm = None         # M10: best mark seen this round
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
@@ -131,7 +134,7 @@ class Bot:
                     adapter.position_idx(self._exit_side, True) or 0,
                     reduce_only=True, link_id=self._make_link(0),
                     borrow=self._borrow)
-            except VenueError as e:
+            except (VenueError, OSError) as e:      # raw OSError too (M2)
                 self.notify.event('warn', self.botid, f'flatten: {e}')
         floor = abs(held) - qty
         try:                           # X4 honestly: re-read, never assume the
@@ -241,6 +244,36 @@ class Bot:
         return [f for f in fills
                 if rung_of(f['link_id'], self.botid) is not None]
 
+    def _how_round_ended(self):
+        """M14: read the venue's own account of the closing fill — our exit
+        (link or hosted TP), a liquidation, or an outside hand. None means
+        the venue could not tell us, and silence is never evidence."""
+        try:
+            fills = self._own_fills_all()
+        except (VenueError, OSError):
+            return None
+        if not fills:
+            return None
+        last = max(fills, key=lambda f: f['time_ms'])
+        kind = str(last.get('venue_kind') or '')
+        if 'liquidation' in kind.lower() or 'adl' in kind.lower():
+            return 'liquidation'
+        if rung_of(last['link_id'], self.botid) is not None:
+            return 'exit'
+        if last.get('venue_closed'):
+            return 'exit'                      # the venue's hosted TP/SL
+        return 'an outside close'
+
+    def _own_fills_all(self):
+        """Every recent fill on OUR symbol — including ones with no link
+        (a liquidation carries none), which _own_fills deliberately drops."""
+        hist = getattr(self.client, 'fills_history', None)
+        if hist is None:
+            return []
+        now_ms = int(self._now() * 1000)
+        return hist(self.cfg['market_type'], self.cfg['symbol'],
+                    now_ms - 2 * 86_400_000, now_ms)
+
     def _reinvest_scale(self, fills):
         """M12: 1 + lifetime realized-net / capital, floored at 0, CAPPED at
         1.2 — the watchdog ceiling sits at cap x1.2 (F2), so auto-compound
@@ -273,8 +306,16 @@ class Bot:
         priced = [(adapter.round_price(basis * (1.0 + sign * t['at_avg_pct'])),
                    t['share']) for t in tranches]
         if mark is not None:
+            # M10: "passed" must be MONOTONE within a round — measured
+            # against the best mark the round has seen, not the current one.
+            # Without this a fired tranche resurrects the moment price dips
+            # back below it, and the conditional book churns every wobble.
+            hwm = self._round_hwm
+            gauge = mark if hwm is None else (max(hwm, mark) if long
+                                              else min(hwm, mark))
+            self._round_hwm = gauge
             priced = [(p, sh) for p, sh in priced
-                      if (p > mark if long else p < mark)]
+                      if (p > gauge if long else p < gauge)]
         if not priced:
             return []
         total = sum(sh for _, sh in priced)
@@ -402,12 +443,23 @@ class Bot:
                          or (self._last_pos is None and truth['orders']
                              and any(rung_of(o['link_id'], self.botid)
                                      is not None for o in truth['orders'])))
+            if completed and self._last_pos:
+                # M14: a round that ended by LIQUIDATION or by the operator's
+                # own hand is not a completed round — re-entering there walks
+                # straight back into what just killed it. Ask the venue how
+                # the position actually closed.
+                how = self._how_round_ended()
+                if how is not None and how != 'exit':
+                    self._kill(truth, f'round ended by {how}, not by our exit '
+                                      '— standing down (M14/D1)')
+                    return {'round': how}
             if completed:
                 if not cfg['repeat']:
                     self._kill(truth, 'round complete (TP hit), repeat off')
                     return {'round': 'complete'}
                 self._round += 1
                 self._anchor = None
+                self._round_hwm = None          # M10: round-scoped
                 self.notify.event('repeat', self.botid,
                                   f'round {self._round + 1} re-anchors at '
                                   'market (M5: from flat only)')
@@ -462,8 +514,18 @@ class Bot:
                 return {'round': 'cooling'}
             if cfg.get('reinvest') and self._scale is None:
                 self._scale = self._reinvest_scale(self._own_fills())
-            scale = self._scale if (cfg.get('reinvest') and self._scale) \
-                else 1.0
+            # M12: 0.0 is a REAL factor (capital fully lost), not "unset" —
+            # truthiness here re-entered at full size after a total loss.
+            scale = (self._scale if (cfg.get('reinvest')
+                                     and self._scale is not None) else 1.0)
+            if cfg.get('reinvest') and scale <= 0.0:
+                if not self._unplaceable_warned:
+                    self._unplaceable_warned = True
+                    self.notify.event(
+                        'warn', self.botid,
+                        'reinvest: realised losses have consumed the capital '
+                        '— refusing to open another round (M12)')
+                return {'round': 'capital_exhausted'}
             qty = adapter.round_qty(cfg['base_order_size'] * scale
                                     / truth['mark'])
             if qty <= 0 or not adapter.meets_minimum(qty, truth['mark']):
@@ -474,10 +536,19 @@ class Bot:
                 return {'round': 'unplaceable'}
             self._unplaceable_warned = False
             self._gen += 1
-            self.client.place_market(cfg['market_type'], cfg['symbol'],
-                                     self._entry_side, adapter.fmt_qty(qty),
-                                     idx, link_id=self._make_link(0),
-                                     borrow=self._borrow)
+            try:
+                self.client.place_market(cfg['market_type'], cfg['symbol'],
+                                         self._entry_side,
+                                         adapter.fmt_qty(qty), idx,
+                                         link_id=self._make_link(0),
+                                         borrow=self._borrow)
+            except (VenueError, OSError) as e:      # E6: may have landed
+                self._anchor = truth['mark']
+                self._last_pos = 0.0
+                self.notify.event('warn', self.botid,
+                                  f'base order ambiguous ({e}) — assuming '
+                                  'placed; the next read reconciles (E6)')
+                return {'round': 'ambiguous'}
             self._anchor = truth['mark']
             self.notify.event('start', self.botid,
                               f'round {self._round + 1}: base '
@@ -574,10 +645,20 @@ class Bot:
             return False
         idx = self.adapter.position_idx(self._entry_side, False) or 0
         self._gen += 1
-        self.client.place_market(self.cfg['market_type'], self.cfg['symbol'],
-                                 self._entry_side, self.adapter.fmt_qty(qty),
-                                 idx, link_id=self._make_link(0),
-                                 borrow=self._borrow)
+        try:
+            self.client.place_market(self.cfg['market_type'],
+                                     self.cfg['symbol'], self._entry_side,
+                                     self.adapter.fmt_qty(qty), idx,
+                                     link_id=self._make_link(0),
+                                     borrow=self._borrow)
+        except (VenueError, OSError) as e:
+            # E6: the write may have landed. Treating it as done is the SAFE
+            # direction here — a re-fired seed doubles the ladder, while a
+            # lost seed is visible as an uncovered position next cycle.
+            self.notify.event('warn', self.botid,
+                              f'seed ambiguous ({e}) — assuming placed; the '
+                              'next truth read reconciles (E6)')
+            return True
         self.notify.event('seed', self.botid,
                           f'{self._entry_side} {qty:.10g} at market for '
                           f'{len(exit_rungs)} exit rungs')
@@ -693,8 +774,22 @@ class Bot:
         elif (self._last_pos and abs(self._last_pos) > 0 and held == 0):
             links_now = {o['link_id'] for o in truth['orders']}
             if not (self._exit_links_last - links_now):      # no exit of ours
+                # E9: a venue that answers an EMPTY position list (under load,
+                # or on an account-type mismatch) is indistinguishable from
+                # flat — and this path is irreversible. Confirm across
+                # consecutive reads before killing.
+                self._flat_streak += 1
+                if self._flat_streak < FLAT_CONFIRMATIONS:
+                    self.notify.event(
+                        'warn', self.botid,
+                        f'position reads flat but our exits still rest — '
+                        f'confirming ({self._flat_streak}/'
+                        f'{FLAT_CONFIRMATIONS}) before standing down (E9)')
+                    return {'confirming_flat': self._flat_streak}
                 self._kill(truth, 'position closed externally (D1)')
                 return None
+        if held:
+            self._flat_streak = 0
 
         ref = self._sticky(truth['split_ref'])     # W2: the one anchor
         bid, ask = truth['bid'], truth['ask']
@@ -716,7 +811,8 @@ class Bot:
                                       ref, held,
                                       scale=(self._scale
                                              if cfg.get('reinvest')
-                                             and self._scale else 1.0))
+                                             and self._scale is not None
+                                             else 1.0))
         else:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
                                 resting_exits)

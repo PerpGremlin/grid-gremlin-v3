@@ -314,12 +314,18 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
     # L1: build_fleet issues account writes (hedge mode, leverage, tiers) —
     # a second launch must die BEFORE those, so a coarse per-file lock comes
     # first; the per-account lock follows once the venues are known
+    # H4: /tmp is age-cleaned by systemd-tmpfiles (default 10d) — a held
+    # flock does not protect the FILE, so a long-running fleet silently
+    # loses its lock. Locks live beside the logs the fleet already owns.
+    lockdir = Path('logs')
+    lockdir.mkdir(parents=True, exist_ok=True)
     prelock = acquire_fleet_lock(
-        f'/tmp/gridgremlin.{Path(fleet_path).resolve().name}.prelock')
+        str(lockdir / f'{Path(fleet_path).resolve().name}.prelock'))
     fleet, clients, bots = build_fleet(fleet_path, notifier,
                                        allow_mainnet=allow_mainnet)
     lock_tag = '+'.join(f'{v}.{c.env}' for v, c in sorted(clients.items()))
-    lock = acquire_fleet_lock(lock_path or f'/tmp/gridgremlin.{lock_tag}.lock')
+    lock = acquire_fleet_lock(lock_path
+                              or str(lockdir / f'{lock_tag}.lock'))
     try:
         notifier.ship_orders = (fleet['notify_orders'] if ship_orders is None
                                 else ship_orders)
@@ -330,12 +336,21 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         while cycles is None or n < cycles:
             try:
                 wallets = {v: c.read_wallet() for v, c in clients.items()}  # E8
-                wallet = {'equity': sum(w['equity'] for w in wallets.values()),
+                known = [w['equity'] for w in wallets.values()
+                         if w['equity'] is not None]
+                wallet = {'equity': sum(known) if known else None,
                           'mm_rate': max((w['mm_rate'] or 0.0)
                                          for w in wallets.values())}
                 for bot in bots:
-                    counts = bot.cycle(
-                        equity=wallets[bot.cfg['venue']]['equity'])
+                    try:
+                        counts = bot.cycle(
+                            equity=wallets[bot.cfg['venue']]['equity'])
+                    except Exception as e:              # noqa: BLE001
+                        # M3: one bot's venue trouble must never starve the
+                        # REST of the fleet's stop evaluation.
+                        notifier.event('net', bot.botid,
+                                       f'cycle lost: {type(e).__name__}: {e}')
+                        continue
                     if counts is not None:
                         print(f"cycle {n} {bot.botid}: {counts}", flush=True)
                 if snapshot and n % snapshot_every == 0:

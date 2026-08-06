@@ -67,10 +67,12 @@ def evaluate(cfg, row, now, peak):
         breaches['stale'] = f'snapshot is {age:.0f}s old'
     if row.get('mm_rate') is not None and row['mm_rate'] > cfg['mm_rate_max']:
         breaches['mmr'] = f"mm_rate {row['mm_rate']:.4f} > {cfg['mm_rate_max']}"
-    if row['equity'] < cfg['equity_min']:
+    if row['equity'] is None:
+        breaches['equity_unknown'] = 'the fleet could not read equity'
+    elif row['equity'] < cfg['equity_min']:
         breaches['equity'] = f"equity {row['equity']:.0f} < {cfg['equity_min']:.0f}"
     dd_max = cfg.get('equity_drawdown_max')
-    if dd_max and peak:
+    if dd_max and peak and row['equity'] is not None:
         dd = (peak - row['equity']) / peak
         if dd > dd_max:
             breaches['drawdown'] = f'{dd:.1%} below the peak'

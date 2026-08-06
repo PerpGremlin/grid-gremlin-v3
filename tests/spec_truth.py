@@ -85,7 +85,9 @@ def spec_V1_positions_are_one_shape_with_every_key():
 
 def spec_V1_wallet_is_one_shape_even_empty():
     w = read_wallet({'list': []})
-    assert w['equity'] == 0.0 and w['coins'] == {}
+    # E8/E9: a hollow payload is UNKNOWN equity, never zero — zero fires
+    # every account_equity stop irreversibly.
+    assert w['equity'] is None and w['coins'] == {}
     assert 'mm_rate' in w and 'maint_margin' in w      # the empty-account keys
 
 

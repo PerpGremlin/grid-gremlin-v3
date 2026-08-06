@@ -26,6 +26,7 @@ class TelegramNotifier(Notifier):
     the terminal is the audit trail, the phone is the alert channel."""
 
     MIN_INTERVAL = 3.0
+    HARD_LIMIT = 3900        # Telegram rejects > 4096; keep headroom
 
     def __init__(self, token, chat_id, ship_orders=False, transport=None,
                  clock=None, sink=None):
@@ -64,12 +65,28 @@ class TelegramNotifier(Notifier):
         now = self._clock()
         if not force and now - self._last_send < self.MIN_INTERVAL:
             return
+        payload = '\n'.join(self._buffer)
+        if len(payload) > self.HARD_LIMIT:
+            # the venue rejects oversize payloads outright — an unbounded
+            # buffer would then fail forever, silently losing every later
+            # page including kills. Send the NEWEST, say what was dropped.
+            keep, size = [], 0
+            for line in reversed(self._buffer):
+                if size + len(line) + 1 > self.HARD_LIMIT - 80:
+                    break
+                keep.append(line)
+                size += len(line) + 1
+            dropped = len(self._buffer) - len(keep)
+            payload = ('\n'.join(reversed(keep))
+                       + f'\n[{dropped} earlier line(s) dropped — see the log]')
         try:
-            self._transport('\n'.join(self._buffer))
+            self._transport(payload)
             self._buffer = []
             self._last_send = now
         except OSError:
-            pass                    # keep buffering; the terminal already has it
+            if len(payload) >= self.HARD_LIMIT - 200 or len(self._buffer) > 200:
+                self._buffer = []   # never wedge the channel on one bad payload
+            self._last_send = now   # and respect the interval before retrying
 
     def close(self):
         self._maybe_flush(force=True)

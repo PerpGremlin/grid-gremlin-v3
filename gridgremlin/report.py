@@ -269,12 +269,13 @@ def main(argv):
            for k, b in books.items() if isinstance(k, str)):
         print("* the window opened mid-round: that bot's realized and "
               "remainder are partial — widen --hours for the whole story")
-    owned = [b for k, b in books.items() if not isinstance(k, tuple)]
+    owned = [b for k, b in books.items()
+             if not isinstance(k, tuple) and not b.get('inverse')]
     # (unowned tuple keys excluded above)
     if owned:
         realized = sum(b['realized'] for b in owned)
         fees = sum(b['fees'] for b in owned)
-        print(f"{'TOTAL (owned)':<18}{sum(b['fills'] for b in owned):>6}"
+        print(f"{'TOTAL (quote)':<18}{sum(b['fills'] for b in owned):>6}"
               f'{_n(realized):>12}{_n(fees):>10}{"":>20}{"":>12}'
               f'{_n(realized - fees):>12}')
     print()

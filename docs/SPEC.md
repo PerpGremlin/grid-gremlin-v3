@@ -34,6 +34,12 @@ eventually pin (T1).
   watchdog's staleness page. *(two overnight TLS resets killed the HL unit,
   2026-08-05)*
 - **E8** Unknown is not flat: a failed startup read refuses to trade. *(nautilus TAKE)*
+- **E9** A DEGRADED answer is not a fact: an empty positions list and a genuinely
+  flat position are indistinguishable, and a hollow wallet payload is unknown equity,
+  never zero. No irreversible action (kill, tombstone, cancel-all, stop-fire) may be
+  taken on a single such read — flat is confirmed across consecutive reads, and
+  unknown equity fires nothing. *(audit 2026-08-06, demonstrated: one empty read
+  killed a holding grid and abandoned its position)*
 
 ## A — contract maths (the adapter seam)
 
@@ -155,19 +161,26 @@ eventually pin (T1).
 - **M10** A round's exit may be TRANCHED (D23): shares of one position at ascending
   targets, summing to one, every price re-anchored from the average as fills deepen —
   venue-hosted partial TPs where the venue hosts them, several D21 resting exits
-  where it does not. A tranche the mark has PASSED is done — never re-placed below
-  mark (the venue refuses those, correctly); the remaining shares renormalise over
+  where it does not. A tranche the mark has PASSED is done — 'passed' measured against the
+  best mark the ROUND has seen, so a fired tranche never resurrects when price
+  retreats (audit 2026-08-06) — never re-placed below mark (the venue refuses those, correctly); the remaining shares renormalise over
   what is still held, and with every target met the remainder closes marketable at
   the deepest target, or better. The same law as M3, split into shares. *(the ADA
   re-anchor warns, 2026-08-05)*
 - **M11** Trailing rides the venue or does not exist: set once per round from the
   average, the venue moves it from there; refused where the venue cannot host it.
   *(D23)*
+- **M14** A round that ended by liquidation, ADL, or an outside hand is NOT a
+  completed round: the venue's own account of the closing fill decides, and anything
+  but our own exit stands the bot down instead of re-entering. Silence from the venue
+  is never evidence. *(audit 2026-08-06: `repeat` walked straight back into what had
+  just liquidated it)*
 - **M12** Reinvest is a toggle (D26): on, the round's sizes scale by
   1 + realized-net/capital over the last 30 days of the bot's own venue fills
   (bounded — an epoch-0 history pull was ~3,000 requests, the audit's H1; the
-  window is stated in the event), restart-proof by derivation — floored at 0 (losses shrink, never grow) and CAPPED at
-  1.2, the watchdog ceiling's own headroom (F2); beyond +20% the owner raises
+  window is stated in the event), restart-proof by derivation — floored at 0 — and zero is a REAL factor that refuses the
+  next round, never a falsy 'unset' that re-enters at full size (audit
+  2026-08-06) — and CAPPED at 1.2, the watchdog ceiling's own headroom (F2); beyond +20% the owner raises
   `capital` in config, ceiling reviewed together. Grids reinvest only by that
   manual path; the key refuses on a grid, naming it.
 - **M13** The round cooldown anchors to the VENUE's timestamp of the TP fill, never
@@ -324,6 +337,10 @@ eventually pin (T1).
   module.
 - **R5** "Grid profit" is realized minus fees (D8); "total P&L" adds mark-to-average
   on the open remainder; an unknown mark yields no number, never a guess.
+- **R8** A forced close is a fill: liquidation (`BustTrade`) and auto-deleveraging
+  (`AdlTrade`) move the position and realise the loss, so they enter the ledger like
+  any other — funding and settlement rows still do not. *(audit 2026-08-06: the
+  execType filter hid liquidations from both the P&L and reinvest sizing)*
 - **R7** A fill the VENUE created to close a position (hosted TP/SL, trailing,
   liquidation) carries no link — the venue's own labels say what it is, and I2 says
   exactly one bot owns (market, symbol, side), so it attributes to the bot whose
