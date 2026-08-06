@@ -43,6 +43,8 @@ def new_book():
             'rounds': 0,           # flat crossings (a martingale's rounds)
             'round_pnl_sum': 0.0,  # realized per completed round, summed
             'so_fills': 0,         # entry fills at rung >= 1 (safety orders)
+            'same_rung': 0,        # R9: exits filled at a price we BOUGHT at
+            '_entry_px': set(),    # prices this book has entered at
             'max_depth': 0,        # deepest safety rung ever reached
             '_round_realized0': 0.0, '_round_depth': 0}
 
@@ -85,6 +87,14 @@ def apply_fill(book, side, price, qty, fee, inverse=False, rung=None,
                                       - book['_round_realized0'])
             book['_round_realized0'] = book['realized']
             book['_round_depth'] = 0
+    # R9: the zero-spread signature, measured without needing a basis — an
+    # exit that fills at a price this book ENTERED at earns nothing and pays
+    # two fees. Unambiguous, and immune to a truncated window's bad average.
+    entering = (abs(pos) < EPS or (pos > 0) == (signed > 0))
+    if entering:
+        book['_entry_px'].add(round(price, 10))
+    elif round(price, 10) in book['_entry_px']:
+        book['same_rung'] += 1
     book['fees'] += fee
     book['fills'] += 1
     book['bought' if side == 'buy' else 'sold'] += qty
@@ -287,12 +297,16 @@ def main(argv):
             continue
         if strat_of.get(botid) == 'martingale':
             avg = (b['round_pnl_sum'] / b['rounds']) if b['rounds'] else None
+            wash = (f"  <- {b['same_rung']} SAME-RUNG exit(s) (R9)"
+                    if b['same_rung'] else '')
             print(f"{botid:<18}{'—':>7}{'—':>10}{b['rounds']:>8}"
-                  f"{_n(avg):>11}{b['so_fills']:>10}{b['max_depth']:>11}")
+                  f"{_n(avg):>11}{b['so_fills']:>10}{b['max_depth']:>11}{wash}")
         else:
             per = (b['realized'] / b['trips']) if b['trips'] else None
+            wash = (f"  <- {b['same_rung']} SAME-RUNG exit(s) (R9)"
+                    if b['same_rung'] else '')
             print(f"{botid:<18}{b['trips']:>7}{_n(per):>10}"
-                  f"{'—':>8}{'—':>11}{'—':>10}{'—':>11}")
+                  f"{'—':>8}{'—':>11}{'—':>10}{'—':>11}{wash}")
     return 0
 
 
