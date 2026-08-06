@@ -260,7 +260,11 @@ money table, the **activity layer** (R6): grids show round **trips** and
 profit-per-trip (losses counted — underwater churn is visible); martingales
 show completed **rounds**, average realized per round, **safety orders used**,
 and the **max depth** ever reached — the martingale's true risk gauge. All
-derived from the same venue fills; nothing is counted in memory.
+derived from the same venue fills; nothing is counted in memory. Fills the
+venue itself created to close a position (a hosted TP, a trailing stop, a
+liquidation) carry no link id, so they are attributed by what they closed
+(R7); a `--hours` window that opens mid-round prints `pre-window*` instead of
+a phantom position, and says so.
 
 ## 10. Backtesting
 

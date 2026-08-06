@@ -179,9 +179,21 @@ def read_fills(client, category, symbol, start_ms, end_ms):
                     # spot buys pay fees in the RECEIVED base coin —
                     # quote-normalise at the fill price (the audit's M2)
                     fee *= _f(e.get('execPrice'), 0.0)
+                # R7: the venue CREATES some fills itself (hosted TP/SL,
+                # trailing, liquidation) — they carry no link, so the venue's
+                # own labels are the attribution evidence
+                created = str(e.get('createType') or '')
+                stop_kind = str(e.get('stopOrderType') or '')
+                closed = _f(e.get('closedSize'), 0.0)
                 fills.append({'exec_id': eid,
                               'time_ms': int(e.get('execTime') or 0),
                               'symbol': e.get('symbol'),
+                              'market_type': category,
+                              'venue_closed': bool(
+                                  closed > 0 and (stop_kind or
+                                                  created.startswith('CreateBy'))
+                                  and created != 'CreateByUser'),
+                              'venue_kind': stop_kind or created,
                               'side': 'buy' if e.get('side') == 'Buy'
                               else 'sell',
                               'price': _f(e.get('execPrice')),

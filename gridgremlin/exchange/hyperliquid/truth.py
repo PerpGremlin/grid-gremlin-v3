@@ -139,6 +139,12 @@ def read_fills(raw, coins):
         out.append({'exec_id': str(f.get('tid')),
                     'time_ms': int(f.get('time') or 0),
                     'symbol': f.get('coin'),
+                    'market_type': 'linear',
+                    # HL's round exits are OUR resting orders (D21) and carry
+                    # cloids; only a venue liquidation would be venue-created
+                    'venue_closed': str(f.get('liquidation') or '') not in
+                    ('', 'None', 'False'),
+                    'venue_kind': 'liquidation' if f.get('liquidation') else '',
                     'side': 'buy' if f.get('side') == 'B' else 'sell',
                     'price': _f(f.get('px')),
                     'qty': _f(f.get('sz'), 0.0),
