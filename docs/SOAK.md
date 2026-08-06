@@ -45,5 +45,17 @@ counts (amends/cancels/skips = churn) · the watchdog record (breaches, kills).
    martingale. Metric: tranche fill quality (both halves?), trailing
    interference, reinvest factor per round; clock: 10 completed rounds.
 
+## Calls made
+
+- **2026-08-06 — spot economics (experiment 4).** The LTC and ADA spot grids
+  ran net negative across ~40 round trips. The cause was NOT fee-vs-spacing as
+  first suspected: measurement showed buys and sells filling at the SAME price.
+  A basis-less venue left the exit floor with nothing to clear (G15). Fixed at
+  the root; the spot clocks restart from the fix.
+- **2026-08-06 — the martingale trail (experiment 9).** 30 rounds averaged a
+  small loss because the 0.8% trail was tighter than the +1% first tranche, so
+  rounds closed on the trail before any target could fill. M11 now arms the
+  trail only after tranche one. Clock restarts.
+
 Anything measured that this file doesn't list gets added here first — the
 doctrine is the experiment registry.

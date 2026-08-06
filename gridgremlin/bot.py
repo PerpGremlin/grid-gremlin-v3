@@ -61,6 +61,7 @@ class Bot:
         self._history_capped_warned = False
         self._flat_streak = 0          # E9: confirmations of 'flat'
         self._round_hwm = None         # M10: best mark seen this round
+        self._basis_cache = None       # G15: (held, basis) from fills
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
@@ -245,6 +246,36 @@ class Bot:
         return [f for f in fills
                 if rung_of(f['link_id'], self.botid) is not None]
 
+    def _derive_basis(self, held):
+        """G15: a venue that reports no average entry (spot: the position IS
+        a wallet balance) leaves the exit floor with nothing to clear, so
+        exits may rest at the very price the inventory was bought at — the
+        grid churns at zero spread and pays fees both ways (measured live
+        2026-08-06: 17 LTC round trips, every buy and sell at one price).
+        The venue still knows: its own fill history reconstructs the cost."""
+        if not held or self.adapter.reports_avg_entry:
+            return None
+        cached = self._basis_cache
+        if cached and abs(cached[0] - held) < 1e-12:
+            return cached[1]
+        try:
+            fills = self._own_fills()
+        except (VenueError, OSError):
+            return cached[1] if cached else None
+        if not fills:
+            return None
+        from .report import apply_fill, new_book
+        book = new_book()
+        for f in sorted(fills, key=lambda f: f['time_ms']):
+            apply_fill(book, f['side'], f['price'], f['qty'], f['fee'])
+        basis = book['avg_cost'] if abs(book['position']) > 1e-12 else None
+        self._basis_cache = (held, basis)
+        if basis:
+            self.notify.event('net', self.botid,
+                              f'basis derived from venue fills: {basis:.10g} '
+                              '(this venue reports none — G15)')
+        return basis
+
     def _how_round_ended(self):
         """M14: read the venue's own account of the closing fill — our exit
         (link or hosted TP), a liquidation, or an outside hand. None means
@@ -423,11 +454,14 @@ class Bot:
             self.notify.event('tp', self.botid,
                               f'{placed} tranche exit(s) resting')
 
-    def _maintain_trailing(self, truth, basis, held, idx):
+    def _maintain_trailing(self, truth, basis, held, idx, armed=True):
         """D23: trailing rides the venue or does not exist. Set once per
-        round; the venue moves it from there."""
+        round; the venue moves it from there. M11: with tranches, it arms
+        only AFTER the first target fills — a trail tighter than the first
+        tranche closes the round before it can ever take profit (measured
+        live 2026-08-06: 30 rounds averaging a small loss)."""
         pct = self.cfg.get('trailing_stop_pct')
-        if not pct or not held or basis is None:
+        if not pct or not held or basis is None or not armed:
             return
         if truth['positions'].get(idx, {}).get('trailing_stop'):
             return
@@ -567,10 +601,12 @@ class Bot:
 
         # holding: the round is never without a venue-resting exit
         # (M3/D21/D23 — tranches are the same law, split into shares)
-        self._maintain_trailing(truth, basis, held, idx)
         hosted = getattr(self.client, 'hosts_position_tp', True)
         if self.cfg.get('take_profit_tranches'):
             targets = self._round_targets(basis, held, truth['mark'])
+            # M11: a tranche has fired iff fewer targets remain than configured
+            fired = len(targets) < len(self.cfg['take_profit_tranches'])
+            self._maintain_trailing(truth, basis, held, idx, armed=fired)
             try:
                 if not targets:
                     self._close_remainder_at_best(held, basis)
@@ -582,6 +618,7 @@ class Bot:
             except VenueError as e:
                 self.notify.event('warn', self.botid, f'tp: {e}')
             return None
+        self._maintain_trailing(truth, basis, held, idx)
         targets = self._round_targets(basis, held)
         target = targets[0][0]
         tp_order = None

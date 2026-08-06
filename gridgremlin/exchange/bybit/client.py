@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 
 from ..errors import VenueError
+from ..truth import _f
 
 BASE_URLS = {'demo': 'https://api-demo.bybit.com',
              'testnet': 'https://api-testnet.bybit.com',
@@ -132,6 +133,15 @@ class Client:
         if cursor:
             params['cursor'] = cursor
         return self.get('/v5/order/realtime', params, signed=True)
+
+    def fee_rates(self, category, symbol):
+        """G16: ask the venue what it CHARGES — a grid whose rung spacing
+        cannot clear the round trip loses on every trip by construction."""
+        r = self.get('/v5/account/fee-rate',
+                     {'category': category, 'symbol': symbol}, signed=True)
+        row = (r.get('list') or [{}])[0]
+        return {'maker': _f(row.get('makerFeeRate'), 0.0),
+                'taker': _f(row.get('takerFeeRate'), 0.0)}
 
     def executions(self, category, symbol, limit=50):
         return self.get('/v5/execution/list',
