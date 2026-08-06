@@ -198,18 +198,25 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
             # churns forever, silently. It needs LIVE quotes, so it lands
             # here — stated loudly, not refused on a transient spread.
             try:
-                from .ladder import grid_rungs as _gr, spacing_clears_guard
+                from .ladder import (SPACING_GUARD_MULTIPLE,
+                                     grid_rungs as _gr,
+                                     spacing_clears_guard)
                 t = client.read_symbol_truth(
                     cfg['market_type'], cfg['symbol'],
                     spec['funding_interval_minutes'])
                 ok, gap, guard = spacing_clears_guard(
                     _gr(cfg, adapter), t['bid'], t['ask'])
-                if not ok:
+                # the guard scales with the LIVE spread, so a grid sitting
+                # within a few percent of the threshold flips either way
+                # between restarts — warn on a real shortfall, not on noise
+                if not ok and gap < 0.95 * SPACING_GUARD_MULTIPLE * guard:
                     _vn(notifier, venue).event(
                         'warn', cfg['symbol'],
                         f'rung gap {gap:.10g} sits inside the cross guard '
-                        f'({guard:.10g}) — nearest rungs will be dropped '
-                        'every cycle; widen the range or cut rungs (B8)')
+                        f'({guard:.10g}, needs '
+                        f'{SPACING_GUARD_MULTIPLE * guard:.10g}) — nearest '
+                        'rungs will be dropped; widen the range or cut '
+                        'rungs (B8)')
             except (VenueError, OSError, KeyError, TypeError):
                 pass                    # a quote we cannot read is not a verdict
         if (cfg.get('spot_borrow')
