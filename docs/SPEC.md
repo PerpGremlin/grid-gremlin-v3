@@ -324,6 +324,12 @@ eventually pin (T1).
   module.
 - **R5** "Grid profit" is realized minus fees (D8); "total P&L" adds mark-to-average
   on the open remainder; an unknown mark yields no number, never a guess.
+- **R7** A fill the VENUE created to close a position (hosted TP/SL, trailing,
+  liquidation) carries no link — the venue's own labels say what it is, and I2 says
+  exactly one bot owns (market, symbol, side), so it attributes to the bot whose
+  exits sit on that side: evidence, not inference. A time window that opens
+  mid-round declares itself rather than printing the phantom remainder.
+  *(the DOGE round that read realized 0.00 with a phantom short, 2026-08-06)*
 - **R6** The activity layer derives from the SAME fills, no new state: every
   realisation is a trip (counted at a loss too — underwater churn is visible), a
   flat crossing closes a round and banks its realized, an entry fill at rung ≥ 1 is

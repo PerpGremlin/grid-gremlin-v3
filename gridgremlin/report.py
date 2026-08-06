@@ -24,6 +24,17 @@ def owner_of(link_id, botids):
     return None
 
 
+def closer_of(fill, closers):
+    """R7: a fill the VENUE created to close a position (hosted TP/SL,
+    trailing, liquidation) carries no link — the venue says what it is, and
+    I2 says exactly one bot owns (market, symbol, side), so the fill belongs
+    to the bot whose exits sit on that side. Evidence, not inference."""
+    if not fill.get('venue_closed'):
+        return None
+    return closers.get((fill.get('market_type'), fill['symbol'],
+                        fill['side']))
+
+
 def new_book():
     return {'fills': 0, 'bought': 0.0, 'sold': 0.0, 'realized': 0.0,
             'fees': 0.0, 'position': 0.0, 'avg_cost': 0.0, 'inverse': False,
@@ -80,13 +91,16 @@ def apply_fill(book, side, price, qty, fee, inverse=False, rung=None,
     return book
 
 
-def ledger(fills, botids, inverse_ids=(), entry_sides=None):
+def ledger(fills, botids, inverse_ids=(), entry_sides=None, closers=None):
     """R1/R3: time-ordered fills -> books keyed by botid, or by
     ('unowned', symbol) — external activity is reported, never dropped.
-    R6: rung and entry side ride along so the activity layer can count."""
+    R6: rung and entry side ride along so the activity layer can count.
+    R7: venue-created closes attribute by the position they closed."""
     books, entry_sides = {}, entry_sides or {}
+    closers = closers or {}
     for f in sorted(fills, key=lambda f: f['time_ms']):
-        key = owner_of(f['link_id'], botids) or ('unowned', f['symbol'])
+        key = (owner_of(f['link_id'], botids) or closer_of(f, closers)
+               or ('unowned', f['symbol']))
         rung = rung_of(f['link_id'], key) if isinstance(key, str) else None
         apply_fill(books.setdefault(key, new_book()),
                    f['side'], f['price'], f['qty'], f['fee'],
@@ -165,14 +179,26 @@ def _n(v, nd=2):
     return '—' if v is None else f'{v:,.{nd}f}'
 
 
-def _row(name, book, mark):
+def window_truncated(book, side):
+    """R7: a window that opens MID-round sees the close but not the open, so
+    the ledger's remainder contradicts the bot's own direction. Say so —
+    never print a phantom position as if it were real."""
+    if side is None or abs(book['position']) < EPS:
+        return False
+    return (book['position'] < 0) if side == 'long' else (book['position'] > 0)
+
+
+def _row(name, book, mark, side=None):
     inv = book.get('inverse')
     scale = (mark if inv and mark is not None else 1.0)
     unreal = unreal_pnl(book, mark)
     if inv and mark is None:
         unreal = None
+    cut = window_truncated(book, side)
     open_at = ('flat' if abs(book['position']) < EPS
                else f"{book['position']:.10g}@{book['avg_cost']:,.6g}")
+    if cut:
+        open_at = 'pre-window*'
     def usd(v):
         return None if v is None else v * scale
     return (f"{name:<18}{book['fills']:>6}"
@@ -195,13 +221,16 @@ def main(argv):
     now_ms = int(time.time() * 1000)
     since_ms = now_ms - int(hours * 3600 * 1000)
     by_venue, key_of, inverse_ids = {}, {}, set()
-    strat_of, entry_sides = {}, {}
+    strat_of, entry_sides, closers, side_of = {}, {}, {}, {}
     for cfg in fleet['bots']:
         by_venue.setdefault(cfg['venue'], []).append(cfg)
         botid = make_botid(cfg['market_type'], cfg['symbol'], cfg['side'])
         key_of[botid] = (cfg['market_type'], cfg['symbol'])
         strat_of[botid] = cfg.get('strategy', 'grid')
         entry_sides[botid] = 'buy' if cfg['side'] == 'long' else 'sell'
+        side_of[botid] = cfg['side']
+        exit_side = 'sell' if cfg['side'] == 'long' else 'buy'
+        closers[(cfg['market_type'], cfg['symbol'], exit_side)] = botid
         if cfg['market_type'] == 'inverse':
             inverse_ids.add(botid)
             inverse_ids.add(('unowned', cfg['symbol']))
@@ -217,7 +246,7 @@ def main(argv):
             continue
         fills += got
         marks.update(m)
-    books = ledger(fills, botids, inverse_ids, entry_sides)
+    books = ledger(fills, botids, inverse_ids, entry_sides, closers)
     print(f'last {hours:g}h · grid profit = realized − fees (D8) · '
           f'total adds mark-to-average on the open remainder')
     print(f"{'bot':<18}{'fills':>6}{'realized':>12}{'fees':>10}"
@@ -228,13 +257,18 @@ def main(argv):
             print(f'{botid:<18}{0:>6}{"—":>12}{"—":>10}{"—":>20}'
                   f'{"—":>12}{"—":>12}')
             continue
-        print(_row(botid, book, marks.get(key_of[botid])))
+        print(_row(botid, book, marks.get(key_of[botid]),
+                   side=side_of.get(botid)))
     for key in sorted(k for k in books if isinstance(k, tuple)
                       and k[0] == 'unowned'):
         _, symbol = key
         mark = next((m for (cat, sym), m in marks.items()
                      if sym == symbol and m is not None), None)
         print(_row(f'unowned {symbol}', books[key], mark))
+    if any(window_truncated(b, side_of.get(k))
+           for k, b in books.items() if isinstance(k, str)):
+        print("* the window opened mid-round: that bot's realized and "
+              "remainder are partial — widen --hours for the whole story")
     owned = [b for k, b in books.items() if not isinstance(k, tuple)]
     # (unowned tuple keys excluded above)
     if owned:

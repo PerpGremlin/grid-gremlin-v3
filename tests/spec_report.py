@@ -256,3 +256,48 @@ def spec_R6_the_ledger_threads_rungs_from_links():
     b = ledger(fills, ['linBTCUSDTl'],
                entry_sides={'linBTCUSDTl': 'buy'})['linBTCUSDTl']
     assert b['so_fills'] == 1 and b['max_depth'] == 2 and b['rounds'] == 1
+
+
+# --- R7: venue-created closes, and honest windows ---------------------------
+
+def spec_R7_a_hosted_TP_fill_belongs_to_the_bot_it_closed():
+    """Bybit's position-TP fills carry NO link (found live 2026-08-06: a
+    completed martingale round showed realized 0.00 and a phantom short)."""
+    from gridgremlin.report import closer_of
+    closers = {('linear', 'DOGEUSDT', 'sell'): 'linDOGEUSDTl'}
+    tp = dict(_fill(9, 'sell', 0.07049, 14330, 0.55, link='',
+                    symbol='DOGEUSDT'),
+              market_type='linear', venue_closed=True,
+              venue_kind='TakeProfit')
+    assert closer_of(tp, closers) == 'linDOGEUSDTl'
+    manual = dict(tp, venue_closed=False)          # an operator's own sell
+    assert closer_of(manual, closers) is None      # stays unowned (R3)
+    wrong_side = dict(tp, side='buy')
+    assert closer_of(wrong_side, closers) is None  # never guesses a side
+
+
+def spec_R7_the_ledger_credits_the_round_to_the_bot():
+    fills = [_fill(1, 'buy', 0.07, 7000, 0.1, link='linDOGEUSDTl-0-a',
+                   symbol='DOGEUSDT'),
+             dict(_fill(2, 'sell', 0.0705, 7000, 0.1, link='',
+                        symbol='DOGEUSDT'),
+                  market_type='linear', venue_closed=True)]
+    for f in fills:
+        f.setdefault('market_type', 'linear')
+        f.setdefault('venue_closed', False)
+    books = ledger(fills, ['linDOGEUSDTl'],
+                   entry_sides={'linDOGEUSDTl': 'buy'},
+                   closers={('linear', 'DOGEUSDT', 'sell'): 'linDOGEUSDTl'})
+    b = books['linDOGEUSDTl']
+    assert b['rounds'] == 1 and abs(b['realized'] - 3.5) < 1e-9
+    assert ('unowned', 'DOGEUSDT') not in books
+
+
+def spec_R7_a_mid_round_window_declares_itself():
+    from gridgremlin.report import window_truncated
+    b = new_book()
+    apply_fill(b, 'sell', 0.0705, 14330, 0.0)      # close seen, open missed
+    assert window_truncated(b, 'long') is True     # a long cannot be short
+    assert window_truncated(b, 'short') is False   # a short legitimately is
+    flat = new_book()
+    assert window_truncated(flat, 'long') is False
