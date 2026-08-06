@@ -496,3 +496,28 @@ def spec_M11_trailing_waits_for_the_first_tranche():
     venue.position = dict(venue.position, size='0.008')
     bot.cycle()
     assert venue.trail_calls                      # now it rides
+
+
+def spec_M10_a_tranche_must_clear_the_mark_by_the_guard_band():
+    """Between our read and the venue's write the mark moves; a target that
+    merely exceeds mark gets refused ('should be higher than base_price').
+    B3's law applied to the hosted TP (live refusal, 2026-08-06)."""
+    from gridgremlin.ladder import guard_band
+    venue, lines = FakeVenue(), []
+    bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.cycle()
+    guard = guard_band(venue.mark - 0.5, venue.mark + 0.5)
+    basis = 60000.0
+    # a target a hair above mark is NOT placeable; the same target with room is
+    near = bot._round_targets(basis, 0.016, mark=60599.0, guard=guard)
+    assert all(p > 60599.0 + guard for p, _ in near)
+    assert not any(abs(p - 60600.0) < 1e-9 for p, _ in near)   # t1 excluded
+    fresh = Bot(_tranche_cfg(), ADAPTER, FakeVenue(),
+                Notifier(sink=lines.append), gen_seed=2)
+    far = fresh._round_targets(basis, 0.016, mark=60000.0, guard=guard)
+    assert any(abs(p - 60600.0) < 1e-9 for p, _ in far)        # room: t1 fine
+    # and the high-water still persists across calls (M10): once passed, gone
+    bot._round_targets(basis, 0.016, mark=60599.0, guard=guard)
+    again = bot._round_targets(basis, 0.016, mark=60000.0, guard=guard)
+    assert not any(abs(p - 60600.0) < 1e-9 for p, _ in again)

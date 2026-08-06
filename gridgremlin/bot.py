@@ -331,7 +331,7 @@ class Bot:
                 else 0.0
         return min(max(0.0, 1.0 + net / self.cfg['capital']), 1.2)
 
-    def _round_targets(self, basis, held, mark=None):
+    def _round_targets(self, basis, held, mark=None, guard=0.0):
         """M4/D23: targets from average entry; tranches share ONE position.
         A tranche the mark has already PASSED is done (filled, or owed at
         better-than-target) — it is filtered out and the remaining shares
@@ -354,8 +354,13 @@ class Bot:
             gauge = mark if hwm is None else (max(hwm, mark) if long
                                               else min(hwm, mark))
             self._round_hwm = gauge
+            # B3's law, applied to the hosted TP: a target must CLEAR the
+            # mark by the guard band, not merely exceed it. Between our read
+            # and the venue's write the mark moves, and a target inside that
+            # margin is refused ("should be higher than base_price") — the
+            # same race the cross guard already solves for resting limits.
             priced = [(p, sh) for p, sh in priced
-                      if (p > gauge if long else p < gauge)]
+                      if (p > gauge + guard if long else p < gauge - guard)]
         if not priced:
             return []
         total = sum(sh for _, sh in priced)
@@ -603,7 +608,9 @@ class Bot:
         # (M3/D21/D23 — tranches are the same law, split into shares)
         hosted = getattr(self.client, 'hosts_position_tp', True)
         if self.cfg.get('take_profit_tranches'):
-            targets = self._round_targets(basis, held, truth['mark'])
+            targets = self._round_targets(
+                basis, held, truth['mark'],
+                guard=guard_band(truth['bid'], truth['ask']))
             # M11: a tranche has fired iff fewer targets remain than configured
             fired = len(targets) < len(self.cfg['take_profit_tranches'])
             self._maintain_trailing(truth, basis, held, idx, armed=fired)
