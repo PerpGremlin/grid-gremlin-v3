@@ -210,7 +210,7 @@
       "reinvest": true
     },
     {
-      "_note": "classic doubler, one round only",
+      "_note": "classic doubler, now looping (owner 2026-08-06) with a 10-min cooldown so it never re-enters the instant a TP fills",
       "strategy": "martingale",
       "market_type": "linear",
       "symbol": "DOGEUSDT",
@@ -224,7 +224,8 @@
       "deviation_step_multiplier": 1,
       "max_averaging_orders": 3,
       "take_profit_avg_pct": 0.01,
-      "repeat": false
+      "repeat": true,
+      "repeat_cooldown_seconds": 600
     }
   ]
 }
