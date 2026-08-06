@@ -65,6 +65,44 @@ carries the flag, ever** — cloning this repo cannot reach real money by accide
 and arming it is a deliberate two-step act. The promotion checklist (evidence
 gate, key ceremony, cutover) is [docs/PROMOTION.md](docs/PROMOTION.md).
 
+## Before you run this against your own account
+
+- **The shipped configs are not a starting point — they are one test
+  account's sizing.** `configs/fleet.demo.json` commits six figures of demo
+  margin across twelve bots because it exists to stress the engine. Write your
+  own rows from §3/§4 and start with one bot.
+- **Demo/testnet first, and for longer than feels necessary.** Every venue
+  behaviour that has bitten this engine — rate budgets, hosted-TP fills with no
+  link id, an exchange delisting a symbol mid-run, a coin needing a collateral
+  switch — was found by running it, not by reading it.
+- **Read `docs/AUDIT-2026-08-06.md` §ACCEPTED before trusting anything
+  unattended.** Three known limitations are listed there rather than fixed.
+- Real funds need the double gate (see Safety) *and* the checklist in
+  `docs/PROMOTION.md`. Neither is a formality: the audit above found nine HIGH
+  defects in code that had already been soaking for days.
+
+## Found something? (this is the useful part)
+
+Findings are the contribution this project values most, because its whole
+premise is that a green suite is a *claim*, not a proof — the 2026-08-06 audit
+found six specs that asserted the wrong thing, one of which encoded a bug as
+expected behaviour.
+
+A good report, in rough order of usefulness:
+
+1. **A failing spec.** A `spec_*` function in `tests/spec_*.py`, named for the
+   SPEC id it pins, that fails against today's code and passes against the
+   behaviour you think is right. That is the whole argument, and it cannot rot.
+2. **A reproduction** against the fakes in `tests/` (no venue, no keys) —
+   inputs, state, and the wrong outcome.
+3. **A description** naming the file, the line, and the market scenario that
+   triggers it. Still welcome; just slower to act on.
+
+Please do **not** include account figures, keys, hostnames, or venue
+credentials in an issue — redact them the way this repo redacts its own (see
+the hygiene rule in `CLAUDE.md`). If a finding is genuinely sensitive, say so
+without the detail and it can be handled privately.
+
 ## 2. The fleet file
 
 A JSON object (or a bare list of rows, treated as `{"bots": [...]}`):
