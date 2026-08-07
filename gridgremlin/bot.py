@@ -1168,7 +1168,18 @@ class Bot:
         sellable = held and abs(held) > 0 and cfg['strategy'] == 'grid'
         has_exits = any(o['side'] == self._exit_side for o in desired)
         if sellable and not has_exits and not defer_exits:   # S5: warned once
-            if not self._uncovered_warned:
+            # two causes, two names (the old text asserted one cause it
+            # never verified): a sub-minimum partial-fill sliver is routine
+            # and self-resolves in seconds — log-only; a basis beyond the
+            # range is the operator's to resolve — page once.
+            sliver = not self.adapter.meets_minimum(
+                abs(held), truth['mark'] or 0.0)
+            if sliver:
+                self.notify.event('net', self.botid,
+                                  f'holding {abs(held):.10g} — below the '
+                                  'venue minimum, unharvestable until the '
+                                  'fill completes (S5)')
+            elif not self._uncovered_warned:
                 self._uncovered_warned = True
                 self.notify.event('warn', self.botid,
                                   'holding, but nothing harvestable — basis '
