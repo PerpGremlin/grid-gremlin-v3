@@ -85,7 +85,11 @@ class TelegramNotifier(Notifier):
             self._last_send = now
         except OSError:
             if len(payload) >= self.HARD_LIMIT - 200 or len(self._buffer) > 200:
-                self._buffer = []   # never wedge the channel on one bad payload
+                # never wedge the channel on one bad payload — but a kill
+                # page is the one line this channel exists for: it survives
+                # the drop and rides the next flush (audit 2026-08-07 H4)
+                self._buffer = [ln for ln in self._buffer
+                                if 'kill' in ln][-10:]
             self._last_send = now   # and respect the interval before retrying
 
     def close(self):

@@ -303,20 +303,34 @@ def spec_R7_a_mid_round_window_declares_itself():
     assert window_truncated(flat, 'long') is False
 
 
-def spec_R9_an_exit_at_a_price_we_bought_at_is_counted():
-    """The zero-spread signature, measured WITHOUT a basis: an exit filling
-    at a price the book entered at earns nothing and pays two fees. Needs no
-    average, so a truncated window cannot produce a false verdict (the exact
-    live pattern on the spot grids, 2026-08-06)."""
-    wash = new_book()
-    apply_fill(wash, 'buy', 44.27, 3.99, 0.18)
-    apply_fill(wash, 'sell', 44.27, 3.98, 0.18)      # same rung, both ways
-    assert wash['trips'] == 1 and wash['same_rung'] == 1
-    good = new_book()
-    apply_fill(good, 'buy', 44.27, 3.99, 0.18)
-    apply_fill(good, 'sell', 45.30, 3.98, 0.18)      # a real rung apart
-    assert good['trips'] == 1 and good['same_rung'] == 0
-    short = new_book()                                # shorts count too
-    apply_fill(short, 'sell', 100.0, 1.0, 0.0)
-    apply_fill(short, 'buy', 100.0, 1.0, 0.0)         # bought back at entry
-    assert short['same_rung'] == 1
+def spec_R9_zero_spread_is_margin_against_the_cost_it_closes():
+    """An exit inside the fee of its own book's average is churn; an exit
+    that earned the gap is not — even at a price an EARLIER round entered
+    at. The first cut kept a lifetime entry-price set, and since grids
+    reuse a fixed lattice it flagged profitable full-gap trips on two live
+    bots (audit 2026-08-07 H1: the counter's own name was believed)."""
+    from gridgremlin.report import apply_fill, new_book
+    # true zero-spread churn: buy and sell at one price -> flagged
+    churn = new_book()
+    apply_fill(churn, 'buy', 0.1913, 980.0, 0.19)
+    apply_fill(churn, 'sell', 0.1913, 979.0, 0.19)
+    assert churn['same_rung'] == 1
+    # a full-gap SHORT round exiting at a price the PREVIOUS round entered
+    # at: profitable, and never flagged
+    short = new_book()
+    apply_fill(short, 'sell', 1.100, 9.0, 0.01)     # round 1 entry
+    apply_fill(short, 'buy', 1.093, 9.0, 0.01)      # +gap, flat
+    apply_fill(short, 'sell', 1.107, 9.0, 0.01)     # round 2 entry
+    apply_fill(short, 'buy', 1.100, 9.0, 0.01)      # +gap, at R1's entry px
+    assert short['same_rung'] == 0, 'lattice reuse is not churn'
+    # multi-lot averaging: nearest-first exit clearing the fee -> clean
+    avg = new_book()
+    apply_fill(avg, 'sell', 1.100, 9.0, 0.01)
+    apply_fill(avg, 'sell', 1.107, 9.0, 0.01)       # avg 1.1035
+    apply_fill(avg, 'buy', 1.100, 9.0, 0.01)        # +0.32% margin
+    assert avg['same_rung'] == 0
+    # but an exit scraping its own average IS flagged, long or short
+    scrape = new_book()
+    apply_fill(scrape, 'sell', 1.100, 9.0, 0.01)
+    apply_fill(scrape, 'buy', 1.1002, 9.0, 0.01)    # 0.018% — inside fee
+    assert scrape['same_rung'] == 1

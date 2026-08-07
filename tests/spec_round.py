@@ -498,10 +498,12 @@ def spec_M11_trailing_waits_for_the_first_tranche():
     assert venue.trail_calls                      # now it rides
 
 
-def spec_M10_a_tranche_must_clear_the_mark_by_the_guard_band():
-    """Between our read and the venue's write the mark moves; a target that
-    merely exceeds mark gets refused ('should be higher than base_price').
-    B3's law applied to the hosted TP (live refusal, 2026-08-06)."""
+def spec_M10_a_near_miss_defers_the_write_and_never_fires_the_round():
+    """The guard band defers PLACEMENT (a TP written inside the band is
+    refused by the venue) — it must not retire the tranche. The first cut
+    folded the guard into "passed": a ~5bps near-miss cancelled t1's TP
+    and armed the trail with zero profit taken, M11's bug reborn (audit
+    2026-08-07 H4). Retirement is strict: the mark must CLEAR the target."""
     from gridgremlin.ladder import guard_band
     venue, lines = FakeVenue(), []
     bot = Bot(_tranche_cfg(), ADAPTER, venue, Notifier(sink=lines.append),
@@ -509,18 +511,13 @@ def spec_M10_a_tranche_must_clear_the_mark_by_the_guard_band():
     bot.cycle()
     guard = guard_band(venue.mark - 0.5, venue.mark + 0.5)
     basis = 60000.0
-    # a target a hair above mark is NOT placeable; the same target with room is
-    near = bot._round_targets(basis, 0.016, mark=60599.0, guard=guard)
-    assert all(p > 60599.0 + guard for p, _ in near)
-    assert not any(abs(p - 60600.0) < 1e-9 for p, _ in near)   # t1 excluded
-    fresh = Bot(_tranche_cfg(), ADAPTER, FakeVenue(),
-                Notifier(sink=lines.append), gen_seed=2)
-    far = fresh._round_targets(basis, 0.016, mark=60000.0, guard=guard)
-    assert any(abs(p - 60600.0) < 1e-9 for p, _ in far)        # room: t1 fine
-    # and the high-water still persists across calls (M10): once passed, gone
-    bot._round_targets(basis, 0.016, mark=60599.0, guard=guard)
-    again = bot._round_targets(basis, 0.016, mark=60000.0, guard=guard)
-    assert not any(abs(p - 60600.0) < 1e-9 for p, _ in again)
+    # mark a hair BELOW t1 (inside the band): t1 is NOT passed — it stays
+    near = bot._round_targets(basis, 0.016, mark=60600.0 - guard / 2)
+    assert any(abs(p - 60600.0) < 1e-9 for p, _ in near), near
+    # and once the mark genuinely clears it, it retires — monotonically
+    bot._round_targets(basis, 0.016, mark=60601.0)
+    after = bot._round_targets(basis, 0.016, mark=60000.0)
+    assert not any(abs(p - 60600.0) < 1e-9 for p, _ in after)
 
 
 def spec_M3_a_covered_round_does_not_stack_another_exit():
@@ -579,3 +576,50 @@ def spec_M14_a_lagging_close_account_is_awaited_not_judged():
     assert bot.alive, 'stood down on its own hosted take-profit'
     assert 'confirming_close' not in (r or {})
     assert not any('kill' in ln for ln in lines)
+
+
+def spec_M14_silence_never_kills_a_round():
+    """Audit 2026-08-07 H3: three cycles of fills-endpoint failure killed
+    and tombstoned a healthy bot — and on a spuriously-flat read would
+    have cancelled every order around a REAL position. Silence holds the
+    round open; only a venue account of the close judges it."""
+    import tempfile
+    from pathlib import Path as _P
+    from gridgremlin.tombstones import Tombstones
+    from gridgremlin.exchange.errors import VenueError
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    bot.tombs = Tombstones(_P(tempfile.mkdtemp()) / 'tombs.json')
+
+    def raising(mt, sym, a, b):
+        raise VenueError('fills endpoint down', kind='other')
+    venue.fills_history = raising
+    for _ in range(8):
+        bot._last_pos = 0.016
+        bot.cycle()
+    assert bot.alive, 'killed on endpoint silence'
+    assert not bot.tombs.has(bot.botid)
+    assert not any('] kill' in ln for ln in lines)   # the EVENT, not prose
+
+
+def spec_M14_a_liquidation_survives_a_restart():
+    """Audit 2026-08-07 H2 (money): a liquidation while the process was
+    down leaves no tombstone — the fill history is the only witness, and
+    the restarted bot asked nobody before re-entering."""
+    import time as _t
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    now_ms = int(_t.time() * 1000)
+    venue.fills_history = lambda mt, sym, a, b: [
+        {'side': 'buy', 'price': 60000.0, 'qty': 0.016, 'fee': 0.1,
+         'time_ms': now_ms - 600_000, 'link_id': f'{bot.botid}-0-1',
+         'venue_closed': False, 'venue_kind': ''},
+        {'side': 'sell', 'price': 55000.0, 'qty': 0.016, 'fee': 0.1,
+         'time_ms': now_ms - 300_000, 'link_id': '',
+         'venue_closed': True, 'venue_kind': 'liquidation'}]
+    r = bot.cycle()                      # fresh process, flat venue
+    assert r == {'round': 'liquidation'}, r
+    assert not bot.alive
+    assert not any('round 1: base' in ln for ln in lines)

@@ -266,7 +266,10 @@ class Bot:
         try:
             fills = self._own_fills()
         except (VenueError, OSError):
-            return cached[1] if cached else None
+            # a degraded read may serve the cache — but only for the SAME
+            # holding; a cached basis for a different quantity is a guess
+            return (cached[1] if cached
+                    and abs(cached[0] - held) < 1e-12 else None)
         # Walk NEWEST first until the fills cover the holding. Two live
         # failures forbid the obvious all-history average: the fill list
         # lags the wallet by seconds, so right after a buy the average
@@ -277,7 +280,10 @@ class Bot:
         # account cannot explain the holding, there is no basis — refuse.
         entry = self._entry_side.lower()
         want = abs(held)
-        slack = max(self.adapter.min_qty, want * 0.02)   # base-coin fee shave
+        # tolerance covers the base-coin fee shave (~0.1%/fill) plus one
+        # rounding step — NEVER min_qty, which for small holdings let a
+        # 17%-coverage sliver price the whole position (audit 2026-08-07)
+        slack = want * 0.02 + self.adapter.qty_step
         remaining, cost, deficit = want, 0.0, 0.0
         for f in sorted(fills, key=lambda f: f['time_ms'], reverse=True):
             qty = abs(f['qty'])
@@ -342,7 +348,11 @@ class Bot:
                 return 'liquidation'
             if ours or f.get('venue_closed'):
                 return 'exit'
-            return 'an outside close'     # unlinked, and user-created
+            # an unlinked, user-created reduce: an outside hand — but only
+            # when the round is bracketed by a visible entry. With no linked
+            # entry in the window (a round older than the lookback) the fill
+            # cannot be placed inside or outside the round: judge nothing.
+            return 'an outside close' if anchor > 0 else None
         return None                       # no account YET — not evidence
 
     def _own_fills_all(self):
@@ -354,6 +364,27 @@ class Bot:
         now_ms = int(self._now() * 1000)
         return hist(self.cfg['market_type'], self.cfg['symbol'],
                     now_ms - 2 * 86_400_000, now_ms)
+
+    def _round_fills(self):
+        """M12/M13/R8: this bot's round history INCLUDING venue-created
+        closes. A hosted TP or a liquidation carries no link — the link
+        filter alone hid every close from reinvest sizing (a profitable
+        bot's factor drifted DOWN on entry fees; a liquidation's loss was
+        invisible — audit 2026-08-07 H1). On a hedged symbol the exit
+        SIDE disambiguates whose close an unlinked fill is."""
+        linked = self._own_fills()
+        all_fills = self._own_fills_all()
+        if not all_fills:
+            return linked
+        exit_side = self._exit_side.lower()
+        seen = {f['time_ms'] for f in linked}
+        for f in all_fills:
+            if (f['time_ms'] not in seen
+                    and not f.get('link_id')
+                    and str(f.get('side', '')).lower() == exit_side
+                    and (f.get('venue_closed') or f.get('venue_kind'))):
+                linked = linked + [f]
+        return sorted(linked, key=lambda f: f['time_ms'])
 
     def _reinvest_scale(self, fills):
         """M12: 1 + lifetime realized-net / capital, floored at 0, CAPPED at
@@ -403,13 +434,13 @@ class Bot:
             gauge = mark if hwm is None else (max(hwm, mark) if long
                                               else min(hwm, mark))
             self._round_hwm = gauge
-            # B3's law, applied to the hosted TP: a target must CLEAR the
-            # mark by the guard band, not merely exceed it. Between our read
-            # and the venue's write the mark moves, and a target inside that
-            # margin is refused ("should be higher than base_price") — the
-            # same race the cross guard already solves for resting limits.
+            # M10 retires a tranche only when the mark actually CLEARED
+            # it. The guard band is a PLACEMENT deferral, applied where the
+            # order is written (_maintain_partial_tps) — folding it in here
+            # retired near-missed tranches unfilled and armed the trail
+            # with zero profit taken, M11's bug reborn (audit 2026-08-07).
             priced = [(p, sh) for p, sh in priced
-                      if (p > gauge + guard if long else p < gauge - guard)]
+                      if (p > gauge if long else p < gauge)]
         if not priced:
             return []
         total = sum(sh for _, sh in priced)
@@ -464,6 +495,12 @@ class Bot:
         """D23 hosted: tranche TPs live on the venue's conditional book —
         level-triggered, re-anchored whenever the average moves."""
         cfg, adapter = self.cfg, self.adapter
+        long = cfg['side'] == 'long'
+        mark, guard = truth['mark'], guard_band(truth['bid'], truth['ask'])
+
+        def clear(p):     # B3 for the hosted TP: too close to mark right
+            return (mark is None       # now -> defer the WRITE, not the round
+                    or (p > mark + guard if long else p < mark - guard))
         want = {(adapter.fmt_price(p), adapter.fmt_qty(q))
                 for p, q in targets if q > 0}
         have = {}
@@ -485,7 +522,7 @@ class Bot:
         placed = 0
         for p, q in targets:
             key = (adapter.fmt_price(p), adapter.fmt_qty(q))
-            if q <= 0 or key in have:
+            if q <= 0 or key in have or not clear(p):
                 continue
             self.client.set_trading_stop(cfg['market_type'], cfg['symbol'],
                                          idx, take_profit=adapter.fmt_price(p),
@@ -581,10 +618,13 @@ class Bot:
                             f'({self._close_streak}/{FLAT_CONFIRMATIONS}) '
                             'before judging (M14/E9)')
                         return {'confirming_close': self._close_streak}
-                    self._kill(truth,
-                               'round ended with no venue account of the '
-                               'closing fill — standing down; silence is '
-                               'never evidence (M14/D1)')
+                    if self._close_streak == FLAT_CONFIRMATIONS:
+                        self.notify.event(
+                            'warn', self.botid,
+                            'round ended and the venue STILL has no account '
+                            'of the closing fill — holding this round open, '
+                            'not judging; a kill on silence cancels real '
+                            'orders on a maybe (M14/E9, audit 2026-08-07)')
                     return {'round': 'unaccounted'}
                 self._close_streak = 0
                 if how not in ('exit', 'unknowable'):
@@ -605,7 +645,7 @@ class Bot:
                 # then the completion latch clears so none of this re-runs
                 # on the next flat cycle (H4a)
                 if cfg.get('repeat_cooldown_seconds') or cfg.get('reinvest'):
-                    fills = self._own_fills()
+                    fills = self._round_fills()   # H1: closes carry no link
                     cd = cfg.get('repeat_cooldown_seconds') or 0.0
                     if cd and fills:
                         self._cool_until = (max(f['time_ms'] for f in fills)
@@ -645,13 +685,13 @@ class Bot:
             if cd and self._cool_until is None and self._last_pos is None:
                 # restart during a cooldown: re-derive the anchor from the
                 # venue once — a first-ever start has no fills and skips this
-                fills = self._own_fills()
+                fills = self._round_fills()   # H1: closes carry no link
                 self._cool_until = ((max(f['time_ms'] for f in fills)
                                      / 1000.0 + cd) if fills else 0.0)
             if self._cool_until and self._now() < self._cool_until:
                 return {'round': 'cooling'}
             if cfg.get('reinvest') and self._scale is None:
-                self._scale = self._reinvest_scale(self._own_fills())
+                self._scale = self._reinvest_scale(self._round_fills())
             # M12: 0.0 is a REAL factor (capital fully lost), not "unset" —
             # truthiness here re-entered at full size after a total loss.
             scale = (self._scale if (cfg.get('reinvest')
@@ -664,6 +704,15 @@ class Bot:
                         'reinvest: realised losses have consumed the capital '
                         '— refusing to open another round (M12)')
                 return {'round': 'capital_exhausted'}
+            if self._last_pos is None:
+                # M14 across a restart (audit 2026-08-07 H2): a liquidation
+                # while the process was down left no tombstone — the fill
+                # history is the only witness. Ask before re-entering.
+                if self._how_round_ended() == 'liquidation':
+                    self._kill(truth,
+                               'last round ended by liquidation while this '
+                               'process was down — standing down (M14/D1)')
+                    return {'round': 'liquidation'}
             qty = adapter.round_qty(cfg['base_order_size'] * scale
                                     / truth['mark'])
             if qty <= 0 or not adapter.meets_minimum(qty, truth['mark']):
@@ -976,6 +1025,9 @@ class Bot:
         if held:
             self._flat_streak = 0
             self._close_streak = 0
+        else:
+            self._basis_cache = None   # a cached cost describes a holding
+                                       # that no longer exists (H2 2026-08-07)
 
         ref = self._sticky(truth['split_ref'])     # W2: the one anchor
         bid, ask = truth['bid'], truth['ask']
@@ -992,7 +1044,7 @@ class Bot:
                                    and rung_of(o['link_id'], self.botid) == 0)]
         if cfg['strategy'] == 'martingale':
             if cfg.get('reinvest') and self._scale is None:
-                self._scale = self._reinvest_scale(self._own_fills())
+                self._scale = self._reinvest_scale(self._round_fills())
             if self._anchor is None:
                 # M15: a restart mid-round must NOT re-anchor on the average
                 # entry — that deepens every remaining rung and un-suppresses
@@ -1020,6 +1072,11 @@ class Bot:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
                                 resting_exits)
         if defer_exits:
+            # freeze the exit side: place nothing new (the plan priced them
+            # off a basis we do not have) and cancel nothing resting (they
+            # were priced off a basis we DID have — tearing them down on
+            # every fills-lag window cost queue position and left the
+            # holding uncovered, audit 2026-08-07 H5)
             desired = [d for d in desired if d['side'] != self._exit_side]
             self._defer_cycles += 1
             if self._defer_cycles == DEFER_ESCALATE_CYCLES:
@@ -1033,6 +1090,9 @@ class Bot:
             self._defer_cycles = 0
         live = window(desired, ref, cfg['place_within_pct'])          # W1
         to_cancel, _ = diff(desired, orders_view, self.botid)         # full
+        if defer_exits:
+            to_cancel = [o for o in to_cancel
+                         if o['side'] != self._exit_side]
         _, to_create = diff(live, orders_view, self.botid)            # windowed
         amends, cancels, creates = pair_amends(to_cancel, to_create, self.botid)
 
@@ -1048,6 +1108,7 @@ class Bot:
                 if e.kind not in ('gone', 'not_modified'):
                     self.notify.event('warn', self.botid, f'amend: {e}')
 
+        uncancelled = set()
         for order in cancels:                       # E2: cancels before creates
             try:
                 self.client.cancel_order(cfg['market_type'], cfg['symbol'],
@@ -1056,6 +1117,12 @@ class Bot:
                                   f"{order['side']}@{order['price']:.10g}")
             except VenueError as e:
                 if e.kind != 'gone':
+                    # E2 is a CONDITION, not a sequence: the old order still
+                    # rests, so its replacement must not join it — that is
+                    # how two full-size sells shared one wallet (audit
+                    # 2026-08-07 H3). The rung retries whole next cycle.
+                    uncancelled.add((rung_of(order['link_id'], self.botid),
+                                     order['side']))
                     self.notify.event('warn', self.botid, f'cancel: {e}')
 
         placed_now, placed_exit_links, skipped = set(), set(), 0
@@ -1063,6 +1130,9 @@ class Bot:
             creates, skipped = [], len(creates)
         for want in creates:
             key = (want['rung'], want['side'])
+            if key in uncancelled:
+                skipped += 1
+                continue
             if self._cooling(key, now) or self._would_cross(want, bid, ask):
                 self.notify.event('skip', self.botid,
                                   f"{want['side']}@{want['price']:.10g}")
