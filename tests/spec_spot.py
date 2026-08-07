@@ -169,3 +169,22 @@ def spec_G15_a_lagging_fill_list_withholds_exits_not_prices_them_blind():
         f'exit below the TRUE cost of the holding: {sells}'
     # and the basis is the newest covering fill, not an all-history average
     assert any('basis 0.207 ' in ln for ln in lines), lines
+
+
+def spec_G15_defer_freezes_the_exit_side_but_never_tears_it_down():
+    """Audit 2026-08-07 H5: the defer filter fed the cancel diff, so every
+    fills-lag window cancelled correctly-priced RESTING exits and re-placed
+    them seconds later. Deferral means: create nothing, cancel nothing."""
+    venue, lines = FakeSpotVenue(mark=0.1950, base=953.73), []
+    venue.record_fill('buy', 0.1964, 954.68, 'spoADAUSDTl-9-1')
+    bot = _spot_bot(venue, lines)
+    bot.cycle()
+    resting = [o for o in venue.orders if o['side'] == 'Sell']
+    assert resting
+    # wallet moves (a new buy), fills lag: basis unreconstructable
+    venue.base = 1900.0
+    bot._basis_cache = None
+    bot.cycle()
+    still = [o for o in venue.orders if o['side'] == 'Sell']
+    assert still == resting, 'deferral tore down the resting exit ladder'
+    assert not any('cancel' in ln and 'Sell' in ln for ln in lines)
