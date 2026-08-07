@@ -46,8 +46,13 @@ class FakeSpotVenue(FakeVenue):
         return [f for f in self.fill_log if since_ms <= f['time_ms'] <= until_ms]
 
     def record_fill(self, side, price, qty, link_id):
+        # strictly increasing, strictly PAST timestamps — a same-millisecond
+        # tie makes "newest first" undefined, and a future stamp falls out
+        # of the history window entirely
         self.fill_log.append({'side': side, 'price': price, 'qty': qty,
-                              'fee': 0.0, 'time_ms': int(time.time() * 1000),
+                              'fee': 0.0,
+                              'time_ms': (int(time.time() * 1000) - 60_000
+                                          + len(self.fill_log) * 1000),
                               'link_id': link_id, 'venue_closed': False,
                               'venue_kind': '', 'market_type': 'spot'})
 
@@ -89,7 +94,8 @@ def spec_G15_the_derived_basis_reaches_the_exit_floor_through_cycle():
     assert sells, 'holding with no exit resting'
     assert all(o['price'] >= 0.1964 * 1.0025 for o in sells), \
         f'exit below the fee floor of its own cost: {sells}'
-    assert any('basis derived from venue fills' in ln for ln in lines), \
+    assert any('reconstructed from the newest venue fills' in ln
+               for ln in lines), \
         'the derivation must be WIRED, not merely correct'
     # and the exit rung no longer flip-flops with the ref wobble
     assert not any('cancel' in ln and 'Sell' in ln for ln in lines)
@@ -101,6 +107,7 @@ def spec_D1_our_own_exit_fill_is_a_trip_not_an_external_close():
     discriminator fails (it did, live), the venue's fill history decides.
     Live failure: a healthy bot tombstoned itself on its own take-profit."""
     venue, lines = FakeSpotVenue(), []
+    venue.record_fill('buy', 0.1964, 954.68, 'spoADAUSDTl-9-0')
     bot = _spot_bot(venue, lines)
     bot.cycle()
     sell = next(o for o in venue.orders if o['side'] == 'Sell')
@@ -122,6 +129,7 @@ def spec_D1_an_unlinked_close_still_stands_down():
     from pathlib import Path
     from gridgremlin.tombstones import Tombstones
     venue, lines = FakeSpotVenue(), []
+    venue.record_fill('buy', 0.1964, 954.68, 'spoADAUSDTl-9-0')
     bot = _spot_bot(venue, lines)
     bot.tombs = Tombstones(Path(tempfile.mkdtemp()) / 'tombs.json')
     bot.cycle()
@@ -133,3 +141,31 @@ def spec_D1_an_unlinked_close_still_stands_down():
         bot.cycle()
     assert not bot.alive
     assert any('closed by' in ln for ln in lines)
+
+
+def spec_G15_a_lagging_fill_list_withholds_exits_not_prices_them_blind():
+    """The wallet moves before the fill list does. Live: an exit placed 6s
+    after a buy the fill list had not yet published rested at the freshly
+    bought rung — zero spread, fees both ways. When fills cannot COVER the
+    holding, there is no basis and there are no exits, until the account
+    arrives."""
+    venue, lines = FakeSpotVenue(mark=0.2050, base=904.88), []
+    # history knows only an OLD completed trip — not the buy that created
+    # the current holding
+    venue.record_fill('buy', 0.1913, 980.13, 'spoADAUSDTl-8-1')
+    venue.record_fill('sell', 0.1913, 979.15, 'spoADAUSDTl-8-2')
+    bot = _spot_bot(venue, lines)
+    bot.cycle()
+    assert not any(o['side'] == 'Sell' for o in venue.orders), \
+        'exit placed with no coverable cost'
+    assert not any('nothing harvestable' in ln for ln in lines), \
+        'the transient lag must not page the operator'
+    # the account arrives: the buy that created the holding becomes visible
+    venue.record_fill('buy', 0.207, 905.79, 'spoADAUSDTl-11-3')
+    bot.cycle()
+    sells = [o for o in venue.orders if o['side'] == 'Sell']
+    assert sells, 'account arrived but no exit followed'
+    assert all(o['price'] >= 0.207 * 1.0025 for o in sells), \
+        f'exit below the TRUE cost of the holding: {sells}'
+    # and the basis is the newest covering fill, not an all-history average
+    assert any('basis 0.207 ' in ln for ln in lines), lines

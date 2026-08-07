@@ -9,6 +9,8 @@ from .ladder import (anchor_from_rung, grid_rungs, guard_band, lot,
 from .window import window
 
 FLAT_CONFIRMATIONS = 3  # E9: consecutive flat reads before standing down
+DEFER_ESCALATE_CYCLES = 60  # G15: withheld-exit cycles before the operator
+                            # is told the cost is not reconstructable
 FLAP_LIMIT = 3          # B5: strikes before a (rung, side) cools
 FLAP_COOLDOWN = 60.0
 BACKOFF_BASE = 30.0     # B7: margin backoff, doubling to the ceiling
@@ -62,6 +64,9 @@ class Bot:
         self._flat_streak = 0          # E9: confirmations of 'flat'
         self._round_hwm = None         # M10: best mark seen this round
         self._basis_cache = None       # G15: (held, basis) from fills
+        self._close_streak = 0         # M14: cycles waiting for the venue's
+                                       # account of a closing fill
+        self._defer_cycles = 0         # G15: cycles exits were withheld
 
     def _kill(self, truth, reason):
         """D1/S7: cancel every owned order, stand down, never restart. X4:
@@ -262,18 +267,39 @@ class Bot:
             fills = self._own_fills()
         except (VenueError, OSError):
             return cached[1] if cached else None
-        if not fills:
-            return None
-        from .report import apply_fill, new_book
-        book = new_book()
-        for f in sorted(fills, key=lambda f: f['time_ms']):
-            apply_fill(book, f['side'], f['price'], f['qty'], f['fee'])
-        basis = book['avg_cost'] if abs(book['position']) > 1e-12 else None
-        self._basis_cache = (held, basis)
+        # Walk NEWEST first until the fills cover the holding. Two live
+        # failures forbid the obvious all-history average: the fill list
+        # lags the wallet by seconds, so right after a buy the average
+        # prices YESTERDAY'S inventory (an exit rested at the freshly
+        # bought rung 6s later); and residue accumulates in a running
+        # book, drifting the average off the true cost of what is
+        # actually held. Coverage is the honesty test: if the venue's
+        # account cannot explain the holding, there is no basis — refuse.
+        entry = self._entry_side.lower()
+        want = abs(held)
+        slack = max(self.adapter.min_qty, want * 0.02)   # base-coin fee shave
+        remaining, cost, deficit = want, 0.0, 0.0
+        for f in sorted(fills, key=lambda f: f['time_ms'], reverse=True):
+            qty = abs(f['qty'])
+            if str(f.get('side', '')).lower() != entry:
+                deficit += qty              # sold: consumes older buys
+                continue
+            usable = qty - min(deficit, qty)
+            deficit -= min(deficit, qty)
+            take = min(usable, remaining)
+            cost += take * f['price']
+            remaining -= take
+            if remaining <= slack:
+                break
+        if remaining > slack:
+            return None                     # account incomplete: never guess
+        covered = want - remaining
+        basis = cost / covered if covered > 0 else None
         if basis:
+            self._basis_cache = (held, basis)     # never cache a refusal
             self.notify.event('net', self.botid,
-                              f'basis derived from venue fills: {basis:.10g} '
-                              '(this venue reports none — G15)')
+                              f'basis {basis:.10g} reconstructed from the '
+                              'newest venue fills covering the holding (G15)')
         return basis
 
     def _how_round_ended(self):
@@ -284,24 +310,47 @@ class Bot:
             fills = self._own_fills_all()
         except (VenueError, OSError):
             return None
-        if not fills:
-            return None
-        last = max(fills, key=lambda f: f['time_ms'])
-        kind = str(last.get('venue_kind') or '')
-        if 'liquidation' in kind.lower() or 'adl' in kind.lower():
-            return 'liquidation'
-        if rung_of(last['link_id'], self.botid) is not None:
-            return 'exit'
-        if last.get('venue_closed'):
-            return 'exit'                      # the venue's hosted TP/SL
-        return 'an outside close'
+        if fills is None:
+            return 'unknowable'   # no fills surface at all: judge nothing
+        # Find the fill that ACCOUNTS FOR OUR CLOSE — never merely the
+        # newest fill on the symbol. Two live misattributions forbid that
+        # (2026-08-06): the fill list lags the position, so 3s after a
+        # hosted TP the close was not yet visible; and on a hedged symbol
+        # the newest fill belonged to the OTHER side's bot. A fill is our
+        # close only if it is on our exit side, recent, and either carries
+        # our link or was created by the venue itself.
+        fills = sorted(fills, key=lambda f: f['time_ms'], reverse=True)
+        entry_side = self._entry_side.lower()
+        # the closing fill must be newer than the round's own newest entry
+        # — that is what separates THIS round's close from the last one's
+        # (a fixed recency window broke on any cooldown longer than it)
+        anchor = max((f['time_ms'] for f in fills
+                      if str(f.get('side', '')).lower() == entry_side
+                      and rung_of(f['link_id'], self.botid) is not None),
+                     default=0)
+        exit_side = self._exit_side.lower()
+        for f in fills:
+            if f['time_ms'] < anchor:
+                break
+            if str(f.get('side', '')).lower() != exit_side:
+                continue
+            ours = rung_of(f['link_id'], self.botid) is not None
+            if not ours and f.get('link_id'):
+                continue                  # another bot's fill on our symbol
+            kind = str(f.get('venue_kind') or '').lower()
+            if 'liquidation' in kind or 'adl' in kind:
+                return 'liquidation'
+            if ours or f.get('venue_closed'):
+                return 'exit'
+            return 'an outside close'     # unlinked, and user-created
+        return None                       # no account YET — not evidence
 
     def _own_fills_all(self):
         """Every recent fill on OUR symbol — including ones with no link
         (a liquidation carries none), which _own_fills deliberately drops."""
         hist = getattr(self.client, 'fills_history', None)
         if hist is None:
-            return []
+            return None       # the venue offers no account — unknowable
         now_ms = int(self._now() * 1000)
         return hist(self.cfg['market_type'], self.cfg['symbol'],
                     now_ms - 2 * 86_400_000, now_ms)
@@ -520,7 +569,25 @@ class Bot:
                 # straight back into what just killed it. Ask the venue how
                 # the position actually closed.
                 how = self._how_round_ended()
-                if how is not None and how != 'exit':
+                if how is None:
+                    # the fill list lags the position by seconds — the
+                    # account of the close usually arrives on the next read
+                    self._close_streak += 1
+                    if self._close_streak < FLAT_CONFIRMATIONS:
+                        self.notify.event(
+                            'warn', self.botid,
+                            'round ended, but the venue has no account of '
+                            'the closing fill yet — confirming '
+                            f'({self._close_streak}/{FLAT_CONFIRMATIONS}) '
+                            'before judging (M14/E9)')
+                        return {'confirming_close': self._close_streak}
+                    self._kill(truth,
+                               'round ended with no venue account of the '
+                               'closing fill — standing down; silence is '
+                               'never evidence (M14/D1)')
+                    return {'round': 'unaccounted'}
+                self._close_streak = 0
+                if how not in ('exit', 'unknowable'):
                     self._kill(truth, f'round ended by {how}, not by our exit '
                                       '— standing down (M14/D1)')
                     return {'round': how}
@@ -838,6 +905,12 @@ class Bot:
             # zero-spread round trips live before this call was WIRED; the
             # function existed unwired — B8's failure mode in G15's coat).
             basis = cfg.get('assumed_avg_entry') or self._derive_basis(held)
+        # G15: holding with no reconstructable cost — the wallet moved
+        # before the fill list did (it lags by seconds). An exit priced
+        # blind is how zero-spread churn happens; withhold exits and let
+        # the account arrive. Escalate only if it never does.
+        defer_exits = (basis is None and bool(held)
+                       and not self.adapter.reports_avg_entry)
 
         reason = self._stop_hit(truth, equity)          # X1: before everything
         if reason:
@@ -884,15 +957,25 @@ class Bot:
                 how = self._how_round_ended()
                 if how == 'exit':
                     self._flat_streak = 0          # our exit filled: a trip
+                elif how is None and self._flat_streak < 2 * FLAT_CONFIRMATIONS:
+                    # the fill list lags the wallet by seconds — keep asking
+                    self.notify.event(
+                        'warn', self.botid,
+                        'flat, but the venue has no account of the closing '
+                        f'fill yet — waiting ({self._flat_streak}/'
+                        f'{2 * FLAT_CONFIRMATIONS}) (E9/M14)')
+                    return {'confirming_flat': self._flat_streak}
                 else:
-                    self._kill(truth,
-                               f"position closed by "
-                               f"{how or 'an unknown hand — the venue gave '
-                                        'no account of the closing fill'}"
-                               ' (D1)')
+                    if how in (None, 'unknowable'):
+                        how = ('an unaccounted hand — the venue '
+                               + ('gave no account of the closing fill'
+                                  if how is None else
+                                  'offers no fill history'))
+                    self._kill(truth, f'position closed by {how} (D1)')
                     return None
         if held:
             self._flat_streak = 0
+            self._close_streak = 0
 
         ref = self._sticky(truth['split_ref'])     # W2: the one anchor
         bid, ask = truth['bid'], truth['ask']
@@ -936,6 +1019,18 @@ class Bot:
         else:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
                                 resting_exits)
+        if defer_exits:
+            desired = [d for d in desired if d['side'] != self._exit_side]
+            self._defer_cycles += 1
+            if self._defer_cycles == DEFER_ESCALATE_CYCLES:
+                self.notify.event(
+                    'warn', self.botid,
+                    'holding with no reconstructable cost — no venue fills '
+                    'cover the holding and no assumed_avg_entry is set; '
+                    'exits withheld (G15). State assumed_avg_entry to trade '
+                    'this inventory.')
+        else:
+            self._defer_cycles = 0
         live = window(desired, ref, cfg['place_within_pct'])          # W1
         to_cancel, _ = diff(desired, orders_view, self.botid)         # full
         _, to_create = diff(live, orders_view, self.botid)            # windowed
@@ -1002,7 +1097,7 @@ class Bot:
 
         sellable = held and abs(held) > 0 and cfg['strategy'] == 'grid'
         has_exits = any(o['side'] == self._exit_side for o in desired)
-        if sellable and not has_exits:             # S5: state, warned once
+        if sellable and not has_exits and not defer_exits:   # S5: warned once
             if not self._uncovered_warned:
                 self._uncovered_warned = True
                 self.notify.event('warn', self.botid,

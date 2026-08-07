@@ -545,3 +545,37 @@ def spec_M3_a_covered_round_does_not_stack_another_exit():
     r = bot.cycle()
     assert r == {'round': 'closing'}
     assert any('every tranche target met' in ln for ln in lines)
+
+
+def spec_M14_a_lagging_close_account_is_awaited_not_judged():
+    """Live 2026-08-06: a hosted TP closed the round, and 3s later the fill
+    list had not yet published it — the newest visible fill on the shared
+    symbol belonged to the OTHER side's bot. The bot judged 'an outside
+    close' and tombstoned itself, healthy. The account is awaited, and
+    another bot's fills are never evidence about ours."""
+    import time as _t
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    now_ms = int(_t.time() * 1000)
+    fills = [
+        {'side': 'buy', 'price': 60000.0, 'qty': 0.016, 'fee': 0.1,
+         'time_ms': now_ms - 20_000, 'link_id': f'{bot.botid}-0-1',
+         'venue_closed': False, 'venue_kind': ''},        # our entry
+        {'side': 'buy', 'price': 60500.0, 'qty': 0.01, 'fee': 0.1,
+         'time_ms': now_ms - 1_000, 'link_id': 'linBTCUSDTs-3-9',
+         'venue_closed': False, 'venue_kind': ''},        # the OTHER bot
+    ]
+    venue.fills_history = lambda mt, sym, a, b: list(fills)
+    bot._last_pos = 0.016                       # position just vanished
+    assert bot.cycle() == {'confirming_close': 1}
+    assert bot.alive
+    # the venue's account arrives: OUR hosted TP closed it
+    fills.append({'side': 'sell', 'price': 60600.0, 'qty': 0.016, 'fee': 0.1,
+                  'time_ms': now_ms - 500, 'link_id': '',
+                  'venue_closed': True, 'venue_kind': 'TakeProfit'})
+    bot._last_pos = 0.016
+    r = bot.cycle()
+    assert bot.alive, 'stood down on its own hosted take-profit'
+    assert 'confirming_close' not in (r or {})
+    assert not any('kill' in ln for ln in lines)
