@@ -363,6 +363,7 @@ all: the agent proposes and builds — the human decides, and reads everything.
 | [docs/PLAN.md](docs/PLAN.md) | every build slice, phases 1 and 2 |
 | [docs/PROMOTION.md](docs/PROMOTION.md) | how v3 reaches real funds — the checklist |
 | [docs/AUDIT-2026-08-06.md](docs/AUDIT-2026-08-06.md) | three independent reviewers: what they found, what changed |
+| [docs/AUDIT-2026-08-07.md](docs/AUDIT-2026-08-07.md) | second audit: ten HIGHs, fix-here-not-there doctrine, prior-art verdicts |
 | [docs/DASHBOARD.md](docs/DASHBOARD.md) | design notes for a companion panel — vocabulary settled before code |
 | [ops/README.md](ops/README.md) | the deploy layer: units, alerts, triage, relay, range review |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
