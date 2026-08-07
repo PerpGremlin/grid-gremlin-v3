@@ -188,3 +188,18 @@ def spec_G15_defer_freezes_the_exit_side_but_never_tears_it_down():
     still = [o for o in venue.orders if o['side'] == 'Sell']
     assert still == resting, 'deferral tore down the resting exit ladder'
     assert not any('cancel' in ln and 'Sell' in ln for ln in lines)
+
+
+def spec_S5_a_sub_minimum_sliver_logs_and_never_pages():
+    """A partial fill leaves a holding below the venue minimum for seconds
+    — routine, self-resolving, and it paged the operator twice in an hour
+    (live 2026-08-07). The page is reserved for the state that needs an
+    operator: basis beyond the range."""
+    # 2 ADA clears the dust rule but its notional (~$0.39) is under the
+    # venue's $1 minimum — sellable, yet no exit can legally rest
+    venue, lines = FakeSpotVenue(mark=0.1950, base=2.0), []
+    venue.record_fill('buy', 0.1950, 2.0, 'spoADAUSDTl-9-1')
+    bot = _spot_bot(venue, lines)
+    bot.cycle()
+    assert not any('] warn' in ln and 'harvestable' in ln for ln in lines)
+    assert any('below the venue minimum' in ln for ln in lines), lines
