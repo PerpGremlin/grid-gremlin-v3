@@ -196,3 +196,36 @@ def init_pair(fleet_path, tag, equity_min, mm_rate_max=0.5,
     atomic_write(wp, json.dumps(wd, indent=1) + '\n')
     atomic_write(fp, json.dumps(fleet, indent=1) + '\n')
     return wp
+
+
+GRID_KNOBS = ('lower', 'upper', 'rungs', 'capital')
+MG_KNOBS = ('capital', 'leverage', 'base_order_size', 'safety_order_size',
+            'order_size_multiplier', 'deviation_pct',
+            'deviation_step_multiplier', 'max_averaging_orders',
+            'take_profit_avg_pct', 'repeat_cooldown_seconds')
+MG_FLAGS = ('repeat', 'reinvest')
+
+
+def overlay_edit(orig_row, form):
+    """§11 edits are OVERLAYS: start from the row as it is, change only
+    the knobs the form carries — a fresh-built row silently drops every
+    key the form never heard of (spot_borrow, a custom stop, a note).
+    Identity keys are never overlaid; the identity check stands guard."""
+    row = json.loads(json.dumps(orig_row))
+    knobs = MG_KNOBS if row.get('strategy') == 'martingale' else GRID_KNOBS
+    for k in knobs:
+        v = form.get(k)
+        if v not in (None, ''):
+            row[k] = (int(float(v)) if k in ('rungs',
+                                             'max_averaging_orders')
+                      else float(v))
+    if row.get('strategy') == 'martingale':
+        for k in MG_FLAGS:
+            row[k] = form.get(k) == '1'
+        # the form is PREFILLED: an optional field arriving empty means
+        # the user deleted it — an explicit clear, not a keep
+        if form.get('repeat_cooldown_seconds') == '':
+            row.pop('repeat_cooldown_seconds', None)
+        if not row.get('reinvest'):
+            row.pop('reinvest', None)
+    return row

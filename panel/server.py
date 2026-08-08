@@ -570,6 +570,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             mode = proposal.get('mode', 'create')
         elif mode == 'remove':
             proposal = {'mode': 'remove', 'orig': form.get('orig', '')}
+        elif mode == 'edit':
+            from gridgremlin.apply import make_botid as _mb
+            orig = next((b for b in fleet_raw.get('bots', [])
+                         if _mb(b['market_type'], b['symbol'], b['side'])
+                         == form.get('orig')), None)
+            if orig is None:
+                return self._page('<h1 class="neg">refused</h1><p class='
+                                  '"neg">that bot is not in this fleet.'
+                                  '</p>')
+            from panel.create import overlay_edit
+            proposal = {'mode': 'edit', 'orig': form.get('orig', ''),
+                        'bot': overlay_edit(orig, form),
+                        'watchdog': {'max': _f(form.get('ceiling'))}}
         elif form.get('strategy') == 'martingale':
             bot = {'strategy': 'martingale', 'market_type': 'linear',
                    'venue': 'bybit',
@@ -744,14 +757,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 f'<input type="hidden" name="orig" value="{botid}">'
                 f'<button>run the gates</button></form>'
                 f'<p><a href="/">&larr; fleet</a></p>')
-        if bot.get('strategy', 'grid') != 'grid' \
-                or bot.get('market_type') != 'linear':
-            return self._page(f'<h1 class="dim">{botid}</h1><p>this slice '
-                              'edits linear grids only — the file door '
-                              'covers the rest (same contract, §8).</p>')
-        w = json.loads(Path(json.loads(Path(self.fleets[fi]).read_text())
-                            ['watchdog']).read_text())
+        w = json.loads(Path(fleet_raw['watchdog']).read_text())
         wmax = (w.get('positions', {}).get(botid) or {}).get('max', '')
+        if bot.get('strategy') == 'martingale':
+            def chk(k):
+                return 'checked' if bot.get(k) else ''
+            return self._page(
+                f'<h1>edit {botid} <span class="dim">— identity fixed; '
+                'the schedule moves; unlisted keys survive untouched '
+                '(§11)</span></h1>'
+                f'<form method="post" action="/create"><table>'
+                f'<tr><th>capital</th><th>lev</th><th>base</th>'
+                f'<th>safety</th><th>size x</th><th>dev %</th>'
+                f'<th>dev step x</th></tr><tr>'
+                f'<td><input name="capital" value="{bot.get("capital")}" '
+                f'size="7"></td>'
+                f'<td><input name="leverage" value="{bot.get("leverage", 1)}"'
+                f' size="3"></td>'
+                f'<td><input name="base_order_size" '
+                f'value="{bot.get("base_order_size")}" size="6"></td>'
+                f'<td><input name="safety_order_size" '
+                f'value="{bot.get("safety_order_size")}" size="6"></td>'
+                f'<td><input name="order_size_multiplier" '
+                f'value="{bot.get("order_size_multiplier")}" size="4"></td>'
+                f'<td><input name="deviation_pct" '
+                f'value="{bot.get("deviation_pct")}" size="6"></td>'
+                f'<td><input name="deviation_step_multiplier" '
+                f'value="{bot.get("deviation_step_multiplier")}" size="4">'
+                f'</td></tr>'
+                f'<tr><th>max SOs</th><th>TP avg %</th><th>repeat</th>'
+                f'<th>cooldown s</th><th>reinvest</th><th>ceiling</th>'
+                f'<th></th></tr><tr>'
+                f'<td><input name="max_averaging_orders" '
+                f'value="{bot.get("max_averaging_orders")}" size="3"></td>'
+                f'<td><input name="take_profit_avg_pct" '
+                f'value="{bot.get("take_profit_avg_pct")}" size="6"></td>'
+                f'<td><input type="checkbox" name="repeat" value="1" '
+                f'{chk("repeat")}></td>'
+                f'<td><input name="repeat_cooldown_seconds" '
+                f'value="{bot.get("repeat_cooldown_seconds", "")}" '
+                f'size="6"></td>'
+                f'<td><input type="checkbox" name="reinvest" value="1" '
+                f'{chk("reinvest")}></td>'
+                f'<td><input name="ceiling" value="{wmax}" size="8"></td>'
+                f'<td><button>run the gates</button></td></tr></table>'
+                f'<input type="hidden" name="gg" value="1">'
+                f'<input type="hidden" name="mode" value="edit">'
+                f'<input type="hidden" name="fleet" value="{fi}">'
+                f'<input type="hidden" name="orig" value="{botid}">'
+                f'</form><p><a href="/">&larr; fleet</a></p>')
         return self._page(
             f'<h1>edit {botid} <span class="dim">— identity is fixed; '
             'range, rungs, capital, ceiling move (§11)</span></h1>'
