@@ -27,6 +27,7 @@ CSS = """:root{--bg:#14161a;--fg:#d6dae0;--dim:#7a828c;--line:#262a30;
 :root.light{--bg:#f5f4f0;--fg:#232629;--dim:#6f6a60;--line:#ddd8d0;
 --pos:#2e7d4f;--neg:#b04a40;--accent:#3a6ea5}
 body{background:var(--bg);color:var(--fg);font:14px/1.5 monospace;margin:2em}
+table.fleet{table-layout:fixed}td{overflow:hidden;text-overflow:ellipsis}
 table{border-collapse:collapse;width:100%}td,th{padding:.35em .8em;
 text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:normal}td:first-child,th:first-child
@@ -143,6 +144,14 @@ def verdict(draft, out):
             "benchmark or hold.</p>")
 
 
+COLS = ('<colgroup><col style="width:11%"><col style="width:6%">'
+        '<col style="width:4%"><col style="width:7%"><col style="width:6%">'
+        '<col style="width:11%"><col style="width:7%"><col style="width:7%">'
+        '<col style="width:6%"><col style="width:6%"><col style="width:8%">'
+        '<col style="width:7%"><col style="width:8%"><col style="width:8%">'
+        '<col style="width:6%"></colgroup>')
+
+
 def section(idx, label, contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
@@ -165,12 +174,13 @@ def section(idx, label, contract):
                       else '<td class="neg">UNWATCHED</td>')
             rows.append(
                 f'<tr><td>{botid}</td><td class="{cls}">{state}</td>'
-                f'<td class="dim">0</td><td class="dim" colspan="2">no '
-                f'fills in window</td><td class="dim">'
+                f'<td class="dim">0</td><td class="dim">no fills</td>'
+                f'<td class="dim">—</td><td class="dim">'
                 + (f'{pos:.10g} (belief)' if abs(pos) > 1e-12 else '—')
                 + '</td><td class="dim">—</td><td class="dim">—</td>'
                   '<td class="dim">—</td><td class="dim">—</td>'
                   '<td class="dim">—</td><td class="dim">—</td>'
+                  '<td class="dim">—</td>'
                 + watch0
                 + f"<td class='dim'><a href='/edit?fleet={idx}&bot={botid}'>"
                   f"edit</a> <a href='/edit?fleet={idx}&bot={botid}"
@@ -212,7 +222,8 @@ def section(idx, label, contract):
     return f"""
 <h1>{label} — last {contract['window_hours']:g}h {sweep_note(contract)}
 <span class="dim">(read {age}s ago; refreshes every {REFRESH_S}s)</span></h1>
-<table><tr><th>bot</th><th>state</th><th>fills</th><th>realized</th>
+<table class="fleet">{COLS}
+<tr><th>bot</th><th>state</th><th>fills</th><th>realized</th>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
 <th>stop-now est.</th><th>watcher</th><th></th></tr>
