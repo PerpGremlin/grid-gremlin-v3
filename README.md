@@ -341,7 +341,8 @@ Links along the bottom:
 - **create / edit / remove** — grids (linear or spot) and martingale
   creation, with the deviation-ladder preview doing the compounding
   (every price, size, and running total, plus the full-depth number the
-  ceiling watches); martingale/spot *edits* stay file-only this slice.
+  ceiling watches); edits cover all of them, as OVERLAYS — only the
+  knobs on the form move, every other key survives untouched.
   One proposal carries
   the bot AND its watchdog line; four unskippable gates (whole-fleet
   validation, diff, keyless dry-run ladder, typed-botid confirm); apply is an

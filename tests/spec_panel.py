@@ -446,3 +446,34 @@ def spec_F3_the_supervisor_detaches_stops_and_never_mistakes_a_stale_pid():
     st, _ = sup.status(fleet)
     assert st == 'stale pid file'
     assert 'not running' in sup.stop(fleet)
+
+
+def spec_C2_an_edit_is_an_overlay_and_unlisted_keys_survive():
+    """A fresh-built row silently drops every key the form never heard of
+    — spot_borrow, a custom stop, a note. Edits overlay the row as it
+    is; only the carried knobs move."""
+    from panel.create import overlay_edit
+    spot = {'market_type': 'spot', 'symbol': 'ADAUSDT', 'side': 'long',
+            'capital': 1500, 'lower': 0.155, 'upper': 0.23, 'rungs': 16,
+            'spot_borrow': True, 'spot_leverage': 2, '_note': 'mine',
+            'stop': {'watch': 'mark_price', 'level': 0.148}}
+    out = overlay_edit(spot, {'lower': '0.16', 'capital': '1800'})
+    assert out['lower'] == 0.16 and out['capital'] == 1800
+    assert out['spot_borrow'] is True and out['spot_leverage'] == 2
+    assert out['stop'] == spot['stop'] and out['_note'] == 'mine'
+    assert spot['lower'] == 0.155                  # the original untouched
+    mg = {'strategy': 'martingale', 'market_type': 'linear',
+          'symbol': 'SOLUSDT', 'side': 'short', 'capital': 5000,
+          'leverage': 10, 'base_order_size': 800, 'safety_order_size': 800,
+          'order_size_multiplier': 1.5, 'deviation_pct': 0.008,
+          'deviation_step_multiplier': 1.5, 'max_averaging_orders': 4,
+          'take_profit_avg_pct': 0.012, 'repeat': True,
+          'repeat_cooldown_seconds': 600}
+    out = overlay_edit(mg, {'take_profit_avg_pct': '0.015', 'repeat': '1',
+                            'repeat_cooldown_seconds': '600'})
+    assert out['take_profit_avg_pct'] == 0.015
+    assert out['base_order_size'] == 800 and out['repeat'] is True
+    # an unchecked checkbox is an explicit False, and empty cooldown drops
+    out2 = overlay_edit(mg, {'repeat_cooldown_seconds': ''})
+    assert out2['repeat'] is False
+    assert 'repeat_cooldown_seconds' not in out2

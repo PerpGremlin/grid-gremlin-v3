@@ -49,10 +49,9 @@ init + the on-page key left via PR #109 — README §11.)*
 
 **Remaining, in tackle order:**
 
-1. **Martingale + spot EDIT forms** — creation left via PR #107 (form,
-   deviation-ladder preview, ceiling from full depth, spot grids in the
-   create form; tranches/trailing stay file-only). Edit for
-   martingale/spot rows remains grids-only.
+1. *(Martingale + spot forms: creation left via PR #107; edits via
+   PR #114 — overlays: only carried knobs move, unlisted keys survive.
+   Tranches/trailing stay file-only by design.)*
 2. **Local-first: DONE for the core** (PR #113 — `--supervise`: control
    spawns/stops the engine as a detached child, pid bookkeeping, F3
    lock stays the only mutex; README quickstart is one terminal, once).
