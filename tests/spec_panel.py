@@ -193,3 +193,43 @@ def spec_X8_atomic_write_replaces_whole_and_keeps_the_bak():
     assert p.read_text() == '{"new": true}'
     assert (d / 'fleet.json.bak').read_text() == '{"old": true}'
     assert not list(d.glob('fleet.json?*[!k]'))       # no temp litter
+
+
+def spec_C1_control_is_opt_in_and_typed():
+    """§12: a panel launched without --unit has NO control surface; with
+    it, an unmatched typed confirmation does nothing."""
+    srv, base = _serve(CONTRACT)
+    try:
+        req = urllib.request.Request(f'{base}/control',
+                                     headers={'Cookie': 'gg=tok123'})
+        try:
+            urllib.request.urlopen(req)
+            assert False, 'control served unarmed'
+        except urllib.error.HTTPError as e:
+            assert e.code == 404
+        req = urllib.request.Request(
+            f'{base}/unit', data=b'gg=1&action=stop&confirm=wrong',
+            method='POST', headers={'Cookie': 'gg=tok123'})
+        try:
+            urllib.request.urlopen(req)
+            assert False
+        except urllib.error.HTTPError as e:
+            assert e.code == 404       # unarmed: refused before the confirm
+    finally:
+        srv.shutdown()
+
+
+def spec_X7_revive_removes_exactly_the_typed_entry_atomically():
+    """The revive path is the delete-the-entry-deliberately workflow: the
+    typed botid goes, everything else stays, .bak keeps the before."""
+    import tempfile
+    from pathlib import Path as _P
+    from panel.create import atomic_write
+    d = _P(tempfile.mkdtemp())
+    tp = d / 'tombstones.json'
+    tp.write_text(json.dumps({'a': {'reason': 'x'}, 'b': {'reason': 'y'}}))
+    tombs = json.loads(tp.read_text())
+    tombs.pop('a')
+    atomic_write(tp, json.dumps(tombs))
+    assert json.loads(tp.read_text()) == {'b': {'reason': 'y'}}
+    assert 'a' in json.loads((d / 'tombstones.json.bak').read_text())
