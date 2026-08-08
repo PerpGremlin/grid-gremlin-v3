@@ -316,7 +316,78 @@ the live engine runs (T3) — fills require trade-through, never touch. Bybit gr
 only; HL bots and martingales are refused by name. Prints grid profit, fees,
 funding, max drawdown, trips, and what the run ends holding.
 
-## 11. Development
+## 11. The panel — the fleet on a screen
+
+A read-first dashboard in `panel/` (stdlib, like everything else). It renders
+the engine's own readout contract — the page cannot disagree with the
+terminal — and it **holds no keys, ever**: no key entry, no key storage, no
+key material in any request or response. A compromised panel steals nothing.
+
+```
+python3 -m panel.server configs/fleet.demo.json configs/fleet.hl.testnet.json
+```
+
+It prints a one-time tokened URL — open it and the token becomes a cookie.
+One venue section per fleet file: per-bot state (named, never a silent
+"Working"), realized / fees / unrealized / total, bought vs sold, the range
+as a strip with distance to both edges, the stop-now settlement estimate
+(labelled an estimate), and each bot's watchdog ceiling utilisation. Quiet
+bots still render — from the engine's snapshot belief, labelled "(belief)".
+Links along the bottom:
+
+- **rehearse** — draft a grid, the engine's validator speaks or real candles
+  replay the REAL plan over your window: profit, fees, drawdown, the equity
+  path, and the hold benchmark (beat the hold or hold).
+- **create / edit / remove** (linear grids this slice) — one proposal carries
+  the bot AND its watchdog line; four unskippable gates (whole-fleet
+  validation, diff, keyless dry-run ladder, typed-botid confirm); apply is an
+  atomic file write with a `.bak` kept, and the fleet trades the old config
+  until you restart it.
+- **control** (opt-in: `--units name1,name2`) — start/stop/restart the fleet
+  units and revive tombstones with their evidence shown. The panel drives
+  processes and files, never the venue. **stop PARKS, never flattens**:
+  positions and their venue-resting orders survive a stopped engine.
+- **export snapshot** — the page as a dated, self-contained HTML file.
+
+Remote box? Tunnel it: add `LocalForward 41900 127.0.0.1:41900` to the host's
+entry in `~/.ssh/config`, run `ssh -fN <host>` once per boot, bookmark the
+URL. Pin the session with `--port 41900 --token-file <path>` (0600; the
+panel refuses a looser file). Locally, none of that — just open the URL.
+
+### Keys — the one technical step for everyone
+
+Keys live in `.env` beside the repo, never in the panel, never in git:
+
+```
+cd grid-gremlin-v3
+touch .env && chmod 600 .env
+# then edit .env:
+#   BYBIT_API_KEY=...
+#   BYBIT_API_SECRET=...
+umask 077   # keep future copies tight too
+```
+
+The engine refuses a group/other-readable secrets file and says why. Use a
+key with trade-only permissions — no withdrawal, no transfer. The engine
+treats an unverifiable or over-privileged key as a refusal, not a warning.
+
+### When something red appears
+
+- **DEAD** on a bot row → it stood down and tombstoned. Open **control**: the
+  tombstone's reason is the evidence. Liquidation or an outside close means
+  investigate before revival; revival is typing the botid, and it takes
+  effect at the next fleet start.
+- **UNWATCHED** → that bot has no watchdog line; the fleet will refuse to
+  build until it does (F1). Edit the bot — the watcher moves with it.
+- **watchdog swept Ns ago** in red → the watchdog timer has stopped
+  sweeping. The engine trades on, unwatched: restart the watchdog timer on
+  the box before anything else.
+- **A refusal text** anywhere → the engine speaking, verbatim. It names what
+  to change; it is never a paraphrase and never wrong about its own rules.
+- **`*` beside a bot** → the readout window opened mid-round; widen the
+  window before believing those numbers (R7).
+
+## 12. Development
 
 - `python3 tests/run.py` — a spec is a `spec_*` function in `tests/spec_*.py`; its
   name carries the SPEC ID it pins (`spec_G7_...`). An error is a failure, never a
@@ -326,7 +397,7 @@ funding, max drawdown, trips, and what the run ends holding.
 - Renames follow the `capital` pattern: old key refused with the migration stated,
   the whole seam changes in one commit (C2).
 
-## 12. Working with an agent (recommended)
+## 13. Working with an agent (optional, recommended)
 
 This system is built and operated the way it reads: a human making every
 decision that matters, an AI agent doing the building, testing, and watching at
