@@ -253,7 +253,13 @@ def spec_V7_a_quiet_bot_is_shown_not_omitted():
         [('hl', c)])
     assert 'linDOGEs' in html
     assert 'HOLDING' in html and '730 (belief)' in html
-    assert 'no fills in window' in html
+    assert 'no fills' in html
+    # every row carries the full column count — a short row shears the
+    # table and lands cells under the wrong headers (live 2026-08-08)
+    for row in html.split('<tr>')[1:]:
+        cells = row.split('</tr>')[0]
+        n = cells.count('<td') or cells.count('<th')
+        assert n == 15, f'{n} cells in row: {cells[:90]}'
 
 
 def spec_F1_edit_and_remove_move_bot_and_watcher_together():
