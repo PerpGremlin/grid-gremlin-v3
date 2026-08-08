@@ -316,3 +316,18 @@ def spec_V8_the_export_is_the_same_renderer_frozen():
     assert '/control' in live and '/control' not in frozen
     assert 'exported Fri, 08 Aug 2026' in frozen
     assert 'snapshot, not a live view' in frozen
+
+
+def spec_T3_the_verdict_draws_the_equity_path_with_a_zero_line():
+    """The curve is inline SVG with the zero line drawn — a rehearsal that
+    spent the window underwater must LOOK underwater."""
+    from panel.server import verdict
+    out = {'grid_profit': 5.0, 'fees': 1.0, 'net': 4.0, 'total': 4.0,
+           'hold_benchmark': 2.0, 'max_drawdown': 3.0, 'trips': 2,
+           'entry_fills': 4, 'held': 0.0, 'basis': None, 'bars': 3,
+           'equity_curve': [0.0, -2.0, 4.0]}
+    html = verdict({'symbol': 'X', 'side': 'long', 'lower': 1, 'upper': 2,
+                    'rungs': 3}, out)
+    assert '<polyline' in html and '<line' in html
+    from panel.server import curve_svg
+    assert curve_svg([]) == '' and curve_svg([1.0]) == ''
