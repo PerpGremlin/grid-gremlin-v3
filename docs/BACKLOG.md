@@ -44,6 +44,9 @@ control (start/stop/restart both units + tombstone revival with evidence,
 opt-in per launch) · export snapshot · stable tunnel session (pinned port,
 0600 token). 320 specs.
 
+*(Keys recipe and the red-states quickstart left via PR #106 —
+README §11.)*
+
 **Remaining, in tackle order:**
 
 1. **Martingale + spot create/edit forms** — the fields exist in the
@@ -55,14 +58,7 @@ opt-in per launch) · export snapshot · stable tunnel session (pinned port,
    fleet+watchdog pair; a no-agent user hits a cliff at clone. A guided
    flow (or CLI) writing a minimal valid pair from a template, refusals
    guiding each field. Cheap, unblocks strangers.
-3. **Keys recipe in README** — the deliberate one technical step for
-   everyone (§8: keys never enter the panel); five copy-pasteable lines
-   incl. the chmod, plus the engine's refusal-on-loose-file behaviour.
-4. **Quickstart + "when something red appears"** — one page: what to open
-   first, what each red state asks of a human, when to trust a tombstone.
-   The test of every name we settled: if a message needs an AI to explain
-   it, the name failed.
-5. **Local-first packaging** — the real project: engine + panel on a
+3. **Local-first packaging** — the real project: engine + panel on a
    stranger's PC, no VPS, no tunnel, one command to a bookmark. Promoted
    by the no-agent question (2026-08-08); everything built transfers, the
    plumbing around it changes. Design §4's centre case, finally built.
