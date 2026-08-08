@@ -147,11 +147,22 @@ def probe_bot(bot):
         return f'{type(e).__name__}: {e}'   # one bot fails, not the build
 
 
+def _logs_dir(fleet_path):
+    """logs/ beside the fleet's home: configs/x.json -> configs/../logs;
+    a fleet file anywhere else keeps logs as its sibling. Anchored to the
+    file so every launcher agrees, whatever directory it ran from."""
+    parent = Path(fleet_path).resolve().parent
+    root = parent.parent if parent.name == 'configs' else parent
+    return root / 'logs'
+
+
 def build_fleet(fleet_path, notifier, allow_mainnet=False):
     load_env()
     fleet = validate_fleet(json.loads(Path(fleet_path).read_text()))
     try:
-        tombs = Tombstones(fleet.get('tombstones') or 'logs/tombstones.json')
+        tombs = Tombstones(fleet.get('tombstones')
+                           or str(_logs_dir(fleet_path)
+                                  / 'tombstones.json'))
     except TombstoneError as e:
         raise ConfigError(str(e)) from e
     clients, bots, identities = {}, [], []
@@ -388,7 +399,10 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
     # H4: /tmp is age-cleaned by systemd-tmpfiles (default 10d) — a held
     # flock does not protect the FILE, so a long-running fleet silently
     # loses its lock. Locks live beside the logs the fleet already owns.
-    lockdir = Path('logs')
+    # cwd-relative paths meant two launches from different directories
+    # held DIFFERENT locks — F3 only per-cwd (audit 2026-08-07 MED).
+    # Everything anchors relative to the FLEET FILE, never the cwd.
+    lockdir = _logs_dir(fleet_path)
     lockdir.mkdir(parents=True, exist_ok=True)
     prelock = acquire_fleet_lock(
         str(lockdir / f'{Path(fleet_path).resolve().name}.prelock'))
@@ -406,7 +420,21 @@ def run(fleet_path, cycles=None, poll_seconds=None, ship_orders=None,
         lost_warn_t = 0.0
         while cycles is None or n < cycles:
             try:
-                wallets = {v: c.read_wallet() for v, c in clients.items()}  # E8
+                wallets = {}
+                for v, c in clients.items():                          # E8
+                    try:
+                        wallets[v] = c.read_wallet()
+                    except (VenueError, OSError, ValueError,
+                            KeyError, IndexError) as e:
+                        # one venue's trouble must not starve the other's
+                        # bots of their stop evaluation (audit 2026-08-07
+                        # MED — the fleet-level twin of the per-bot M3)
+                        wallets[v] = {'equity': None, 'mm_rate': None}
+                        _vn(notifier, v).event(
+                            'net', 'fleet',
+                            f'wallet read failed: {type(e).__name__}: '
+                            f'{e} — '
+                            'this cycle runs with unknown equity (E9)')
                 known = [w['equity'] for w in wallets.values()
                          if w['equity'] is not None]
                 wallet = {'equity': sum(known) if known else None,

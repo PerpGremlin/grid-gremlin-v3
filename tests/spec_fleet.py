@@ -220,9 +220,13 @@ def spec_E7_a_failed_read_costs_a_cycle_never_the_process():
         rc = m.run('ignored', cycles=3, poll_seconds=0)
     finally:
         m.build_fleet, m.make_notifier, m.load_env, m.acquire_fleet_lock = saved
-    assert rc == 0 and calls['n'] == 3             # cycle 2 lost, 3 still ran
-    assert any('cycle 1 lost' in e for e in events)
-    assert any('readable again after 1' in e for e in events)
+    # audit 2026-08-07 MED: one venue's failed wallet read no longer
+    # loses the CYCLE — bots still run (with unknown equity, E9), and the
+    # weather event names the error
+    assert rc == 0 and calls['n'] == 3
+    assert any('wallet read failed' in e for e in events)
+    # no 'cycle lost' and no recovery banner: nothing was lost to recover
+    assert not any('cycle' in e and 'lost' in e for e in events)
 
 
 def spec_F5_no_repo_fleet_file_ever_carries_the_mainnet_flag():
