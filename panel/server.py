@@ -139,7 +139,8 @@ def main(argv):
     Handler.token = secrets.token_urlsafe(16)
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     Handler.host_ok = f'127.0.0.1:{srv.server_port}'
-    print(f'panel: http://{Handler.host_ok}/?t={Handler.token}')
+    print(f'panel: http://{Handler.host_ok}/?t={Handler.token}',
+          flush=True)   # journald/pipes: the URL must not sit in a buffer
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
