@@ -63,7 +63,12 @@ def matches(desired, order, qty_rtol=QTY_RTOL):
         return False
     dq, oq = desired['qty'], order['qty']
     if desired['reduce_only']:
-        return 0 < oq <= dq * (1.0 + qty_rtol)
+        # truncation-tolerant DOWN TO A POINT: the venue shrinks an exit to
+        # the position, but a resting order far below the desire is not
+        # truncation, it is a grown position with a stale cover — matching
+        # it forever left the growth unexited (audit 2026-08-07 MED). Below
+        # three quarters, replace (the diff makes it an amend).
+        return dq * 0.75 <= oq <= dq * (1.0 + qty_rtol)
     return abs(dq - oq) <= qty_rtol * dq
 
 

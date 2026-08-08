@@ -37,7 +37,8 @@ def closer_of(fill, closers):
 
 
 def new_book():
-    return {'fills': 0, 'bought': 0.0, 'sold': 0.0, 'realized': 0.0,
+    return {'fills': 0, 'first_side': None,
+            'bought': 0.0, 'sold': 0.0, 'realized': 0.0,
             'fees': 0.0, 'position': 0.0, 'avg_cost': 0.0, 'inverse': False,
             # R6 — the activity layer, same fills, no new state:
             'trips': 0,            # realisation events (a grid's round trips)
@@ -61,6 +62,8 @@ def apply_fill(book, side, price, qty, fee, inverse=False, rung=None,
     signed = qty if side == 'buy' else -qty
     pos = book['position']
     prev_avg = book['avg_cost']   # R9 reads the pre-fill cost
+    if book['first_side'] is None:
+        book['first_side'] = side
     book['inverse'] = inverse
     if entry_side is not None and side == entry_side and rung and rung >= 1:
         book['so_fills'] += 1
@@ -198,7 +201,15 @@ def window_truncated(book, side):
     """R7: a window that opens MID-round sees the close but not the open, so
     the ledger's remainder contradicts the bot's own direction. Say so —
     never print a phantom position as if it were real."""
-    if side is None or abs(book['position']) < EPS:
+    if side is None:
+        return False
+    # a balanced slice nets the phantom away and the sign test passes it
+    # (audit 2026-08-07 MED): the window's FIRST fill is the other tell —
+    # a one-sided book cannot legitimately open with its exit side
+    first = book.get('first_side')
+    if first and (first == ('sell' if side == 'long' else 'buy')):
+        return True
+    if abs(book['position']) < EPS:
         return False
     return (book['position'] < 0) if side == 'long' else (book['position'] > 0)
 

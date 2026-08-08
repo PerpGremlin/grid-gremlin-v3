@@ -66,8 +66,12 @@ init + the on-page key left via PR #109 — README §11.)*
   wallet-read isolation, cwd-relative locks/tombstones, probe stranding,
   partially-resting remainder close, M15 deepest-round fallback, grid E9
   cancel-vs-fill blind side, multi-quote TOTAL, backtester bid/ask.
-  *(Left via PR #116: half-lot suppression ceil, ≥100% cumdev refusal,
-  unknown-equity projection guard.)*
+  *(Left via PR #116: half-lot suppression, cumdev refusal, equity
+  guard; via PR #117: first-fill truncation tell, RO re-size below 3/4,
+  the grid E9 fast-path blind side.)* Remaining: per-venue wallet
+  isolation, cwd-relative locks, probe stranding, partial-remainder
+  close + ro_capacity warn, M15 deepest-round fallback, multi-quote
+  TOTAL, backtester bid/ask.
 - **Prior-art adoption trio** — deterministic clientOrderIds on
   market/seed writes; netted sells in the G15 coverage walk (passivbot's
   arithmetic, our refusal); Nautilus-style temporal deadband before
