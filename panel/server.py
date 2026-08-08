@@ -11,6 +11,7 @@ Data is the engine's own contract (report --json). One shape, every
 renderer: this page can never disagree with the terminal readout.
 """
 import http.server
+import urllib.parse
 import json
 import secrets
 import subprocess
@@ -80,6 +81,48 @@ def sweep_note(contract):
     return f'<span class="{cls}">watchdog swept {ago}s ago</span>'
 
 
+FORM = """<h1>rehearse a grid <span class="dim">— a draft, validated by
+the engine, replayed over real candles. nothing is created.</span></h1>
+<form method="post" action="/rehearse">
+<table><tr><th>symbol</th><th>side</th><th>lower</th><th>upper</th>
+<th>rungs</th><th>capital</th><th>days</th><th></th></tr>
+<tr><td><input name="symbol" value="ADAUSDT" size="9"></td>
+<td><select name="side"><option>long</option><option>short</option></select>
+</td><td><input name="lower" size="8"></td>
+<td><input name="upper" size="8"></td>
+<td><input name="rungs" value="16" size="4"></td>
+<td><input name="capital" value="1500" size="7"></td>
+<td><input name="days" value="7" size="4"></td>
+<td><button>rehearse</button></td></tr></table>
+<input type="hidden" name="gg" value="1"></form>
+<p class="dim">linear Bybit grids only; a rehearsal is not a promise —
+same candles are never same fills, and the replay plans without bid/ask
+so guard-band drops never happen (slightly optimistic, stated per §9).</p>
+<p><a href="/">&larr; fleet</a></p>"""
+
+
+def verdict(draft, out):
+    if 'refused' in out:
+        return (f'{FORM}<h1 class="neg">the engine refuses this draft</h1>'
+                f'<p class="neg">{out["refused"]}</p>')
+    rows = ''.join(
+        f'<tr><td>{k}</td>{money(v)}</tr>' for k, v in
+        [('grid profit', out['grid_profit']), ('fees', -out['fees']),
+         ('net', out['net']), ('total (incl. open)', out['total']),
+         ('hold benchmark', out['hold_benchmark']),
+         ('max drawdown', -out['max_drawdown'])])
+    return (f"{FORM}<h1>{draft.get('symbol')} {draft.get('side')} "
+            f"{draft.get('lower')}–{draft.get('upper')} x "
+            f"{draft.get('rungs')} — {out['bars']} bars</h1>"
+            f"<table>{rows}<tr><td>trips / entry fills</td>"
+            f"<td>{out['trips']} / {out['entry_fills']}</td></tr>"
+            f"<tr><td>ends holding</td><td>{out['held']:.10g}"
+            + (f" @ {out['basis']:,.6g}" if out.get('basis') else '')
+            + "</td></tr></table>"
+            "<p class='dim'>window shown, never annualised. beat the hold "
+            "benchmark or hold.</p>")
+
+
 def render(contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
@@ -125,6 +168,7 @@ theme</button>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
 <th>stop-now est.</th><th>watcher</th></tr>{''.join(rows)}</table>
+<p><a href="/rehearse">rehearse a draft grid &rarr;</a></p>
 <p class="dim">stop-now est. = position at mark less the venue fee floor —
 an estimate, not a promise; the venue settles what it settles.<br>
 * window opened mid-round: partial numbers (R7).
@@ -178,6 +222,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(403, 'bad token')
         if not self._authed():
             return self._deny(401, 'open the tokened URL from the terminal')
+        if self.path == '/rehearse':
+            body = (f'<!doctype html><meta charset="utf-8">'
+                    f'<title>rehearse</title><style>{CSS}</style>{FORM}')
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(body.encode())
+            return
         body = (json.dumps(self._contract()) if self.path == '/data'
                 else render(self._contract()))
         self.send_response(200)
@@ -186,6 +238,50 @@ class Handler(http.server.BaseHTTPRequestHandler):
                          else 'text/html; charset=utf-8')
         self.end_headers()
         self.wfile.write(body.encode())
+
+
+    def do_POST(self):
+        if self.headers.get('Host', '') != self.host_ok:
+            return self._deny(403, 'wrong Host')
+        if not self._authed():
+            return self._deny(401, 'open the tokened URL from the terminal')
+        origin = self.headers.get('Origin', '')
+        if origin and origin != f'http://{self.host_ok}':
+            return self._deny(403, 'wrong Origin')     # cross-site write
+        if self.path != '/rehearse':
+            return self._deny(404, 'no such action')
+        raw = self.rfile.read(min(int(self.headers.get(
+            'Content-Length') or 0), 4096)).decode()
+        form = dict(urllib.parse.parse_qsl(raw))
+        if form.pop('gg', None) != '1':
+            return self._deny(403, 'missing form token')
+        draft = {'market_type': 'linear', 'venue': 'bybit',
+                 'symbol': form.get('symbol', '').upper(),
+                 'side': form.get('side', 'long'),
+                 'capital': _f(form.get('capital')),
+                 'lower': _f(form.get('lower')),
+                 'upper': _f(form.get('upper')),
+                 'rungs': int(_f(form.get('rungs')) or 0)}
+        out = subprocess.run(
+            [sys.executable, '-m', 'gridgremlin.backtest_cli', '--draft',
+             '--days', form.get('days', '7')],
+            input=json.dumps(draft), capture_output=True, text=True,
+            timeout=120, cwd=None)
+        result = json.loads(out.stdout or '{"refused": "the rehearsal '
+                            'process died — see the panel journal"}')
+        body = (f'<!doctype html><meta charset="utf-8"><title>rehearse'
+                f'</title><style>{CSS}</style>{verdict(draft, result)}')
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write(body.encode())
+
+
+def _f(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def main(argv):

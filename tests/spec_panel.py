@@ -75,3 +75,58 @@ def spec_P2_the_token_becomes_a_cookie_and_the_page_renders_the_contract():
         assert data == CONTRACT              # the same shape, unmangled
     finally:
         srv.shutdown()
+
+
+def spec_P3_rehearse_speaks_the_engines_refusal_verbatim():
+    """One validator, three doors: a bad draft posted through the panel
+    must come back with the engine's own refusal text — never a second
+    validator's paraphrase. And a POST without auth or with a foreign
+    Origin is refused before any work happens."""
+    from gridgremlin.backtest_cli import run_draft
+    import json as _json
+    out = run_draft(_json.dumps(
+        {'market_type': 'linear', 'venue': 'bybit', 'symbol': 'ADAUSDT',
+         'side': 'long', 'capital': 1500, 'lower': 0.23, 'upper': 0.155,
+         'rungs': 16}), 7, 60, 0.0002)
+    assert 'refused' in out
+    assert 'lower' in out['refused'] or 'upper' in out['refused']
+
+    srv, base = _serve(CONTRACT)
+    try:
+        req = urllib.request.Request(f'{base}/rehearse', data=b'gg=1',
+                                     method='POST')
+        try:
+            urllib.request.urlopen(req)
+            assert False, 'unauthed POST accepted'
+        except urllib.error.HTTPError as e:
+            assert e.code == 401
+        req = urllib.request.Request(
+            f'{base}/rehearse', data=b'gg=1', method='POST',
+            headers={'Cookie': 'gg=tok123',
+                     'Origin': 'http://evil.example'})
+        try:
+            urllib.request.urlopen(req)
+            assert False, 'cross-origin POST accepted'
+        except urllib.error.HTTPError as e:
+            assert e.code == 403
+    finally:
+        srv.shutdown()
+
+
+def spec_T3_the_rehearsal_reports_the_hold_benchmark():
+    """§9: every verdict carries what the same capital did just holding —
+    the number every user asks for and nobody ships."""
+    from gridgremlin.adapters import SpotAdapter
+    from gridgremlin.backtest_cli import rehearse
+    from gridgremlin.config import validate_grid
+    draft = validate_grid({'market_type': 'spot', 'symbol': 'ADAUSDT',
+                           'side': 'long', 'capital': 1000,
+                           'lower': 0.15, 'upper': 0.25, 'rungs': 11,
+                           'stop': {'watch': 'mark_price', 'level': 0.14}})
+    a = SpotAdapter({'symbol': 'ADAUSDT', 'qty_step': 0.01, 'min_qty': 1.0,
+                     'price_tick': 0.0001, 'min_notional': 1.0})
+    bars = [{'o': 0.20, 'h': 0.21, 'l': 0.19, 'c': 0.20},
+            {'o': 0.20, 'h': 0.22, 'l': 0.20, 'c': 0.22}]
+    out = rehearse(draft, bars, a)
+    assert abs(out['hold_benchmark'] - 100.0) < 1e-9   # 1000 * (0.22/0.20-1)
+    assert out['bars'] == 2
