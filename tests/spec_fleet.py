@@ -358,3 +358,49 @@ def spec_F2_a_loose_ceiling_is_chosen_never_defaulted():
         assert False, 'a below-cap ceiling passed'
     except ConfigError as e:
         assert 'below the cap' in str(e)
+
+
+def spec_G7_half_a_lot_held_still_suppresses_its_entry():
+    """round() at exactly 0.5 lot suppressed nothing — the entry re-armed
+    with half its lot unexited. Any of the lot held suppresses."""
+    from gridgremlin.ladder import lots_held
+    assert lots_held(0.5, 1.0) == 1
+    assert lots_held(0.0, 1.0) == 0
+    assert lots_held(1.0, 1.0) == 1
+    assert lots_held(1.5, 1.0) == 2
+
+
+def spec_M2_a_schedule_compounding_past_100pct_is_refused():
+    """deviation_pct < 1 per rung still compounds: 20% stepping x2 over 4
+    safeties reaches 300% — negative prices, silently skipped rungs, and
+    M15 inverting through them. Refused at the validator, with the
+    arithmetic named."""
+    from gridgremlin.config import ConfigError, validate_martingale
+    row = {'strategy': 'martingale', 'market_type': 'linear',
+           'symbol': 'XUSDT', 'side': 'long', 'capital': 1000,
+           'base_order_size': 100, 'safety_order_size': 100,
+           'order_size_multiplier': 1.5, 'deviation_pct': 0.2,
+           'deviation_step_multiplier': 2.0, 'max_averaging_orders': 4,
+           'take_profit_avg_pct': 0.01, 'repeat': False}
+    try:
+        validate_martingale(row)
+        assert False, 'a 300% schedule validated'
+    except ConfigError as e:
+        assert 'compounds' in str(e) and '300%' in str(e)
+
+
+def spec_E9_margin_projection_skips_on_unknown_equity_and_says_so():
+    """Unknown equity is None, and summing None was a bare TypeError at
+    build. The projection is optional; the build proceeds, named."""
+    from gridgremlin.main import _project_margin
+
+    class _C:
+        def read_wallet(self):
+            return {'equity': None}
+    lines = []
+
+    class _N:
+        def event(self, kind, botid, text):
+            lines.append(f'{kind}: {text}')
+    _project_margin({'bybit': _C()}, [], _N())
+    assert any('unknown is not zero' in ln for ln in lines)

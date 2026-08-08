@@ -65,17 +65,19 @@ init + the on-page key left via PR #109 — README §11.)*
   sign-only truncation detection, RO match with no re-size, per-venue
   wallet-read isolation, cwd-relative locks/tombstones, probe stranding,
   partially-resting remainder close, M15 deepest-round fallback, grid E9
-  cancel-vs-fill blind side, multi-quote TOTAL, ≥100% cumdev refusal,
-  backtester bid/ask.
+  cancel-vs-fill blind side, multi-quote TOTAL, backtester bid/ask.
+  *(Left via PR #116: half-lot suppression ceil, ≥100% cumdev refusal,
+  unknown-equity projection guard.)*
 - **Prior-art adoption trio** — deterministic clientOrderIds on
   market/seed writes; netted sells in the G15 coverage walk (passivbot's
   arithmetic, our refusal); Nautilus-style temporal deadband before
   believing venue discrepancies.
 - **`ceiling_loose: true`** — designed (DASHBOARD §8), not implemented:
   the coverage check accepts >1.5x cap only with the named switch.
-- **Fee-economics verdict** — the wide-window readout on the demo BTC and
-  ETH longs (flagged 2026-08-07): is the ETH long genuinely trading
-  inside its fees? An evening's readout, not code.
+- *(Fee-economics verdict delivered 2026-08-08: over 120h the BTC long
+  runs +128.82/trip with fees at 27% of realized, the ETH long
+  +8.79/trip at 17% — both clear their fees comfortably; every earlier
+  alarm was a truncated-window artifact, the class R9/R7 now guard.)*
 
 ## Non-gaps — absent by decision, do not re-invent
 

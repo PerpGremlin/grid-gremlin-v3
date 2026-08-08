@@ -137,7 +137,11 @@ def lots_held(sellable, lot_qty):
     """G7: the suppression count, measured off SELLABLE."""
     if lot_qty <= 0:
         return 0
-    return int(round(sellable / lot_qty))
+    # ceil, not round: at exactly half a lot held, round() suppressed
+    # nothing and the nearest entry re-armed with half its lot unexited
+    # (audit 2026-08-07 LOW). Suppress while ANY of the lot is held.
+    import math
+    return math.ceil(sellable / lot_qty - 1e-9)
 
 
 def exit_ladder(exits, sellable, lot_qty, adapter):
