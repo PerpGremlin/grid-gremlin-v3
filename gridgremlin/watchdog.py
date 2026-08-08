@@ -44,6 +44,10 @@ def validate_watchdog(cfg, where='watchdog'):
     for botid, lim in positions.items():
         if not isinstance(lim, dict) or 'min' not in lim or 'max' not in lim:
             raise ConfigError(f'{where}: positions.{botid} needs min and max')
+        extra = set(lim) - {'min', 'max', 'ceiling_loose'}
+        if extra:
+            raise ConfigError(f'{where}: positions.{botid} has unknown '
+                              f'keys {sorted(extra)}')
     return out
 
 
