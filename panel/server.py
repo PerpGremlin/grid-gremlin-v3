@@ -284,9 +284,7 @@ def section(idx, label, contract):
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
 <th>stop-now est.</th><th>watcher</th><th></th></tr>
 {''.join(rows)}</table>
-<p class="dim">stop-now est. = position at mark less the venue fee floor —
-an estimate, not a promise; the venue settles what it settles.<br>
-* window opened mid-round: partial numbers (R7).</p>"""
+"""
 
 
 def render(labelled, static=None):
@@ -295,13 +293,18 @@ def render(labelled, static=None):
     actions, provenance stamped. The numbers can never diverge because
     there is only one code path to diverge from."""
     body = ''.join(section(i, lb, c) for i, (lb, c) in enumerate(labelled))
+    notes = ('<p class="dim">stop-now est. = position at mark less the '
+             'venue fee floor — an estimate, not a promise; the venue '
+             'settles what it settles. · * window opened mid-round: '
+             'partial numbers (R7).</p>')
     if static:
-        chrome = (f'<p class="dim">exported {static} — a snapshot, not a '
-                  'live view; the fleet has moved since.</p>')
+        chrome = notes + (f'<p class="dim">exported {static} — a snapshot, '
+                          'not a live view; the fleet has moved since.</p>')
         head = ''
     else:
         head = f'<meta http-equiv="refresh" content="{REFRESH_S}">'
-        chrome = ('<p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·'
+        chrome = notes + (
+            '<p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·'
                   '\n<a href="/create">create a grid &rarr;</a> ·'
                   '\n<a href="/control">control &rarr;</a> ·'
                   '\n<a href="/export">export snapshot &darr;</a></p>')
