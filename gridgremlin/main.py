@@ -137,11 +137,21 @@ def probe_bot(bot):
             borrow=bool(cfg.get('spot_borrow')))
         oid = (r or {}).get('orderId') or (r or {}).get('oid')
         if oid is not None:
-            try:
-                client.cancel_order(cfg['market_type'], cfg['symbol'], oid)
-            except VenueError as e:
-                if e.kind != 'gone':
-                    raise
+            for attempt in (1, 2, 3):
+                try:
+                    client.cancel_order(cfg['market_type'], cfg['symbol'],
+                                        oid)
+                    break
+                except VenueError as e:
+                    if e.kind == 'gone':
+                        break
+                    if attempt == 3:
+                        # a dead bot skips cycle() forever — nobody would
+                        # ever cancel this order (audit 2026-08-07 MED).
+                        # Name the strand so a human can.
+                        return (f'probe cancel failed 3x: order {oid} may '
+                                f'REST at {price:.10g} — cancel it by '
+                                f'hand ({e})')
         return None
     except Exception as e:                                   # noqa: BLE001
         return f'{type(e).__name__}: {e}'   # one bot fails, not the build

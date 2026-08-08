@@ -369,13 +369,20 @@ def main(argv):
            for k, b in books.items() if isinstance(k, str)):
         print("* the window opened mid-round: that bot's realized and "
               "remainder are partial — widen --hours for the whole story")
-    owned = [b for k, b in books.items()
-             if not isinstance(k, tuple) and not b.get('inverse')]
-    # (unowned tuple keys excluded above)
-    if owned:
+    # A4 in miniature: 'quote' is not one currency — totals group by the
+    # symbol's actual quote coin, one row each (audit 2026-08-07 LOW)
+    by_quote = {}
+    for k, b in books.items():
+        if isinstance(k, tuple) or b.get('inverse'):
+            continue
+        sym = key_of.get(k, (None, ''))[1]
+        q = next((c for c in ('USDT', 'USDC', 'USD', 'EUR', 'BTC')
+                  if sym.endswith(c)), 'quote')
+        by_quote.setdefault(q, []).append(b)
+    for q, owned in sorted(by_quote.items()):
         realized = sum(b['realized'] for b in owned)
         fees = sum(b['fees'] for b in owned)
-        print(f"{'TOTAL (quote)':<18}{sum(b['fills'] for b in owned):>6}"
+        print(f"{f'TOTAL ({q})':<18}{sum(b['fills'] for b in owned):>6}"
               f'{_n(realized):>12}{_n(fees):>10}{"":>20}{"":>12}'
               f'{_n(realized - fees):>12}')
     print()

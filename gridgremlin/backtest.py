@@ -6,7 +6,7 @@ from .ladder import plan_grid
 
 
 def backtest(cfg, adapter, bars, fee_rate=0.0002, funding_rate_hourly=0.0,
-             bar_hours=1.0):
+             bar_hours=1.0, spread_bps=1.0):
     long = cfg['side'] == 'long'
     sign = 1.0 if long else -1.0
     step = adapter.qty_step
@@ -18,7 +18,12 @@ def backtest(cfg, adapter, bars, fee_rate=0.0002, funding_rate_hourly=0.0,
     equity_curve = []
 
     for bar in bars:
-        desired = plan_grid(cfg, adapter, bar['o'], held, basis)
+        # a synthetic spread around the open feeds B3/B4: without bid/ask
+        # the guard-band drops never happened and near-quote rungs filled
+        # that live would skip — optimistic (audit 2026-08-07 LOW)
+        half = bar['o'] * spread_bps / 20_000.0
+        desired = plan_grid(cfg, adapter, bar['o'], held, basis,
+                            bar['o'] - half, bar['o'] + half)
         for o in desired:
             if o['side'] == ('Buy' if long else 'Sell'):        # entries
                 through = bar['l'] < o['price'] if long else bar['h'] > o['price']

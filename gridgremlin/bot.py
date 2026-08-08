@@ -453,7 +453,7 @@ class Bot:
         our own rung-0 reduce-only orders."""
         want = abs(held)
         if want <= 0:
-            return True
+            return want, 0.0
         if hosted:
             book = getattr(self.client, 'stop_orders', None)
             if book is None:
@@ -467,13 +467,17 @@ class Bot:
             resting = sum(o['qty'] for o in truth['orders']
                           if o['reduce_only'] and o['side'] == self._exit_side
                           and rung_of(o['link_id'], self.botid) == 0)
-        # the venue rounds our shares, so a step of slack is expected
-        return resting >= want - max(self.adapter.qty_step, want * 1e-6)
+        # the venue rounds our shares, so a step of slack is expected —
+        # returns (want, resting) so the remainder close can place ONLY
+        # the uncovered part (audit 2026-08-07 MED: it stacked abs(held)
+        # on top of partial exits and the refusals were silently eaten)
+        return want, resting
 
-    def _close_remainder_at_best(self, held, basis):
+    def _close_remainder_at_best(self, uncovered, basis):
         """M3 for a blown-through tranche round: every target already met —
-        close what remains, marketable at the DEEPEST target (fills at
-        target or better)."""
+        close what remains UNCOVERED, marketable at the DEEPEST target
+        (fills at target or better). Partially-resting exits keep their
+        queue; only the gap is placed."""
         cfg, adapter = self.cfg, self.adapter
         long = cfg['side'] == 'long'
         sign = 1.0 if long else -1.0
@@ -483,7 +487,7 @@ class Bot:
         self._gen += 1
         self.client.place_order(
             cfg['market_type'], cfg['symbol'], self._exit_side,
-            adapter.fmt_qty(abs(held)), adapter.fmt_price(best),
+            adapter.fmt_qty(uncovered), adapter.fmt_price(best),
             self._make_link(0),
             adapter.position_idx(self._exit_side, True) or 0,
             reduce_only=True, post_only=False, borrow=self._borrow)
@@ -760,8 +764,12 @@ class Bot:
                     # exits placed earlier are still resting and will fill —
                     # adding another reduce-only order on top is refused for
                     # capacity (110017) and warns every cycle forever.
-                    if not self._exits_cover(truth, held, idx, hosted):
-                        self._close_remainder_at_best(held, basis)
+                    want, resting = self._exits_cover(truth, held, idx,
+                                                      hosted)
+                    slack = max(self.adapter.qty_step, want * 1e-6)
+                    if resting < want - slack:
+                        self._close_remainder_at_best(
+                            self.adapter.round_qty(want - resting), basis)
                         return {'round': 'closing'}
                     return None
                 if hosted:
@@ -769,7 +777,18 @@ class Bot:
                 else:
                     self._maintain_resting_exits(truth, targets)
             except VenueError as e:
-                if e.kind != 'ro_capacity':      # the ladder ignores these too
+                if e.kind == 'ro_capacity':
+                    # the venue already holds what we asked for — quiet,
+                    # but ONCE per episode it is worth a line: a partially
+                    # covered position retrying forever was invisible
+                    # (audit 2026-08-07 MED)
+                    if not self._uncovered_warned:
+                        self._uncovered_warned = True
+                        self.notify.event('warn', self.botid,
+                                          f'tp refused for capacity — '
+                                          f'checking coverage next cycle '
+                                          f'({e})')
+                else:
                     self.notify.event('warn', self.botid, f'tp: {e}')
             return None
         self._maintain_trailing(truth, basis, held, idx)
@@ -1074,12 +1093,30 @@ class Bot:
                                 f'round anchor recovered from the venue: '
                                 f'{self._anchor:.10g} (M15)')
                             break
-            desired = plan_martingale(cfg, adapter, self._anchor or basis or ref,
-                                      ref, held,
-                                      scale=(self._scale
-                                             if cfg.get('reinvest')
-                                             and self._scale is not None
-                                             else 1.0))
+            if (self._anchor is None and held
+                    and abs(held) > 0):
+                # M15's worst case: the deepest round — every safety
+                # filled, nothing resting to invert, and the fallback
+                # anchor (average entry) is the exact re-anchoring M15
+                # forbids: it deepens rungs past validated capital. Hold
+                # what we hold, keep the exits alive, place no new
+                # safeties (audit 2026-08-07 MED).
+                if not self._unplaceable_warned:
+                    self._unplaceable_warned = True
+                    self.notify.event(
+                        'warn', self.botid,
+                        'restarted in the deepest round: no resting '
+                        'safety to recover the anchor from — placing no '
+                        'new safeties; exits maintained (M15)')
+                desired = []
+            else:
+                desired = plan_martingale(
+                    cfg, adapter, self._anchor or basis or ref,
+                    ref, held,
+                    scale=(self._scale
+                           if cfg.get('reinvest')
+                           and self._scale is not None
+                           else 1.0))
         else:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
                                 resting_exits)

@@ -623,3 +623,30 @@ def spec_M14_a_liquidation_survives_a_restart():
     assert r == {'round': 'liquidation'}, r
     assert not bot.alive
     assert not any('round 1: base' in ln for ln in lines)
+
+
+def spec_M15_the_deepest_round_restart_places_no_new_safeties():
+    """Every safety filled, nothing resting to invert: the fallback
+    anchor (average entry) is the exact re-anchoring M15 forbids — it
+    deepens rungs past validated capital. The bot holds, keeps exits,
+    places no safeties, and says so once (audit 2026-08-07 MED)."""
+    import time as _t
+    venue, lines = FakeVenue(), []
+    bot = Bot(_cfg(repeat=True), ADAPTER, venue, Notifier(sink=lines.append),
+              gen_seed=1)
+    now_ms = int(_t.time() * 1000)
+    venue.fills_history = lambda mt, sym, a, b: [
+        {'side': 'buy', 'price': 60000.0, 'qty': 0.048, 'fee': 0.1,
+         'time_ms': now_ms - 60_000, 'link_id': f'{bot.botid}-0-9',
+         'venue_closed': False, 'venue_kind': ''}]
+    venue.position = {'positionIdx': 1, 'side': 'Buy', 'size': '0.048',
+                      'avgPrice': '58000', 'leverage': '10',
+                      'unrealisedPnl': '0'}
+    venue.mark = 57500.0            # below the TP: the round is still OPEN
+    bot.cycle()                     # fresh process, mid-round, no orders
+    entries = [o for o in venue.orders if o['side'] == 'Buy'
+               and not o['reduce_only']]
+    assert entries == [], f'new safeties placed anchorless: {entries}'
+    assert sum('placing no new safeties' in ln for ln in lines) == 1
+    bot.cycle()
+    assert sum('placing no new safeties' in ln for ln in lines) == 1

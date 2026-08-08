@@ -150,8 +150,8 @@ the engine, replayed over real candles. nothing is created.</span></h1>
 <td><button>rehearse</button></td></tr></table>
 <input type="hidden" name="gg" value="1"></form>
 <p class="dim">linear Bybit grids only; a rehearsal is not a promise —
-same candles are never same fills, and the replay plans without bid/ask
-so guard-band drops never happen (slightly optimistic, stated per §9).</p>
+same candles are never same fills. The replay plans against a synthetic
+1bp spread so guard-band drops happen as they would live (§9).</p>
 <p><a href="/">&larr; fleet</a></p>"""
 
 
