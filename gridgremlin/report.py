@@ -237,7 +237,16 @@ def _watchdog_view(fleet):
         state = wd.get('state')
         if state and Path(state).exists():
             swept = max(0, int(time.time() - Path(state).stat().st_mtime))
-        return {'ceilings': ceilings, 'swept_s_ago': swept}
+        belief = {}
+        snap = wd.get('snapshot')
+        if snap and Path(snap).exists():
+            lines = Path(snap).read_text().strip().splitlines()
+            if lines:
+                row = json.loads(lines[-1])
+                belief = {'age_s': max(0, int(time.time() - row.get('t', 0))),
+                          'bots': row.get('bots', {})}
+        return {'ceilings': ceilings, 'swept_s_ago': swept,
+                'belief': belief}
     except (OSError, ValueError):
         return None
 
@@ -315,9 +324,10 @@ def main(argv):
         contract = {
             'window_hours': hours,
             'generated_ms': now_ms,
-            'bots': {b: public_book(books[b], marks.get(key_of[b]),
-                                    side_of.get(b), strat_of.get(b))
-                     for b in botids if b in books},
+            'bots': {b: (public_book(books[b], marks.get(key_of[b]),
+                                     side_of.get(b), strat_of.get(b))
+                         if b in books else None)   # quiet ≠ absent: every
+                     for b in botids},              # configured bot appears
             'ranges': range_of,
             'watchdog': _watchdog_view(fleet),
             'fee_floors': {b: fee_floor_for(key_of[b][0]) for b in botids},
