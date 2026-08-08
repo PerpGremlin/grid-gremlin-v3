@@ -164,3 +164,35 @@ def martingale_preview(cfg, mark):
         rows.append({'rung': i, 'price': price, 'notional': notional,
                      'qty': qty, 'cum_notional': cum_n, 'cum_qty': cum_q})
     return rows, cum_q
+
+
+def init_pair(fleet_path, tag, equity_min, mm_rate_max=0.5,
+              staleness_seconds=600):
+    """First run: write a minimal VALID fleet + watchdog pair, so the
+    create flow has something to merge into — the cliff between "cloned
+    the repo" and "first bot", removed. Refuses to touch existing files:
+    init is for the empty world only."""
+    fp = Path(fleet_path)
+    wp = fp.with_name(f'watchdog.{tag}.json')
+    if fp.exists() or wp.exists():
+        raise ConfigError(f'{fp.name} or {wp.name} already exists — init '
+                          'is for first runs; edit or create instead')
+    wd = {'tag': tag,
+          'snapshot': f'logs/snapshots-{tag}.jsonl',
+          'state': f'logs/watchdog-{tag}.json',
+          'staleness_seconds': staleness_seconds,
+          'mm_rate_max': mm_rate_max,
+          'equity_min': equity_min,
+          're_alert_seconds': 900,
+          'assumes_sole_actor': True,
+          'positions': {}}
+    # the engine's loaders refuse an EMPTY world on both sides — an empty
+    # fleet and an empty positions map are each "nothing trades unwatched"
+    # said differently, and that refusal is correct for RUNNING. init only
+    # writes the shape; the first create validates the merged whole at its
+    # gate, and until then the engine will not start. Deliberate.
+    fleet = {'bots': [], 'watchdog': str(wp)}
+    fp.parent.mkdir(parents=True, exist_ok=True)
+    atomic_write(wp, json.dumps(wd, indent=1) + '\n')
+    atomic_write(fp, json.dumps(fleet, indent=1) + '\n')
+    return wp

@@ -358,6 +358,23 @@ entry in `~/.ssh/config`, run `ssh -fN <host>` once per boot, bookmark the
 URL. Pin the session with `--port 41900 --token-file <path>` (0600; the
 panel refuses a looser file). Locally, none of that — just open the URL.
 
+### Starting from scratch, entirely in the panel
+
+Point the panel at a fleet file that does not exist yet and it offers
+**init**: name it, set your equity floor, and it writes a minimal valid
+fleet + watchdog pair — then the create flow takes over for your first
+bot. The engine refuses to start until that first bot exists (nothing
+trades unwatched, and nothing trades empty — deliberately). Then:
+
+```
+python3 -m gridgremlin.main configs/mine.json      # terminal 1: engine
+python3 -m panel.server configs/mine.json          # terminal 2: panel
+```
+
+A **key** link on the page defines every column, state, and symbol the
+dashboard can show — if a word on the screen needs more than the key,
+that word has failed and we want to hear about it.
+
 ### Keys — the one technical step for everyone
 
 Keys live in `.env` beside the repo, never in the panel, never in git:

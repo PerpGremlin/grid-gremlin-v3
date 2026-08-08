@@ -13,7 +13,11 @@ def _serve(contract):
         def _contract(self, fleet):
             return contract
     H.token = 'tok123'
-    H.fleets = ('f.json',)
+    import tempfile as _tf
+    from pathlib import Path as _P
+    _fp = _P(_tf.mkdtemp()) / 'f.json'
+    _fp.write_text('{"bots": [{"x": 1}]}')     # exists and non-empty:
+    H.fleets = (str(_fp),)                      # the init guard stands down
     H.labels = ('demo',)
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), H)
     H.host_ok = f'127.0.0.1:{srv.server_port}'
@@ -363,3 +367,42 @@ def spec_M2_the_preview_does_the_compounding_and_names_full_depth():
         _FLEET, _WD, {'bot': raw, 'watchdog': {'max': full * 1.2}})
     assert botid == 'linSOLUSDTs'
     assert validate_whole(fleet, wd, lambda c: _fake_adapter()) is None
+
+
+def spec_F1_init_writes_a_valid_pair_and_only_into_the_empty_world():
+    """First run: a minimal fleet + watchdog pair the create flow can
+    merge into — watchdog validated by the engine's own loader before
+    anything touches disk; existing files are never overwritten."""
+    import tempfile
+    from pathlib import Path as _P
+    from panel.create import init_pair
+    from gridgremlin.watchdog import validate_watchdog
+    d = _P(tempfile.mkdtemp())
+    wp = init_pair(d / 'fleet.mine.json', 'mine', equity_min=500.0)
+    fleet = json.loads((d / 'fleet.mine.json').read_text())
+    wd = json.loads(wp.read_text())
+    assert fleet == {'bots': [], 'watchdog': str(wp)}
+    # the loaders refuse EMPTY worlds (correctly, for running) — so the
+    # pair must validate the moment one bot joins it, which is the gate
+    # that actually matters
+    from panel.create import merge_proposal, validate_whole
+    from gridgremlin.config import validate_grid
+    _, f2, w2 = merge_proposal(fleet, wd, {'bot': dict(_BOT),
+                                           'watchdog': {'max': 9604.0}})
+    assert validate_whole(f2, w2, lambda c: _fake_adapter()) is None
+    assert wd['assumes_sole_actor'] is True and wd['equity_min'] == 500.0
+    try:
+        init_pair(d / 'fleet.mine.json', 'mine', 500.0)
+        assert False, 'overwrote an existing world'
+    except Exception as e:
+        assert 'already exists' in str(e)
+
+
+def spec_V9_the_key_defines_every_word_the_page_uses():
+    """A dashboard that needs a translator failed the thesis: the key
+    defines each column, state, and symbol the page can show."""
+    from panel.server import KEY
+    for term in ('realized', 'unreal', 'stop-now', 'watcher', 'DEAD',
+                 'UNWATCHED', '(belief)', 'ZERO-SPREAD', 'hold benchmark',
+                 'trips', 'max depth', '* (star)'):
+        assert term in KEY, f'key missing: {term}'
