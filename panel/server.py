@@ -189,7 +189,8 @@ theme</button>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
 <th>stop-now est.</th><th>watcher</th></tr>{''.join(rows)}</table>
 <p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·
-<a href="/create">create a grid &rarr;</a></p>
+<a href="/create">create a grid &rarr;</a> ·
+<a href="/control">control &rarr;</a></p>
 <p class="dim">stop-now est. = position at mark less the venue fee floor —
 an estimate, not a promise; the venue settles what it settles.<br>
 * window opened mid-round: partial numbers (R7).
@@ -200,6 +201,7 @@ with the terminal. It holds no keys and can write nothing.</p>"""
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = 'gg-panel'
     token = ''
+    unit = None            # §12: control is opt-in per launch (--unit)
     host_ok = ''
     fleet = ''
     hours = 24.0
@@ -243,6 +245,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(403, 'bad token')
         if not self._authed():
             return self._deny(401, 'open the tokened URL from the terminal')
+        if self.path == '/control':
+            return self._control_page()
         if self.path == '/create':
             return self._page(CREATE_FORM)
         if self.path == '/rehearse':
@@ -278,6 +282,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(403, 'missing form token')
         if self.path in ('/create', '/apply'):
             return self._create_flow(form, apply=self.path == '/apply')
+        if self.path in ('/unit', '/revive'):
+            return self._control_act(form, self.path)
         if self.path != '/rehearse':
             return self._deny(404, 'no such action')
         draft = {'market_type': 'linear', 'venue': 'bybit',
@@ -389,6 +395,85 @@ class Handler(http.server.BaseHTTPRequestHandler):
             f'untouched until restarted (§11).</p>')
 
 
+    def _tombs_path(self):
+        return Path(self.fleet).parent.parent / 'logs' / 'tombstones.json'
+
+    def _control_page(self):
+        if not self.unit:
+            return self._deny(404, 'control is not armed on this panel '
+                                   '(start it with --unit) — §12')
+        state = subprocess.run(['systemctl', '--user', 'is-active',
+                                self.unit], capture_output=True,
+                               text=True).stdout.strip()
+        cls = 'pos' if state == 'active' else 'neg'
+        tombs = {}
+        tp = self._tombs_path()
+        if tp.exists():
+            tombs = json.loads(tp.read_text() or '{}')
+        trows = ''.join(
+            f"<tr><td>{b}</td><td class='dim'>{v.get('reason')}</td>"
+            f"<td><form method='post' action='/revive' style='margin:0'>"
+            f"<input type='hidden' name='gg' value='1'>"
+            f"<input name='confirm' size='14' placeholder='{b}'>"
+            f"<button>revive</button></form></td></tr>"
+            for b, v in tombs.items()) or             '<tr><td class="dim" colspan="3">no tombstones</td></tr>'
+        body = f"""<h1>control <span class="dim">— processes and files,
+never the venue (§12)</span></h1>
+<p>fleet unit <b>{self.unit}</b>: <span class="{cls}">{state}</span></p>
+<form method="post" action="/unit">
+<input type="hidden" name="gg" value="1">
+<select name="action"><option>restart</option><option>stop</option>
+<option>start</option></select>
+type the unit name to confirm: <input name="confirm" size="22"
+placeholder="{self.unit}"><button>do it</button></form>
+<p class="dim">stop PARKS, never flattens: positions and their
+venue-resting orders survive a stopped engine (E3) — but stops go
+unevaluated and nothing replenishes until start. restart enacts any
+written config (§11).</p>
+<h1>tombstones <span class="dim">— revival is deliberate, with the
+evidence (X7)</span></h1>
+<table><tr><th>bot</th><th>reason</th><th></th></tr>{trows}</table>
+<p class="dim">a revival takes effect at the next fleet start — the
+file is the truth; the process reads it at build.</p>
+<p><a href="/">&larr; fleet</a></p>"""
+        return self._page(body)
+
+    def _control_act(self, form, path):
+        if not self.unit:
+            return self._deny(404, 'control is not armed on this panel')
+        if path == '/unit':
+            if form.get('confirm', '') != self.unit:
+                return self._page('<h1 class="neg">not done</h1><p>type the '
+                                  f'unit name <b>{self.unit}</b> exactly — '
+                                  'a click is not a decision (§12). '
+                                  '<a href="/control">back</a></p>')
+            act = form.get('action', '')
+            if act not in ('start', 'stop', 'restart'):
+                return self._deny(403, 'unknown action')
+            r = subprocess.run(['systemctl', '--user', act, self.unit],
+                               capture_output=True, text=True, timeout=60)
+            note = r.stderr.strip() or f'{act}: done'
+            return self._page(f'<h1>{self.unit}: {act}</h1><p>{note}</p>'
+                              '<p><a href="/control">control</a> · '
+                              '<a href="/">fleet</a></p>')
+        # /revive
+        from panel.create import atomic_write
+        tp = self._tombs_path()
+        tombs = json.loads(tp.read_text() or '{}') if tp.exists() else {}
+        botid = form.get('confirm', '')
+        if botid not in tombs:
+            return self._page('<h1 class="neg">not revived</h1><p>type the '
+                              'botid exactly as the tombstone names it. '
+                              '<a href="/control">back</a></p>')
+        gone = tombs.pop(botid)
+        atomic_write(tp, json.dumps(tombs))
+        return self._page(f'<h1>{botid}: tombstone removed</h1>'
+                          f'<p class="dim">was: {gone.get("reason")}</p>'
+                          '<p>takes effect at the next fleet start (X7) — '
+                          'restart from <a href="/control">control</a> when '
+                          'ready.</p>')
+
+
 def _f(v):
     try:
         return float(v)
@@ -406,6 +491,8 @@ def main(argv):
     port = 0
     if '--port' in argv:
         port = int(argv[argv.index('--port') + 1])
+    if '--unit' in argv:
+        Handler.unit = argv[argv.index('--unit') + 1]
     if '--token-file' in argv:
         # the persistent-session variant: token survives restarts, stored
         # like a key (0600, refuse looser — the engine's own rule)
