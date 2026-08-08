@@ -350,7 +350,16 @@ def _ensure_symbol_capacity(clients, bots, base_notifier):
 
 
 def _project_margin(clients, cfgs, notifier):
-    equity = sum(c.read_wallet()['equity'] for c in clients.values())
+    equities = [c.read_wallet()['equity'] for c in clients.values()]
+    if any(e is None for e in equities):
+        # E9 made unknown equity None; summing None crashed the build with
+        # a bare TypeError (audit 2026-08-07 LOW). Unknown is named, and
+        # a projection is optional — the build proceeds without it.
+        notifier.event('warn', 'fleet',
+                       'margin projection skipped: a venue answered no '
+                       'equity (unknown is not zero, E9)')
+        return
+    equity = sum(equities)
     if not equity:
         return
     mm = sum(c['ladder_notional'] * c.get('_tier_mm_rate', 0.005)

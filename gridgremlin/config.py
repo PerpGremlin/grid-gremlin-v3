@@ -350,6 +350,16 @@ def validate_martingale(row, where='row'):
     cfg['max_averaging_orders'] = _num(cfg, 'max_averaging_orders', where,
                                        least=1, most=50, required=True,
                                        integer=True)
+    _sched_d = cfg['deviation_pct']
+    _sched_s = cfg['deviation_step_multiplier']
+    _cum = sum(_sched_d * _sched_s ** i
+               for i in range(int(cfg['max_averaging_orders'])))
+    if _cum >= 1.0:
+        _refuse(f'{where}: the deviation schedule compounds to '
+                f'{_cum:.0%} — rungs beyond -100% have negative prices, '
+                'and M15 anchor recovery would invert through them. '
+                'Fewer safety orders, a smaller step multiplier, or a '
+                'smaller deviation (audit 2026-08-07 LOW)')
     cfg['take_profit_avg_pct'] = _fraction(cfg, 'take_profit_avg_pct', where)
     cfg['take_profit_tranches'] = _validate_tranches(
         cfg.get('take_profit_tranches'), where)
