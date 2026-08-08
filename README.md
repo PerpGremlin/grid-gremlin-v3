@@ -367,9 +367,16 @@ bot. The engine refuses to start until that first bot exists (nothing
 trades unwatched, and nothing trades empty — deliberately). Then:
 
 ```
-python3 -m gridgremlin.main configs/mine.json      # terminal 1: engine
-python3 -m panel.server configs/mine.json          # terminal 2: panel
+python3 -m panel.server configs/mine.json --supervise
 ```
+
+One terminal, once: `--supervise` puts start/stop/restart on the control
+page — the engine runs as a detached child (closing the panel or the
+browser touches nothing; its output goes to `logs/engine-*.log`), stop
+parks (never flattens), and there is no auto-restart, ever. Prefer two
+terminals? The engine still runs bare: `python3 -m gridgremlin.main
+configs/mine.json`. On an ops box, systemd units + `--units` (§12) do
+the same job with the init system's supervision.
 
 A **key** link on the page defines every column, state, and symbol the
 dashboard can show — if a word on the screen needs more than the key,

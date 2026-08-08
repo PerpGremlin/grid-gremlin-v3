@@ -375,6 +375,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
     token = ''
     fleets = ()            # venue sections: one per fleet file
     units = ()             # §12: control is opt-in per launch (--units)
+    supervise = False      # §13: systemd's laptop twin (--supervise)
     labels = ()
     host_ok = ''
     fleet = ''
@@ -773,9 +774,33 @@ class Handler(http.server.BaseHTTPRequestHandler):
             f'</form><p><a href="/">&larr; fleet</a></p>')
 
     def _control_page(self):
-        if not self.units:
+        if not self.units and not self.supervise:
             return self._deny(404, 'control is not armed on this panel '
-                                   '(start it with --units) — §12')
+                                   '(--units or --supervise) — §12/§13')
+        if self.supervise:
+            from panel import supervise as sup
+            rows = []
+            for f in self.fleets:
+                st, pid = sup.status(f)
+                cls = 'pos' if st == 'running' else 'neg'
+                rows.append(f'<p>engine <b>{Path(f).name}</b>: '
+                            f'<span class="{cls}">{st}'
+                            + (f' (pid {pid})' if pid else '')
+                            + '</span></p>')
+            names = ', '.join(Path(f).name for f in self.fleets)
+            return self._page(f"""<h1>control <span class="dim">— processes
+and files, never the venue (§13, supervised)</span></h1>
+{''.join(rows)}
+<form method="post" action="/unit">
+<input type="hidden" name="gg" value="1">
+<select name="action"><option>start</option><option>stop</option>
+<option>restart</option></select>
+type the fleet file name to confirm ({names}):
+<input name="confirm" size="22"><button>do it</button></form>
+<p class="dim">the engine is a DETACHED child: closing the panel does
+nothing to it. stop PARKS, never flattens (E3). no auto-restart, ever
+(§6).</p>
+{self._tombs_html()}<p><a href="/">&larr; fleet</a></p>""")
         rows = []
         for u in self.units:
             state = subprocess.run(['systemctl', '--user', 'is-active', u],
@@ -784,21 +809,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             cls = 'pos' if state == 'active' else 'neg'
             rows.append(f'<p>unit <b>{u}</b>: <span class="{cls}">{state}'
                         '</span></p>')
-        units_html = ''.join(rows)
-        tombs = {}
-        tp = self._tombs_path()
-        if tp.exists():
-            tombs = json.loads(tp.read_text() or '{}')
-        trows = ''.join(
-            f"<tr><td>{b}</td><td class='dim'>{v.get('reason')}</td>"
-            f"<td><form method='post' action='/revive' style='margin:0'>"
-            f"<input type='hidden' name='gg' value='1'>"
-            f"<input name='confirm' size='14' placeholder='{b}'>"
-            f"<button>revive</button></form></td></tr>"
-            for b, v in tombs.items()) or             '<tr><td class="dim" colspan="3">no tombstones</td></tr>'
-        body = f"""<h1>control <span class="dim">— processes and files,
-never the venue (§12)</span></h1>
-{units_html}
+        return self._page(f"""<h1>control <span class="dim">— processes and
+files, never the venue (§12)</span></h1>
+{''.join(rows)}
 <form method="post" action="/unit">
 <input type="hidden" name="gg" value="1">
 <select name="action"><option>restart</option><option>stop</option>
@@ -809,17 +822,52 @@ type a unit name to confirm: <input name="confirm" size="22">
 venue-resting orders survive a stopped engine (E3) — but stops go
 unevaluated and nothing replenishes until start. restart enacts any
 written config (§11).</p>
-<h1>tombstones <span class="dim">— revival is deliberate, with the
-evidence (X7)</span></h1>
-<table><tr><th>bot</th><th>reason</th><th></th></tr>{trows}</table>
-<p class="dim">a revival takes effect at the next fleet start — the
-file is the truth; the process reads it at build.</p>
-<p><a href="/">&larr; fleet</a></p>"""
-        return self._page(body)
+{self._tombs_html()}<p><a href="/">&larr; fleet</a></p>""")
+
+    def _tombs_html(self):
+        tombs = {}
+        tp = self._tombs_path()
+        if tp.exists():
+            tombs = json.loads(tp.read_text() or '{}')
+        trows = ''.join(
+            f"<tr><td>{b}</td><td class='dim'>{v.get('reason')}</td>"
+            f"<td><form method='post' action='/revive' style='margin:0'>"
+            f"<input type='hidden' name='gg' value='1'>"
+            f"<input name='confirm' size='14' placeholder='{b}'>"
+            f"<button>revive</button></form></td></tr>"
+            for b, v in tombs.items()) or \
+            '<tr><td class="dim" colspan="3">no tombstones</td></tr>'
+        return ('<h1>tombstones <span class="dim">— revival is deliberate, '
+                'with the evidence (X7)</span></h1>'
+                '<table><tr><th>bot</th><th>reason</th><th></th></tr>'
+                + trows + '</table>'
+                '<p class="dim">a revival takes effect at the next fleet '
+                'start — the file is the truth; the process reads it at '
+                'build.</p>')
 
     def _control_act(self, form, path):
-        if not self.units:
+        if not self.units and not self.supervise:
             return self._deny(404, 'control is not armed on this panel')
+        if path == '/unit' and self.supervise:
+            from panel import supervise as sup
+            byname = {Path(f).name: f for f in self.fleets}
+            fleet = byname.get(form.get('confirm', ''))
+            if fleet is None:
+                return self._page('<h1 class="neg">not done</h1><p>type '
+                                  'the fleet file name exactly (§13). '
+                                  '<a href="/control">back</a></p>')
+            act = form.get('action', '')
+            if act not in ('start', 'stop', 'restart'):
+                return self._deny(403, 'unknown action')
+            notes = []
+            if act in ('stop', 'restart'):
+                notes.append(sup.stop(fleet))
+            if act in ('start', 'restart'):
+                notes.append(sup.start(fleet))
+            return self._page(f'<h1>{Path(fleet).name}: {act}</h1><p>'
+                              + '<br>'.join(notes)
+                              + '</p><p><a href="/control">control</a> · '
+                                '<a href="/">fleet</a></p>')
         if path == '/unit':
             unit = form.get('confirm', '')
             if unit not in self.units:
@@ -873,6 +921,9 @@ def main(argv):
     port = 0
     if '--port' in argv:
         port = int(argv[argv.index('--port') + 1])
+    if '--supervise' in argv:
+        Handler.supervise = True
+        argv.remove('--supervise')
     if '--token-file' in argv:
         # the persistent-session variant: token survives restarts, stored
         # like a key (0600, refuse looser — the engine's own rule)
