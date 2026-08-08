@@ -226,3 +226,26 @@ def spec_D1_an_outside_close_behind_our_own_cancel_still_stands_down():
     bot.cycle()
     assert not bot.alive, 'an outside close passed as a trip'
     assert any('closed by an outside close' in ln for ln in lines)
+
+
+def spec_G15_the_coverage_walk_nets_interleaved_sells_correctly():
+    """Prior-art adoption item 2 (passivbot's arithmetic): sells inside
+    the window must consume OLDER buys during the walk, so the covering
+    set is the newest surviving lots — not a buys-only selection. Hand
+    case: buy 100@10 (old), sell 50 (sold from that old lot), buy 60@20
+    (new); holding 110 = the 60 new + 50 surviving old.
+    basis = (60x20 + 50x10) / 110 = 15.4545..."""
+    venue, lines = FakeSpotVenue(mark=20.0, base=110.0), []
+    venue.record_fill('buy', 10.0, 100.0, 'spoADAUSDTl-3-1')
+    venue.record_fill('sell', 12.0, 50.0, 'spoADAUSDTl-4-2')
+    venue.record_fill('buy', 20.0, 60.0, 'spoADAUSDTl-5-3')
+    bot = _spot_bot(venue, lines)
+    basis = bot._derive_basis(110.0)
+    assert basis is not None
+    assert abs(basis - (60 * 20 + 50 * 10) / 110.0) < 1e-9, basis
+    # and a sell larger than every remaining buy still refuses (coverage)
+    venue2, _ = FakeSpotVenue(mark=20.0, base=110.0), []
+    venue2.record_fill('buy', 10.0, 40.0, 'spoADAUSDTl-3-1')
+    venue2.record_fill('sell', 12.0, 50.0, 'spoADAUSDTl-4-2')
+    bot2 = _spot_bot(venue2, [].append and [] or [])
+    assert bot2._derive_basis(110.0) is None
