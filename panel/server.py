@@ -287,6 +287,60 @@ def section(idx, label, contract):
 """
 
 
+KEY = """<h1>key — what every word on this page means</h1>
+<table><tr><th>term</th><th></th></tr>
+<tr><td>realized</td><td class="dim">profit from MATCHED buys and sells,
+in quote currency (USDT). Money already made or lost; it never moves
+again.</td></tr>
+<tr><td>fees</td><td class="dim">what the venue charged for every fill
+in the window — already excluded from nothing: total = realized − fees
++ unreal.</td></tr>
+<tr><td>open@avg</td><td class="dim">what the bot HOLDS right now, at
+its average cost. This inventory is not profit and not loss yet.</td></tr>
+<tr><td>unreal</td><td class="dim">the open remainder marked to the
+current price. Moves every second; becomes real only when sold.</td></tr>
+<tr><td>total</td><td class="dim">realized − fees + unreal. The honest
+sum — the number other dashboards inflate by leaving parts out.</td></tr>
+<tr><td>bought / sold</td><td class="dim">base quantity each way in the
+window — how much churn produced the numbers to the left.</td></tr>
+<tr><td>range</td><td class="dim">the grid's territory: bar = range,
+ticks = rungs, dot = current price.</td></tr>
+<tr><td>edge lo/hi</td><td class="dim">distance from price to each end
+of the range, as % of price. Small number = near that edge.</td></tr>
+<tr><td>stop-now est.</td><td class="dim">roughly what you would receive
+if you flattened this bot right now — position at price, minus the
+venue fee. An estimate, never a promise.</td></tr>
+<tr><td>watcher</td><td class="dim">how much of this bot's watchdog
+ceiling its position uses. The watchdog is the independent alarm that
+pages if a position outgrows what its config authorises.</td></tr>
+<tr><td>HOLDING / FLAT / RESTING</td><td class="dim">holding = has a
+position; flat = no position, traded recently; resting = orders working,
+nothing held, no fills this window.</td></tr>
+<tr><td>DEAD</td><td class="dim">the bot stood down and wrote a
+tombstone. Its reason is on the control page; revival is deliberate.
+</td></tr>
+<tr><td>UNWATCHED</td><td class="dim">no watchdog line for this bot —
+the fleet will refuse to build until it has one.</td></tr>
+<tr><td>(belief)</td><td class="dim">a number from the engine's own
+snapshot rather than venue records — what the bot believes, seconds
+old, honest about its source.</td></tr>
+<tr><td>* (star)</td><td class="dim">this bot's numbers come from a
+window that opened mid-round: partial by construction. Widen the window
+for the whole story.</td></tr>
+<tr><td>ZERO-SPREAD (R9)</td><td class="dim">exits that closed inside
+the fee of their own cost — churn that pays the venue and nobody else.
+Should be zero.</td></tr>
+<tr><td>trips / per-trip</td><td class="dim">a trip is buy-to-flat (one
+completed round trip); per-trip is realized per trip. The grid's
+heartbeat.</td></tr>
+<tr><td>rounds / SO fills / max depth</td><td class="dim">martingale:
+completed rounds; safety orders filled this window; the deepest rung
+reached. Depth near max SOs = the schedule nearly exhausted.</td></tr>
+<tr><td>hold benchmark</td><td class="dim">what the same capital would
+have done just holding over the same window. Beat it or hold.</td></tr>
+</table><p><a href="/">&larr; fleet</a></p>"""
+
+
 def render(labelled, static=None):
     """One renderer, two artefacts (§4): the live page, or — with
     static=timestamp-text — a self-contained export: no refresh, no
@@ -307,7 +361,8 @@ def render(labelled, static=None):
             '<p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·'
                   '\n<a href="/create">create a grid &rarr;</a> ·'
                   '\n<a href="/control">control &rarr;</a> ·'
-                  '\n<a href="/export">export snapshot &darr;</a></p>')
+                  '\n<a href="/export">export snapshot &darr;</a> ·'
+            '\n<a href="/key">key</a></p>')
     return f"""<!doctype html><meta charset="utf-8">
 <title>grid-gremlin</title><style>{CSS}</style>
 {head}<button onclick="document.documentElement.classList.toggle('light')">
@@ -336,6 +391,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
         t, data = Handler._cache.get(fleet, (0.0, None))
         if data is not None and time.time() - t < CACHE_TTL_S:
             return data
+        raw = json.loads(Path(fleet).read_text()) if Path(fleet).exists() \
+            else {}
+        if not raw.get('bots'):
+            # a just-initialised world: nothing to report on yet, and the
+            # engine's own report would (rightly) refuse an empty fleet
+            return {'window_hours': self.hours,
+                    'generated_ms': int(time.time() * 1000),
+                    'bots': {}, 'unowned': {}}
         out = subprocess.run(
             [sys.executable, '-m', 'gridgremlin.report', fleet,
              '--hours', str(self.hours), '--json'],
@@ -371,6 +434,30 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(403, 'bad token')
         if not self._authed():
             return self._deny(401, 'open the tokened URL from the terminal')
+        missing = [f for f in self.fleets if not Path(f).exists()]
+        if missing and self.path == '/':
+            f0 = missing[0]
+            return self._page(
+                f'<h1>first run — {f0} does not exist yet</h1>'
+                '<p class="dim">init writes a minimal valid fleet + '
+                'watchdog pair; then the create flow takes over. The '
+                'engine will refuse to start until the first bot exists — '
+                'nothing trades unwatched, and nothing trades empty.</p>'
+                f'<form method="post" action="/init">'
+                f'<input type="hidden" name="gg" value="1">'
+                f'<input type="hidden" name="path" value="{f0}">'
+                '<table><tr><th>name (tag)</th><th>equity floor</th>'
+                '<th>max margin rate</th></tr><tr>'
+                '<td><input name="tag" value="mine" size="10"></td>'
+                '<td><input name="equity_min" size="8" '
+                'placeholder="e.g. 500"></td>'
+                '<td><input name="mm_rate_max" value="0.5" size="5"></td>'
+                '</tr></table><button>write the pair</button></form>'
+                '<p class="dim">equity floor: the watchdog pages if account '
+                'equity falls below this. Margin rate 0.5 = alarm at 50% '
+                'of maintenance margin.</p>')
+        if self.path == '/key':
+            return self._page(KEY)
         if self.path == '/control':
             return self._control_page()
         if self.path == '/export':
@@ -424,6 +511,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._create_flow(form, apply=self.path == '/apply')
         if self.path in ('/unit', '/revive'):
             return self._control_act(form, self.path)
+        if self.path == '/init':
+            from panel.create import init_pair
+            try:
+                wp = init_pair(form.get('path', ''), form.get('tag', 'mine'),
+                               _f(form.get('equity_min')),
+                               _f(form.get('mm_rate_max')) or 0.5)
+            except Exception as e:                          # noqa: BLE001
+                return self._page(f'<h1 class="neg">init refused</h1>'
+                                  f'<p class="neg">{e}</p>')
+            return self._page(f'<h1>written</h1><p>fleet + watcher pair '
+                              f'created ({wp.name} beside it). '
+                              '<a href="/create">create your first bot '
+                              '&rarr;</a></p>')
         if self.path != '/rehearse':
             return self._deny(404, 'no such action')
         draft = {'market_type': 'linear', 'venue': 'bybit',

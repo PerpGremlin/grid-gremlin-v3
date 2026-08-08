@@ -44,8 +44,8 @@ control (start/stop/restart both units + tombstone revival with evidence,
 opt-in per launch) · export snapshot · stable tunnel session (pinned port,
 0600 token). 320 specs.
 
-*(Keys recipe and the red-states quickstart left via PR #106 —
-README §11.)*
+*(Keys recipe + red-states quickstart left via PR #106; first-run
+init + the on-page key left via PR #109 — README §11.)*
 
 **Remaining, in tackle order:**
 
@@ -53,11 +53,7 @@ README §11.)*
    deviation-ladder preview, ceiling from full depth, spot grids in the
    create form; tranches/trailing stay file-only). Edit for
    martingale/spot rows remains grids-only.
-2. **First-run `init`** — the panel can only merge into an existing
-   fleet+watchdog pair; a no-agent user hits a cliff at clone. A guided
-   flow (or CLI) writing a minimal valid pair from a template, refusals
-   guiding each field. Cheap, unblocks strangers.
-3. **Local-first packaging** — the real project: engine + panel on a
+2. **Local-first packaging** — the real project: engine + panel on a
    stranger's PC, no VPS, no tunnel, one command to a bookmark. Promoted
    by the no-agent question (2026-08-08); everything built transfers, the
    plumbing around it changes. Design §4's centre case, finally built.
