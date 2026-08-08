@@ -334,3 +334,25 @@ def spec_R9_zero_spread_is_margin_against_the_cost_it_closes():
     apply_fill(scrape, 'sell', 1.100, 9.0, 0.01)
     apply_fill(scrape, 'buy', 1.1002, 9.0, 0.01)    # 0.018% — inside fee
     assert scrape['same_rung'] == 1
+
+def spec_D8_the_contract_serialises_every_public_field_and_no_working_state():
+    """One data contract feeds the terminal table, the JSON emitter, and
+    (next) the panel — so they can never disagree. Private working state
+    (underscore keys, sets) must never leak; a truncated window must void
+    the R9 verdict, not report one (R9 honours R7)."""
+    import json as _json
+    from gridgremlin.report import apply_fill, new_book, public_book
+    b = new_book()
+    apply_fill(b, 'buy', 100.0, 2.0, 0.1)
+    apply_fill(b, 'sell', 101.0, 1.0, 0.1)
+    out = public_book(b, mark=102.0, side='long', strategy='grid')
+    _json.dumps(out)                       # serialisable, whole
+    assert not any(k.startswith('_') for k in out)
+    assert out['bought'] == 2.0 and out['sold'] == 1.0
+    assert abs(out['unreal_at_mark'] - 2.0) < 1e-9    # 1 @ basis 100, mark 102
+    assert out['truncated'] is False
+    # a window opening mid-round voids the churn verdict
+    t = new_book()
+    apply_fill(t, 'sell', 110.0, 1.0, 0.1)   # long book opening with a sell
+    tout = public_book(t, side='long')
+    assert tout['truncated'] is True and tout['same_rung'] is None
