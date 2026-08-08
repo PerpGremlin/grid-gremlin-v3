@@ -203,3 +203,26 @@ def spec_S5_a_sub_minimum_sliver_logs_and_never_pages():
     bot.cycle()
     assert not any('] warn' in ln and 'harvestable' in ln for ln in lines)
     assert any('below the venue minimum' in ln for ln in lines), lines
+
+
+def spec_D1_an_outside_close_behind_our_own_cancel_still_stands_down():
+    """A link vanishes identically whether it filled or we cancelled it —
+    and an outside flatten coinciding with a routine replace slipped
+    through as a benign trip (audit 2026-08-07 MED). The fills question
+    is asked on the fast path too."""
+    import tempfile
+    from pathlib import Path
+    from gridgremlin.tombstones import Tombstones
+    venue, lines = FakeSpotVenue(), []
+    venue.record_fill('buy', 0.1964, 954.68, 'spoADAUSDTl-9-0')
+    bot = _spot_bot(venue, lines)
+    bot.tombs = Tombstones(Path(tempfile.mkdtemp()) / 'tombs.json')
+    bot.cycle()
+    sell = next(o for o in venue.orders if o['side'] == 'Sell')
+    venue.orders = [o for o in venue.orders if o is not sell]   # we "cancel"
+    venue.record_fill('sell', 0.1970, 953.73, '')   # an outside hand sold
+    venue.base = 0.00322
+    bot._exit_links_last = {sell['link_id']}        # link vanished = fast path
+    bot.cycle()
+    assert not bot.alive, 'an outside close passed as a trip'
+    assert any('closed by an outside close' in ln for ln in lines)

@@ -356,3 +356,19 @@ def spec_D8_the_contract_serialises_every_public_field_and_no_working_state():
     apply_fill(t, 'sell', 110.0, 1.0, 0.1)   # long book opening with a sell
     tout = public_book(t, side='long')
     assert tout['truncated'] is True and tout['same_rung'] is None
+
+
+def spec_R7_a_balanced_slice_still_declares_its_truncation():
+    """The sign test alone passed a window that opened mid-round but
+    netted flat (audit 2026-08-07 MED: reinvest scaled on the corrupt
+    net). The window's FIRST fill is the other tell: a one-sided book
+    cannot legitimately open with its exit side."""
+    from gridgremlin.report import apply_fill, new_book, window_truncated
+    b = new_book()
+    apply_fill(b, 'sell', 110.0, 1.0, 0.1)     # pre-window buy invisible
+    apply_fill(b, 'buy', 105.0, 1.0, 0.1)      # re-entry: nets to +1
+    assert window_truncated(b, 'long') is True
+    clean = new_book()
+    apply_fill(clean, 'buy', 100.0, 1.0, 0.1)
+    apply_fill(clean, 'sell', 110.0, 1.0, 0.1)
+    assert window_truncated(clean, 'long') is False

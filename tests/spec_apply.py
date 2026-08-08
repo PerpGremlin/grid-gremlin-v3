@@ -110,11 +110,18 @@ def spec_E2_duplicates_on_one_rung_keep_exactly_one():
     assert len(cancel) == 2 and create == []                 # self-heals
 
 
-def spec_E2_truncated_exit_is_a_match_oversized_is_not():
+def spec_E2_truncation_is_kept_but_a_grown_position_is_recovered():
+    """The old spec pinned keeping a 0.009 exit against a 0.021 desire
+    forever — conflating venue truncation with a position that GREW past
+    a stale cover (audit 2026-08-07 wrong-spec). Small shrink: keep.
+    Below three quarters: re-size, or the growth never exits."""
     want = _desired(12, 63000.0, 0.021, side='Sell', ro=True)
-    truncated = _resting(12, 63000.0, 0.009, side='Sell', ro=True)
-    cancel, create = diff([want], [truncated], BOT)
-    assert cancel == [] and create == []          # the venue shrank it: keep
+    shrunk = _resting(12, 63000.0, 0.019, side='Sell', ro=True)
+    cancel, create = diff([want], [shrunk], BOT)
+    assert cancel == [] and create == []          # venue-shrunk: keep
+    stale = _resting(12, 63000.0, 0.009, side='Sell', ro=True)
+    cancel, create = diff([want], [stale], BOT)
+    assert len(cancel) == 1 and len(create) == 1  # grown past it: re-size
     oversized = _resting(12, 63000.0, 0.030, side='Sell', ro=True)
     cancel, create = diff([want], [oversized], BOT)
     assert len(cancel) == 1 and len(create) == 1  # over-covering: replace

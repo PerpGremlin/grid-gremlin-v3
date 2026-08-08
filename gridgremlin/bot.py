@@ -984,6 +984,18 @@ class Bot:
                 return early
         elif (self._last_pos and abs(self._last_pos) > 0 and held == 0):
             links_now = {o['link_id'] for o in truth['orders']}
+            if self._exit_links_last - links_now:
+                # fast path: one of our exit links vanished — but a link
+                # vanishes the same way when WE cancelled it in the last
+                # replace, and an outside flatten hiding behind that
+                # coincidence re-entered as a benign trip (audit
+                # 2026-08-07 MED). One fills question closes the blind
+                # side; None (lag) passes as a trip — the next flat
+                # without vanished links gets the full confirm path.
+                how = self._how_round_ended()
+                if how in ('liquidation', 'an outside close'):
+                    self._kill(truth, f'position closed by {how} (D1)')
+                    return None
             if not (self._exit_links_last - links_now):      # no exit of ours
                 # E9: a venue that answers an EMPTY position list (under load,
                 # or on an account-type mismatch) is indistinguishable from
