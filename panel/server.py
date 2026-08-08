@@ -899,11 +899,9 @@ def main(argv):
             venue = None
         if not venue:
             return stem
-        # venue first, redundant venue-ish tokens dropped (hl.testnet ->
-        # hyperliquid testnet, demo -> bybit demo)
-        toks = [t for t in stem.split('.')
-                if t and not venue.startswith(t)]
-        return f"{venue} {' '.join(toks) or stem}"
+        # venue first, plus the stem's final token — the environment word
+        # (demo, testnet, mine); abbreviations like 'hl' never survive
+        return f"{venue} {stem.split('.')[-1]}"
     Handler.labels = tuple(_label(f) for f in Handler.fleets)
     if not Handler.fleets:
         print('usage: python3 -m panel.server <fleet.json>... '
