@@ -231,7 +231,13 @@ phase 2.
   stays open forever; the UI door makes it optional.
 - **Deliberately technical, kept that way:** the mainnet double-switch (F7's
   friction is a safety control — the panel displays mainnet state, never
-  switches it) and raising a watchdog ceiling past the cap bound.
+  switches it).
+- **The watchdog ceiling is panel-configurable** (decided 2026-08-08, owner):
+  freely within [cap, 1.5x cap]; beyond that it is allowed only with a named
+  acknowledgment in the config (`ceiling_loose: true`, the allow_mainnet
+  switch pattern), so a disaster-only watcher is always chosen, never
+  defaulted — and the file records the choice. Panel checkbox and file path
+  carry the same refusal sentence.
 - **Keys are out of scope for the panel, permanently.** No key entry, no key
   storage, no key material in any request or response — a panel compromise
   steals nothing. Keys stay a hand-placed 0600 env file (one technical step
