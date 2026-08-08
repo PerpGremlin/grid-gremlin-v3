@@ -233,16 +233,27 @@ an estimate, not a promise; the venue settles what it settles.<br>
 * window opened mid-round: partial numbers (R7).</p>"""
 
 
-def render(labelled):
+def render(labelled, static=None):
+    """One renderer, two artefacts (§4): the live page, or — with
+    static=timestamp-text — a self-contained export: no refresh, no
+    actions, provenance stamped. The numbers can never diverge because
+    there is only one code path to diverge from."""
     body = ''.join(section(i, lb, c) for i, (lb, c) in enumerate(labelled))
+    if static:
+        chrome = (f'<p class="dim">exported {static} — a snapshot, not a '
+                  'live view; the fleet has moved since.</p>')
+        head = ''
+    else:
+        head = f'<meta http-equiv="refresh" content="{REFRESH_S}">'
+        chrome = ('<p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·'
+                  '\n<a href="/create">create a grid &rarr;</a> ·'
+                  '\n<a href="/control">control &rarr;</a> ·'
+                  '\n<a href="/export">export snapshot &darr;</a></p>')
     return f"""<!doctype html><meta charset="utf-8">
 <title>grid-gremlin</title><style>{CSS}</style>
-<meta http-equiv="refresh" content="{REFRESH_S}">
-<button onclick="document.documentElement.classList.toggle('light')">
+{head}<button onclick="document.documentElement.classList.toggle('light')">
 theme</button>{body}
-<p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·
-<a href="/create">create a grid &rarr;</a> ·
-<a href="/control">control &rarr;</a></p>
+{chrome}
 <p class="dim">this page renders the engine's own readout contract — it
 cannot disagree with the terminal. It holds no keys; venue writes are the
 engine's alone.</p>"""
@@ -303,6 +314,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(401, 'open the tokened URL from the terminal')
         if self.path == '/control':
             return self._control_page()
+        if self.path == '/export':
+            import email.utils
+            stamp = email.utils.formatdate(usegmt=True)
+            body = render(self._labelled(), static=stamp)
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Disposition',
+                             'attachment; filename="grid-gremlin-'
+                             + time.strftime('%Y%m%d-%H%M%S') + '.html"')
+            self.end_headers()
+            self.wfile.write(body.encode())
+            return
         if self.path.startswith('/edit?'):
             return self._edit_page()
         if self.path == '/create':

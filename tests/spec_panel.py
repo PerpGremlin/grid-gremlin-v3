@@ -301,3 +301,18 @@ def _catch(fn):
         return ''
     except Exception as e:
         return str(e)
+
+
+def spec_V8_the_export_is_the_same_renderer_frozen():
+    """§4: one renderer, two artefacts. The export carries the same rows,
+    drops the refresh and every action link, and stamps its provenance —
+    a snapshot must say it is one."""
+    from panel.server import render
+    live = render([('demo', CONTRACT)])
+    frozen = render([('demo', CONTRACT)], static='Fri, 08 Aug 2026')
+    assert 'spoADAUSDTl' in frozen and '910.57' in frozen
+    assert 'http-equiv="refresh"' in live
+    assert 'http-equiv="refresh"' not in frozen
+    assert '/control' in live and '/control' not in frozen
+    assert 'exported Fri, 08 Aug 2026' in frozen
+    assert 'snapshot, not a live view' in frozen
