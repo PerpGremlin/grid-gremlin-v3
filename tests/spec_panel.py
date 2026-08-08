@@ -23,6 +23,8 @@ CONTRACT = {'window_hours': 6.0, 'generated_ms': 0, 'unowned': {},
             'ranges': {'spoADAUSDTl': {'lower': 0.155, 'upper': 0.23,
                                        'rungs': 16}},
             'fee_floors': {'spoADAUSDTl': 0.0025},
+            'watchdog': {'ceilings': {'spoADAUSDTl': 9700.0},
+                         'swept_s_ago': 41},
             'bots': {'spoADAUSDTl': {
                 'fills': 3, 'realized': 5.04, 'fees': 2.07, 'bought': 910.0,
                 'sold': 0.0, 'position': 910.57, 'avg_cost': 0.207,
@@ -65,6 +67,8 @@ def spec_P2_the_token_becomes_a_cookie_and_the_page_renders_the_contract():
         assert '<svg' in html and 'circle' in html      # the range strip
         # settlement: 910.57 * 0.2017 * (1 - 0.0025) = 183.20
         assert '183.2' in html, 'stop-now estimate missing or wrong'
+        assert '9% of 9,700' in html          # 910.57 / 9700 utilization
+        assert 'watchdog swept 41s ago' in html
         req = urllib.request.Request(f'{base}/data',
                                      headers={'Cookie': 'gg=tok123'})
         data = json.loads(op.open(req).read())

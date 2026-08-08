@@ -222,6 +222,26 @@ def _row(name, book, mark, side=None):
             f"{_n(total_pnl(book, mark)):>12}")
 
 
+def _watchdog_view(fleet):
+    """The watcher, watched (F1/F2): each bot's ceiling, and how long ago
+    the watchdog last swept — its state file's own mtime, so a dead timer
+    shows as a growing number instead of a silence."""
+    path = fleet.get('watchdog')
+    if not path:
+        return None
+    try:
+        wd = json.loads(Path(path).read_text())
+        ceilings = {b: v.get('max') for b, v in
+                    (wd.get('positions') or {}).items()}
+        swept = None
+        state = wd.get('state')
+        if state and Path(state).exists():
+            swept = max(0, int(time.time() - Path(state).stat().st_mtime))
+        return {'ceilings': ceilings, 'swept_s_ago': swept}
+    except (OSError, ValueError):
+        return None
+
+
 def public_book(book, mark=None, side=None, strategy=None):
     """The data contract, one book: every public field of the ledger, plus
     what a renderer needs and nothing it must compute. Private working
@@ -299,6 +319,7 @@ def main(argv):
                                     side_of.get(b), strat_of.get(b))
                      for b in botids if b in books},
             'ranges': range_of,
+            'watchdog': _watchdog_view(fleet),
             'fee_floors': {b: fee_floor_for(key_of[b][0]) for b in botids},
             'unowned': {k[1]: public_book(books[k])
                         for k in books if isinstance(k, tuple)
