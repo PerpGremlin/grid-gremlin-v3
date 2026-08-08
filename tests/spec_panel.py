@@ -331,3 +331,35 @@ def spec_T3_the_verdict_draws_the_equity_path_with_a_zero_line():
     assert '<polyline' in html and '<line' in html
     from panel.server import curve_svg
     assert curve_svg([]) == '' and curve_svg([1.0]) == ''
+
+
+def spec_M2_the_preview_does_the_compounding_and_names_full_depth():
+    """§8: the deviation ladder as numbers — every 3Commas thread's
+    hand-arithmetic, machine-done. Pinned by hand: base 800 + safeties
+    800x1.5^i, deviations 0.8% stepping x1.5, short side (prices ABOVE
+    the anchor)."""
+    from panel.create import martingale_preview
+    from gridgremlin.config import validate_martingale
+    raw = {'strategy': 'martingale', 'market_type': 'linear',
+           'symbol': 'SOLUSDT', 'side': 'short', 'capital': 5000,
+           'leverage': 10, 'base_order_size': 800, 'safety_order_size': 800,
+           'order_size_multiplier': 1.5, 'deviation_pct': 0.008,
+           'deviation_step_multiplier': 1.5, 'max_averaging_orders': 4,
+           'take_profit_avg_pct': 0.012, 'repeat': True}
+    cfg = validate_martingale(dict(raw))
+    rows, full = martingale_preview(cfg, 100.0)
+    assert len(rows) == 5                       # base + 4 safeties
+    assert rows[0]['price'] == 100.0 and rows[0]['notional'] == 800
+    assert abs(rows[1]['price'] - 100.8) < 1e-9         # +0.8%
+    assert abs(rows[2]['price'] - 102.0) < 1e-9         # +0.8% + 1.2%
+    assert rows[2]['notional'] == 1200                  # 800 x 1.5
+    assert abs(rows[-1]['cum_notional'] - (800 + 800 + 1200 + 1800 + 2700)) < 1e-9
+    assert abs(full - sum(r['qty'] for r in rows)) < 1e-12
+    # and a martingale proposal passes the whole-fleet gate with a ceiling
+    from panel.create import merge_proposal, validate_whole
+    # merge the RAW row, as the flow does — the validator's derived keys
+    # (ladder_notional) never belong in a fleet file
+    botid, fleet, wd = merge_proposal(
+        _FLEET, _WD, {'bot': raw, 'watchdog': {'max': full * 1.2}})
+    assert botid == 'linSOLUSDTs'
+    assert validate_whole(fleet, wd, lambda c: _fake_adapter()) is None

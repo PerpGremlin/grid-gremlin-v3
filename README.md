@@ -338,7 +338,11 @@ Links along the bottom:
 - **rehearse** — draft a grid, the engine's validator speaks or real candles
   replay the REAL plan over your window: profit, fees, drawdown, the equity
   path, and the hold benchmark (beat the hold or hold).
-- **create / edit / remove** (linear grids this slice) — one proposal carries
+- **create / edit / remove** — grids (linear or spot) and martingale
+  creation, with the deviation-ladder preview doing the compounding
+  (every price, size, and running total, plus the full-depth number the
+  ceiling watches); martingale/spot *edits* stay file-only this slice.
+  One proposal carries
   the bot AND its watchdog line; four unskippable gates (whole-fleet
   validation, diff, keyless dry-run ladder, typed-botid confirm); apply is an
   atomic file write with a `.bak` kept, and the fleet trades the old config

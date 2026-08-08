@@ -95,11 +95,44 @@ one act (§8). Four gates; nothing is written until you type the botid.
 <td><input name="rungs" value="16" size="4"></td>
 <td><input name="capital" value="1500" size="7"></td>
 <td><input name="ceiling" size="8" placeholder="blank = cap x1.2"></td>
-<td><button>run the gates</button></td></tr></table>
+<td><select name="market"><option>linear</option><option>spot</option>
+</select></td><td><button>run the gates</button></td></tr></table>
 <input type="hidden" name="gg" value="1"></form>
-<p class="dim">linear Bybit grids in this slice. The stop defaults to
-mark_price 2% below the lower rung; edit the file for anything fancier —
-same contract, other door.</p><p><a href="/">&larr; fleet</a></p>"""
+<p class="dim">the stop defaults to mark_price 2% below the lower rung;
+edit the file for anything fancier — same contract, other door.</p>
+
+<h1>create a martingale <span class="dim">— the ladder preview does the
+compounding; no rehearsal for martingales (§9: the backtester replays
+plan_grid only), the gates still judge everything else.</span></h1>
+<form method="post" action="/create">
+<table><tr><th>symbol</th><th>side</th><th>capital</th><th>lev</th>
+<th>base</th><th>safety</th><th>size x</th></tr>
+<tr><td><input name="symbol" value="SOLUSDT" size="9"></td>
+<td><select name="side"><option>long</option><option>short</option>
+</select></td><td><input name="capital" value="5000" size="7"></td>
+<td><input name="leverage" value="10" size="3"></td>
+<td><input name="base_order_size" value="800" size="6"></td>
+<td><input name="safety_order_size" value="800" size="6"></td>
+<td><input name="order_size_multiplier" value="1.5" size="4"></td></tr>
+<tr><th>dev %</th><th>dev step x</th><th>max SOs</th><th>TP avg %</th>
+<th>repeat</th><th>cooldown s</th><th>reinvest</th></tr>
+<tr><td><input name="deviation_pct" value="0.008" size="6"></td>
+<td><input name="deviation_step_multiplier" value="1.5" size="4"></td>
+<td><input name="max_averaging_orders" value="4" size="3"></td>
+<td><input name="take_profit_avg_pct" value="0.012" size="6"></td>
+<td><input type="checkbox" name="repeat" value="1" checked></td>
+<td><input name="repeat_cooldown_seconds" value="600" size="6"></td>
+<td><input type="checkbox" name="reinvest" value="1"></td></tr>
+<tr><th>ceiling</th><td colspan="5" class="dim">blank = full-depth base
+qty x1.2 — the deepest position the schedule can build, plus headroom
+</td><td><input name="ceiling" size="8"></td></tr></table>
+<input type="hidden" name="gg" value="1">
+<input type="hidden" name="strategy" value="martingale">
+<button>run the gates</button></form>
+<p class="dim">tranches and trailing stay file-only this slice — nested
+config deserves a text editor. dev % and TP % are FRACTIONS (0.008 =
+0.8%), exactly as the file writes them: one vocabulary, every door.</p>
+<p><a href="/">&larr; fleet</a></p>"""
 
 
 FORM = """<h1>rehearse a grid <span class="dim">— a draft, validated by
@@ -436,13 +469,41 @@ class Handler(http.server.BaseHTTPRequestHandler):
             mode = proposal.get('mode', 'create')
         elif mode == 'remove':
             proposal = {'mode': 'remove', 'orig': form.get('orig', '')}
+        elif form.get('strategy') == 'martingale':
+            bot = {'strategy': 'martingale', 'market_type': 'linear',
+                   'venue': 'bybit',
+                   'symbol': form.get('symbol', '').upper(),
+                   'side': form.get('side', 'long'),
+                   'capital': _f(form.get('capital')),
+                   'leverage': _f(form.get('leverage')),
+                   'base_order_size': _f(form.get('base_order_size')),
+                   'safety_order_size': _f(form.get('safety_order_size')),
+                   'order_size_multiplier':
+                       _f(form.get('order_size_multiplier')),
+                   'deviation_pct': _f(form.get('deviation_pct')),
+                   'deviation_step_multiplier':
+                       _f(form.get('deviation_step_multiplier')),
+                   'max_averaging_orders':
+                       int(_f(form.get('max_averaging_orders')) or 0),
+                   'take_profit_avg_pct':
+                       _f(form.get('take_profit_avg_pct')),
+                   'repeat': form.get('repeat') == '1'}
+            if _f(form.get('repeat_cooldown_seconds')):
+                bot['repeat_cooldown_seconds'] = _f(
+                    form.get('repeat_cooldown_seconds'))
+            if form.get('reinvest') == '1':
+                bot['reinvest'] = True
+            proposal = {'mode': mode, 'orig': form.get('orig', ''),
+                        'bot': bot,
+                        'watchdog': {'max': _f(form.get('ceiling'))}}
         else:
             lo = _f(form.get('lower'))
-            bot = {'market_type': 'linear', 'venue': 'bybit',
+            bot = {'venue': 'bybit',
                    'symbol': form.get('symbol', '').upper(),
                    'side': form.get('side', 'long'),
                    'capital': _f(form.get('capital')),
                    'lower': lo, 'upper': _f(form.get('upper')),
+                   'market_type': (form.get('market') or 'linear'),
                    'rungs': int(_f(form.get('rungs')) or 0),
                    'stop': {'watch': 'mark_price',
                             'level': round((lo or 0) * 0.98, 10)}}
@@ -456,12 +517,20 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                                    proposal['orig'])
                 vbot = adapter = None
             else:
-                from gridgremlin.config import validate_grid
-                vbot = validate_grid(dict(proposal['bot']))  # raw dicts lack
+                from gridgremlin.config import (validate_grid,
+                                                validate_martingale)
+                is_mg = proposal['bot'].get('strategy') == 'martingale'
+                vbot = (validate_martingale(dict(proposal['bot'])) if is_mg
+                        else validate_grid(dict(proposal['bot'])))
                 adapter = public_adapter(vbot)               # defaults (A1)
                 if proposal['watchdog'].get('max') is None:
-                    cap = position_cap(vbot, adapter,
-                                       grid_rungs(vbot, adapter))
+                    if is_mg:
+                        from panel.create import martingale_preview
+                        _, full = martingale_preview(vbot, public_mark(vbot))
+                        cap = full
+                    else:
+                        cap = position_cap(vbot, adapter,
+                                           grid_rungs(vbot, adapter))
                     proposal['watchdog']['max'] = round(
                         cap * CEILING_PREFILL, 6)
                 if mode == 'edit':
@@ -501,6 +570,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if mode == 'remove':
             ladder_html = '<p class="dim">removal: no ladder to dry-run — '\
                           'the diff is the whole change.</p>'
+        elif proposal['bot'].get('strategy') == 'martingale':
+            from panel.create import martingale_preview
+            mark = public_mark(vbot)
+            rows_, full = martingale_preview(vbot, mark)
+            lrows = ''.join(
+                f"<tr><td>{'base' if r['rung'] == 0 else 'SO ' + str(r['rung'])}"
+                f"</td><td>{r['price']:,.6g}</td>"
+                f"<td>{r['notional']:,.6g}</td><td>{r['qty']:,.6g}</td>"
+                f"<td>{r['cum_notional']:,.6g}</td>"
+                f"<td>{r['cum_qty']:,.6g}</td></tr>" for r in rows_)
+            ladder_html = (
+                f'<h1 class="dim">the deviation ladder anchored at mark '
+                f'{mark:,.6g} — prices move with the anchor; sizes and '
+                f'depth do not</h1><table><tr><th>rung</th><th>price</th>'
+                f'<th>notional</th><th>qty</th><th>cum notional</th>'
+                f'<th>cum qty</th></tr>{lrows}</table>'
+                f'<p class="dim">full depth: {full:,.6g} base — the '
+                f'ceiling watches this number.</p>')
         else:
             mark = public_mark(vbot)
             ladder = dry_ladder(vbot, adapter, mark)
