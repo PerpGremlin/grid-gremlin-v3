@@ -52,12 +52,23 @@ def check_watchdog_coverage(bots_caps, watchdog_cfg):
             raise ConfigError(f'{botid} is not in the watchdog config — '
                               'nothing trades unwatched (F1)')
         if cap is not None:
-            ceiling = watchdog_cfg['positions'][botid]['max']
-            if not cap <= ceiling <= cap * CEILING_MULTIPLE:
+            entry = watchdog_cfg['positions'][botid]
+            ceiling = entry['max']
+            if ceiling < cap:
                 raise ConfigError(
-                    f'{botid}: watchdog ceiling {ceiling:.10g} must sit in '
-                    f'[{cap:.10g}, {cap * CEILING_MULTIPLE:.10g}] — a breach '
-                    'should mean the cap itself failed (F2)')
+                    f'{botid}: watchdog ceiling {ceiling:.10g} sits below '
+                    f'the cap {cap:.10g} — a healthy full grid would trip '
+                    'it, and an alarm that fires in normal operation '
+                    'trains you to ignore alarms (F2)')
+            if ceiling > cap * CEILING_MULTIPLE and not entry.get(
+                    'ceiling_loose'):
+                raise ConfigError(
+                    f'{botid}: ceiling {ceiling:.10g} is beyond '
+                    f'{CEILING_MULTIPLE}x the cap ({cap:.10g}) — it will '
+                    'not fire until the position is far past anything the '
+                    "config authorises. State 'ceiling_loose': true beside "
+                    'it to accept a disaster-only watcher, deliberately '
+                    '(F2/D28)')
     for botid in watched - fleet_ids:
         raise ConfigError(f"watchdog watches '{botid}' which is not in the "
                           'fleet — stale entry (F1)')

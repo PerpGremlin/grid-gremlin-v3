@@ -46,9 +46,10 @@ def spec_F1_a_stale_watchdog_entry_also_refuses():
 
 def spec_F2_a_decorative_ceiling_refuses():
     _refused(check_watchdog_coverage, [('botA', 2.0)], _wd(),
-             frag='cap itself failed')       # 12.0 vs cap 2.0: decorative
+             frag='ceiling_loose')           # 12.0 vs cap 2.0: decorative,
+                                             # unless chosen by the switch
     _refused(check_watchdog_coverage, [('botA', 20.0)], _wd(),
-             frag='cap itself failed')       # 12.0 below cap 20.0: absurd
+             frag='below the cap')           # 12.0 below cap 20.0: absurd
     check_watchdog_coverage([('botA', 10.0)], _wd())   # 12.0 in [10, 15]: fine
 
 
@@ -334,3 +335,26 @@ def spec_F8_margin_trading_metadata_is_captured():
             'lotSizeFilter': {'basePrecision': '0.01', 'minOrderQty': '0.01',
                               'minOrderAmt': '5'}}
     assert parse_instrument('spot', info)['margin_trading'] == 'none'
+
+
+def spec_F2_a_loose_ceiling_is_chosen_never_defaulted():
+    """Beyond 1.5x the cap a watcher is decorative — allowed only with
+    ceiling_loose: true beside the max (the allow_mainnet double-switch
+    shape, owner decision 2026-08-08), so the file records the choice.
+    Below the cap is refused outright: a healthy grid would trip it."""
+    from gridgremlin.config import ConfigError
+    from gridgremlin.main import check_watchdog_coverage
+    wd = {'positions': {'b1': {'min': 0, 'max': 300.0}}}
+    try:
+        check_watchdog_coverage([('b1', 100.0)], wd)
+        assert False, 'a 3x ceiling passed without the switch'
+    except ConfigError as e:
+        assert 'ceiling_loose' in str(e)
+    wd['positions']['b1']['ceiling_loose'] = True
+    check_watchdog_coverage([('b1', 100.0)], wd)      # chosen: accepted
+    wd['positions']['b1']['max'] = 90.0
+    try:
+        check_watchdog_coverage([('b1', 100.0)], wd)
+        assert False, 'a below-cap ceiling passed'
+    except ConfigError as e:
+        assert 'below the cap' in str(e)

@@ -322,7 +322,7 @@ eventually pin (T1).
 
 - **F1** Every bot in a fleet appears in that fleet's watchdog config; the spec fails in
   both directions.
-- **F2** Watchdog position ceilings are pinned near the cap (breach ⇒ the cap itself
+- **F2** Watchdog position ceilings are pinned near the cap (breach ⇒ the cap itself Beyond 1.5x the cap only with `ceiling_loose: true` beside the max — a disaster-only watcher is chosen, never defaulted (D28).
   failed), never derived from "held plus budget".
 - **F3** One fleet process per account, ever.
 - **F4** Snapshots include dead bots — liveness must be detectable from the file.
