@@ -49,11 +49,10 @@ README §11.)*
 
 **Remaining, in tackle order:**
 
-1. **Martingale + spot create/edit forms** — the fields exist in the
-   validator; the form needs the deviation-ladder preview (prices + cum
-   capital per rung), tranches, reinvest toggle, cooldown. §9 boundary
-   stands: no rehearsal for martingales, say so on the page. Needs the
-   owner's eye on which knobs are screen-worthy vs file-only.
+1. **Martingale + spot EDIT forms** — creation left via PR #107 (form,
+   deviation-ladder preview, ceiling from full depth, spot grids in the
+   create form; tranches/trailing stay file-only). Edit for
+   martingale/spot rows remains grids-only.
 2. **First-run `init`** — the panel can only merge into an existing
    fleet+watchdog pair; a no-agent user hits a cliff at clone. A guided
    flow (or CLI) writing a minimal valid pair from a template, refusals

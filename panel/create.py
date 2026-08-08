@@ -145,3 +145,22 @@ def public_mark(cfg):
             f'{PUBLIC_HOST}/v5/market/tickers?{q}', timeout=20) as r:
         row = json.load(r)['result']['list'][0]
     return float(row.get('markPrice') or row['lastPrice'])
+
+
+def martingale_preview(cfg, mark):
+    """§8's promise kept: the deviation ladder as numbers — every safety
+    price, size, and the running total, so nobody does the compounding by
+    hand (the arithmetic every 3Commas thread ends in). cfg is VALIDATED;
+    anchor is the current mark. Returns (rows, full_depth_base_qty)."""
+    from gridgremlin.ladder import martingale_schedule
+    sched = martingale_schedule(cfg)
+    sign = -1.0 if cfg['side'] == 'long' else 1.0
+    rows, cum_n, cum_q = [], 0.0, 0.0
+    for i, (notional, cumdev) in enumerate(sched):
+        price = mark * (1.0 + sign * cumdev)
+        qty = notional / price if price > 0 else 0.0
+        cum_n += notional
+        cum_q += qty
+        rows.append({'rung': i, 'price': price, 'notional': notional,
+                     'qty': qty, 'cum_notional': cum_n, 'cum_qty': cum_q})
+    return rows, cum_q
