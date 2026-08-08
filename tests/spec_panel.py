@@ -254,3 +254,44 @@ def spec_V7_a_quiet_bot_is_shown_not_omitted():
     assert 'linDOGEs' in html
     assert 'HOLDING' in html and '730 (belief)' in html
     assert 'no fills in window' in html
+
+
+def spec_F1_edit_and_remove_move_bot_and_watcher_together():
+    """An edit keeps identity or is refused; a removal takes the watchdog
+    line with it and the remaining fleet still validates (F1) — the same
+    one-act rule as creation, in reverse."""
+    from panel.create import (edit_proposal, merge_proposal,
+                              remove_proposal, validate_whole)
+    from gridgremlin.config import validate_grid
+    from gridgremlin.ladder import grid_rungs, position_cap
+    adapter = _fake_adapter()
+    vbot = validate_grid(dict(_BOT))
+    cap = position_cap(vbot, adapter, grid_rungs(vbot, adapter))
+    botid, fleet, wd = merge_proposal(
+        _FLEET, _WD, {'bot': dict(_BOT), 'watchdog': {'max': cap * 1.2}})
+    # edit: new capital, watcher moves with it, fleet revalidates
+    newbot = dict(_BOT, capital=2000)
+    vnew = validate_grid(dict(newbot))
+    ncap = position_cap(vnew, adapter, grid_rungs(vnew, adapter))
+    _, f2, w2 = edit_proposal(fleet, wd, botid, newbot, ncap * 1.2)
+    assert validate_whole(f2, w2, lambda c: adapter) is None
+    assert f2['bots'][0]['capital'] == 2000
+    # edit refusing an identity change
+    try:
+        edit_proposal(fleet, wd, botid, dict(_BOT, side='short'), cap)
+        assert False
+    except Exception as e:
+        assert 'cannot change identity' in str(e)
+    # remove: both lines go; the empty fleet still validates coverage
+    _, f3, w3 = remove_proposal(fleet, wd, botid)
+    assert f3['bots'] == [] and botid not in w3['positions']
+    assert 'not in this fleet' in str(
+        _catch(lambda: remove_proposal(f3, w3, botid)))
+
+
+def _catch(fn):
+    try:
+        fn()
+        return ''
+    except Exception as e:
+        return str(e)

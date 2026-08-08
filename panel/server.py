@@ -143,7 +143,7 @@ def verdict(draft, out):
             "benchmark or hold.</p>")
 
 
-def section(label, contract):
+def section(idx, label, contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
     belief = ((contract.get('watchdog') or {}).get('belief')
@@ -171,7 +171,10 @@ def section(label, contract):
                 + '</td><td class="dim">—</td><td class="dim">—</td>'
                   '<td class="dim">—</td><td class="dim">—</td>'
                   '<td class="dim">—</td><td class="dim">—</td>'
-                + watch0 + '</tr>')
+                + watch0
+                + f"<td class='dim'><a href='/edit?fleet={idx}&bot={botid}'>"
+                  f"edit</a> <a href='/edit?fleet={idx}&bot={botid}"
+                  f"&mode=remove'>remove</a></td></tr>")
             continue
         state = ('HOLDING' if abs(b['position']) > 1e-12 else 'FLAT')
         openat = (f"{b['position']:.10g} @ {b['avg_cost']:.6g}"
@@ -202,21 +205,25 @@ def section(label, contract):
             f"{money(b['fees'], cls=False)}<td>{openat}</td>"
             f"{money(b['unreal_at_mark'])}{money(total)}"
             f"<td>{b['bought']:,.4g}</td><td>{b['sold']:,.4g}</td>"
-            f"{edge}<td>{settle(b, floor)}</td>{watch}</tr>")
+            f"{edge}<td>{settle(b, floor)}</td>{watch}"
+            f"<td class='dim'><a href='/edit?fleet={idx}&bot={botid}'>edit"
+            f"</a> <a href='/edit?fleet={idx}&bot={botid}&mode=remove'>"
+            f"remove</a></td></tr>")
     return f"""
 <h1>{label} — last {contract['window_hours']:g}h {sweep_note(contract)}
 <span class="dim">(read {age}s ago; refreshes every {REFRESH_S}s)</span></h1>
 <table><tr><th>bot</th><th>state</th><th>fills</th><th>realized</th>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
-<th>stop-now est.</th><th>watcher</th></tr>{''.join(rows)}</table>
+<th>stop-now est.</th><th>watcher</th><th></th></tr>
+{''.join(rows)}</table>
 <p class="dim">stop-now est. = position at mark less the venue fee floor —
 an estimate, not a promise; the venue settles what it settles.<br>
 * window opened mid-round: partial numbers (R7).</p>"""
 
 
 def render(labelled):
-    body = ''.join(section(lb, c) for lb, c in labelled)
+    body = ''.join(section(i, lb, c) for i, (lb, c) in enumerate(labelled))
     return f"""<!doctype html><meta charset="utf-8">
 <title>grid-gremlin</title><style>{CSS}</style>
 <meta http-equiv="refresh" content="{REFRESH_S}">
@@ -285,6 +292,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(401, 'open the tokened URL from the terminal')
         if self.path == '/control':
             return self._control_page()
+        if self.path.startswith('/edit?'):
+            return self._edit_page()
         if self.path == '/create':
             return self._page(CREATE_FORM)
         if self.path == '/rehearse':
@@ -364,8 +373,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
         fleet_raw = json.loads(fleet_p.read_text())
         wd_p = Path(fleet_raw['watchdog'])
         wd_raw = json.loads(wd_p.read_text())
+        mode = form.get('mode', 'create')
         if apply:
             proposal = json.loads(form.get('proposal', '{}'))
+            mode = proposal.get('mode', 'create')
+        elif mode == 'remove':
+            proposal = {'mode': 'remove', 'orig': form.get('orig', '')}
         else:
             lo = _f(form.get('lower'))
             bot = {'market_type': 'linear', 'venue': 'bybit',
@@ -376,17 +389,34 @@ class Handler(http.server.BaseHTTPRequestHandler):
                    'rungs': int(_f(form.get('rungs')) or 0),
                    'stop': {'watch': 'mark_price',
                             'level': round((lo or 0) * 0.98, 10)}}
-            proposal = {'bot': bot, 'watchdog': {'max': _f(form.get('ceiling'))}}
+            proposal = {'mode': mode, 'orig': form.get('orig', ''),
+                        'bot': bot, 'watchdog':
+                        {'max': _f(form.get('ceiling'))}}
         try:
-            from gridgremlin.config import validate_grid
-            vbot = validate_grid(dict(proposal['bot']))   # raw dicts lack
-            adapter = public_adapter(vbot)                # defaults (A1)
-            if proposal['watchdog'].get('max') is None:
-                cap = position_cap(vbot, adapter, grid_rungs(vbot, adapter))
-                proposal['watchdog']['max'] = round(cap * CEILING_PREFILL, 6)
-            botid, fleet, wd = merge_proposal(fleet_raw, wd_raw, proposal)
+            from panel.create import edit_proposal, remove_proposal
+            if mode == 'remove':
+                botid, fleet, wd = remove_proposal(fleet_raw, wd_raw,
+                                                   proposal['orig'])
+                vbot = adapter = None
+            else:
+                from gridgremlin.config import validate_grid
+                vbot = validate_grid(dict(proposal['bot']))  # raw dicts lack
+                adapter = public_adapter(vbot)               # defaults (A1)
+                if proposal['watchdog'].get('max') is None:
+                    cap = position_cap(vbot, adapter,
+                                       grid_rungs(vbot, adapter))
+                    proposal['watchdog']['max'] = round(
+                        cap * CEILING_PREFILL, 6)
+                if mode == 'edit':
+                    botid, fleet, wd = edit_proposal(
+                        fleet_raw, wd_raw, proposal['orig'],
+                        proposal['bot'], proposal['watchdog']['max'])
+                else:
+                    botid, fleet, wd = merge_proposal(fleet_raw, wd_raw,
+                                                      proposal)
             refusal = validate_whole(fleet, wd, lambda cfg: adapter
-                                     if cfg is proposal['bot']
+                                     if adapter is not None
+                                     and cfg is proposal.get('bot')
                                      else public_adapter(cfg))
         except Exception as e:                              # noqa: BLE001
             return self._page(f'{CREATE_FORM}<h1 class="neg">refused</h1>'
@@ -411,21 +441,29 @@ class Handler(http.server.BaseHTTPRequestHandler):
                               '<b>The fleet trades the old config until you '
                               'restart it</b> — enacting is phase 3\'s job '
                               '(§11).</p><p><a href="/">fleet</a></p>')
-        mark = public_mark(vbot)
-        ladder = dry_ladder(vbot, adapter, mark)
-        rows = ''.join(f"<tr><td>{o['side']}</td><td>{o['price']:,.6g}</td>"
-                       f"<td>{o['qty']:,.6g}</td></tr>" for o in ladder)
+        if mode == 'remove':
+            ladder_html = '<p class="dim">removal: no ladder to dry-run — '\
+                          'the diff is the whole change.</p>'
+        else:
+            mark = public_mark(vbot)
+            ladder = dry_ladder(vbot, adapter, mark)
+            lrows = ''.join(
+                f"<tr><td>{o['side']}</td><td>{o['price']:,.6g}</td>"
+                f"<td>{o['qty']:,.6g}</td></tr>" for o in ladder)
+            ladder_html = (f'<h1 class="dim">the ladder at mark '
+                           f'{mark:,.6g} (dry-run — nothing placed)</h1>'
+                           f'<table><tr><th>side</th><th>price</th>'
+                           f'<th>qty</th></tr>{lrows}</table>')
         diffs = (unified_diff(fleet_p.read_text(), new_fleet, fleet_p.name)
                  + unified_diff(wd_p.read_text(), new_wd, wd_p.name))
         pj = json.dumps(proposal).replace('"', '&quot;')
         return self._page(
-            f'<h1>{botid} — gates 1-3 passed</h1>'
+            f'<h1>{botid} — {mode}: gates passed</h1>'
             f'<h1 class="dim">the diff</h1><pre class="dim">{diffs}</pre>'
-            f'<h1 class="dim">the ladder at mark {mark:,.6g} (dry-run — '
-            f'nothing placed)</h1><table><tr><th>side</th><th>price</th>'
-            f'<th>qty</th></tr>{rows}</table>'
+            + ladder_html +
             f'<form method="post" action="/apply">'
             f'<input type="hidden" name="gg" value="1">'
+            f'<input type="hidden" name="fleet" value="{fi}">'
             f'<input type="hidden" name="proposal" value="{pj}">'
             f'type the botid to write the files: '
             f'<input name="confirm" size="16" placeholder="{botid}">'
@@ -436,6 +474,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def _tombs_path(self):
         return Path(self.fleets[0]).parent.parent / 'logs' / 'tombstones.json'
+
+    def _edit_page(self):
+        q = dict(urllib.parse.parse_qsl(self.path.split('?', 1)[1]))
+        fi = int(q.get('fleet') or 0)
+        botid = q.get('bot', '')
+        fleet_raw = json.loads(Path(self.fleets[fi]).read_text())
+        from gridgremlin.apply import make_botid as _mb
+        bot = next((b for b in fleet_raw.get('bots', [])
+                    if _mb(b['market_type'], b['symbol'], b['side'])
+                    == botid), None)
+        if bot is None:
+            return self._deny(404, f'{botid}: not in this fleet')
+        if q.get('mode') == 'remove':
+            return self._page(
+                f'<h1>remove {botid}</h1><p class="dim">the bot and its '
+                'watchdog line leave together; the remaining fleet must '
+                'still validate (F1). The running fleet is untouched until '
+                'restarted (§11).</p>'
+                f'<form method="post" action="/create">'
+                f'<input type="hidden" name="gg" value="1">'
+                f'<input type="hidden" name="mode" value="remove">'
+                f'<input type="hidden" name="fleet" value="{fi}">'
+                f'<input type="hidden" name="orig" value="{botid}">'
+                f'<button>run the gates</button></form>'
+                f'<p><a href="/">&larr; fleet</a></p>')
+        if bot.get('strategy', 'grid') != 'grid' \
+                or bot.get('market_type') != 'linear':
+            return self._page(f'<h1 class="dim">{botid}</h1><p>this slice '
+                              'edits linear grids only — the file door '
+                              'covers the rest (same contract, §8).</p>')
+        w = json.loads(Path(json.loads(Path(self.fleets[fi]).read_text())
+                            ['watchdog']).read_text())
+        wmax = (w.get('positions', {}).get(botid) or {}).get('max', '')
+        return self._page(
+            f'<h1>edit {botid} <span class="dim">— identity is fixed; '
+            'range, rungs, capital, ceiling move (§11)</span></h1>'
+            f'<form method="post" action="/create">'
+            f'<table><tr><th>lower</th><th>upper</th><th>rungs</th>'
+            f'<th>capital</th><th>ceiling</th><th></th></tr><tr>'
+            f'<td><input name="lower" value="{bot.get("lower")}" size="8">'
+            f'</td><td><input name="upper" value="{bot.get("upper")}" '
+            f'size="8"></td><td><input name="rungs" '
+            f'value="{bot.get("rungs")}" size="4"></td>'
+            f'<td><input name="capital" value="{bot.get("capital")}" '
+            f'size="7"></td><td><input name="ceiling" value="{wmax}" '
+            f'size="8"></td><td><button>run the gates</button></td></tr>'
+            f'</table><input type="hidden" name="gg" value="1">'
+            f'<input type="hidden" name="mode" value="edit">'
+            f'<input type="hidden" name="fleet" value="{fi}">'
+            f'<input type="hidden" name="orig" value="{botid}">'
+            f'<input type="hidden" name="symbol" value="{bot["symbol"]}">'
+            f'<input type="hidden" name="side" value="{bot["side"]}">'
+            f'</form><p><a href="/">&larr; fleet</a></p>')
 
     def _control_page(self):
         if not self.units:
