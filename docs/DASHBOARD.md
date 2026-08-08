@@ -211,3 +211,66 @@ other; the config file remains the source of truth.
 
 Each phase is useful alone, and nothing in phase 1 needs to be revisited to add
 phase 2.
+
+## 8. Decisions from the design pass (2026-08-08)
+
+- **Setup is bot + watcher, one act.** F1 refuses an unwatched fleet, so the
+  create flow emits a single proposal holding the bot entry AND its watchdog
+  line; the ceiling pre-fills at cap x1.2 (inside F2's 1.5x bound) and the
+  person confirms a number instead of inventing one. Unwatchable
+  configurations are unexpressible in the UI — the refusal still exists on
+  the file path, with the same text, from the same loader.
+- **3Commas: take the form factor, refuse the vocabulary.** The guided
+  create-flow and per-bot cards are genuinely good; the names ("take profit
+  means start trailing", two profits under one label) are the cautionary
+  tale of §1. Their skeleton, our names.
+- **Three doors, one house.** UI, hand-edited file, and agent are three
+  authors of the same proposal shape, validated by the engine's own loader.
+  The dashboard writes nothing the file path cannot express and owns
+  nothing; the config file stays the single source of truth. The agent door
+  stays open forever; the UI door makes it optional.
+- **Deliberately technical, kept that way:** the mainnet double-switch (F7's
+  friction is a safety control — the panel displays mainnet state, never
+  switches it) and raising a watchdog ceiling past the cap bound.
+- **Keys are out of scope for the panel, permanently.** No key entry, no key
+  storage, no key material in any request or response — a panel compromise
+  steals nothing. Keys stay a hand-placed 0600 env file (one technical step
+  for every user, by design); the ENGINE checks its own key's permissions at
+  startup (F8's home) and the panel displays only the verdict.
+- **Tombstones are dashboard citizens:** shown with their reason; revival is
+  a deliberate confirm — the delete-the-entry-on-purpose workflow with the
+  evidence attached.
+- **Telegram is push, the panel is pull** — same events, same vocabulary in
+  both, or the two-names bug is built into our own tooling.
+
+## 9. The backtester (rehearsal, never a promise)
+
+- **One renderer, two sources.** The backtester emits the SAME JSON contract
+  as the live readout — same books, columns, names (trips, per-trip,
+  realized, fees, bought/sold, zero-spread, max depth). Rehearsal and live
+  render through one code path, so comparing them is comparing like with
+  like. Commercial backtest and live screens famously disagree; ours cannot.
+- **In the create flow:** draft -> engine validator (with watcher) -> venue
+  public candles, cached locally -> the engine's own backtester -> readout
+  table plus the ladder drawn over the price path. Adjust, re-run, apply.
+- **Honesty rules:** show the window, never annualise; state the fee
+  schedule used (G16, venue-asked); print the hold benchmark beside every
+  result; label it a rehearsal — same candles are not same fills; print the
+  known limitation (no bid/ask in the backtest plan, so guard-band drops
+  never happen: slightly optimistic) until it is fixed.
+- **Refused:** an optimizer. The backtester answers "what would this config
+  have done", never "what config should you run". A recommend button is the
+  flattering-number machine of §1.
+
+## 10. Build order
+
+1. **Data contract** — `report.py --json` (also adds bought/sold columns to
+   the terminal table and gates R9 behind the truncation flag).
+2. **View** — localhost panel over snapshots + readout: per-bot state
+   (named), position at cost, money columns, watcher health, range strip as
+   inline SVG, settlement preview.
+3. **Backtest in the create flow** (§9).
+4. **Configure** — form -> proposal (bot + watcher) -> diff -> dry-run ->
+   deliberate apply.
+5. **Control** — start/stop/revive; engine remains sole author of venue
+   writes.
