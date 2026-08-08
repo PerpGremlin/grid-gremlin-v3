@@ -27,8 +27,8 @@ CSS = """:root{--bg:#14161a;--fg:#d6dae0;--dim:#7a828c;--line:#262a30;
 :root.light{--bg:#f5f4f0;--fg:#232629;--dim:#6f6a60;--line:#ddd8d0;
 --pos:#2e7d4f;--neg:#b04a40;--accent:#3a6ea5}
 body{background:var(--bg);color:var(--fg);font:14px/1.5 monospace;margin:2em}
-table.fleet{table-layout:fixed}td{overflow:hidden;text-overflow:ellipsis}
-table{border-collapse:collapse;width:100%}td,th{padding:.35em .8em;
+table.fleet{table-layout:fixed;width:100%}td{overflow:hidden;text-overflow:ellipsis}
+table{border-collapse:collapse}td,th{padding:.35em .8em;
 text-align:right;border-bottom:1px solid var(--line)}
 th{color:var(--dim);font-weight:normal}td:first-child,th:first-child
 {text-align:left}.pos{color:var(--pos)}.neg{color:var(--neg)}
@@ -347,10 +347,7 @@ def render(labelled, static=None):
     actions, provenance stamped. The numbers can never diverge because
     there is only one code path to diverge from."""
     body = ''.join(section(i, lb, c) for i, (lb, c) in enumerate(labelled))
-    notes = ('<p class="dim">stop-now est. = position at mark less the '
-             'venue fee floor — an estimate, not a promise; the venue '
-             'settles what it settles. · * window opened mid-round: '
-             'partial numbers (R7).</p>')
+    notes = ''
     if static:
         chrome = notes + (f'<p class="dim">exported {static} — a snapshot, '
                           'not a live view; the fleet has moved since.</p>')
@@ -893,8 +890,21 @@ def main(argv):
     else:
         Handler.token = secrets.token_urlsafe(16)
     Handler.fleets = tuple(a for a in argv if a.endswith('.json'))
-    Handler.labels = tuple(Path(f).stem.replace('fleet.', '')
-                           for f in Handler.fleets)
+    def _label(f):
+        stem = Path(f).stem.replace('fleet.', '')
+        try:
+            bots = json.loads(Path(f).read_text()).get('bots') or []
+            venue = bots[0].get('venue', 'bybit') if bots else None
+        except (OSError, ValueError):
+            venue = None
+        if not venue:
+            return stem
+        # venue first, redundant venue-ish tokens dropped (hl.testnet ->
+        # hyperliquid testnet, demo -> bybit demo)
+        toks = [t for t in stem.split('.')
+                if t and not venue.startswith(t)]
+        return f"{venue} {' '.join(toks) or stem}"
+    Handler.labels = tuple(_label(f) for f in Handler.fleets)
     if not Handler.fleets:
         print('usage: python3 -m panel.server <fleet.json>... '
               '[--hours N] [--port P] [--token-file F] [--units a,b]')
