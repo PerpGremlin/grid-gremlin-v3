@@ -71,9 +71,12 @@ init + the on-page key left via PR #109 — README §11.)*
   the grid E9 fast-path blind side; via PR #118: per-venue wallet
   isolation — a failed read costs unknown equity, never the cycle —
   and locks/tombstones anchor to the fleet file, not the cwd.)*
-  Remaining: probe stranding, partial-remainder close + ro_capacity
-  warn, M15 deepest-round fallback, multi-quote TOTAL, backtester
-  bid/ask; then the prior-art adoption trio.
+  *(Tail closed via PR #119: probe strands named with order id; the
+  remainder close places only the uncovered gap and ro_capacity warns
+  once; deepest-round restarts hold instead of re-anchoring; per-quote
+  totals; the backtest replays against a synthetic 1bp spread.)*
+  Remaining: the prior-art adoption trio (clientOrderIds on market
+  writes, netted sells in the coverage walk, the temporal deadband).
 - **Prior-art adoption trio** — deterministic clientOrderIds on
   market/seed writes; netted sells in the G15 coverage walk (passivbot's
   arithmetic, our refusal); Nautilus-style temporal deadband before
