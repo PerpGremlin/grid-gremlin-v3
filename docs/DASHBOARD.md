@@ -302,3 +302,28 @@ phase 2.
   configure ends at the file.
 - **Remove/edit follow the same gates**; a removed bot's watchdog line goes
   with it in the same write (coverage would refuse the orphan anyway).
+
+## 12. Control (phase 3, designed before built)
+
+- **The panel drives processes, never the venue.** Control is systemctl on
+  the fleet's unit — start, stop, restart — and file edits to the
+  tombstone list. The engine remains the sole author of every venue write,
+  exactly as §6 promised; the panel cannot place, cancel, or flatten
+  anything, even compromised.
+- **Control is opt-in per launch** (`--unit NAME`): a panel started
+  without it has no control surface at all — the read-only posture stays
+  the default, and the VPS operator chooses to arm it.
+- **Every action is the typed-confirmation shape** (§11: a click is not a
+  decision): stop/restart require typing the unit name; revive requires
+  typing the botid.
+- **Stop tells the truth about parking** (E3): positions and their
+  venue-resting orders survive a stopped engine — the page says what
+  keeps protecting the money and what stops happening (stops unevaluated,
+  no replenishment) so "stop" is never mistaken for "flatten".
+- **Revive is the tombstone workflow with the evidence attached**: the
+  page shows each tombstone's reason and timestamp; the typed botid
+  removes the entry (atomic write, .bak kept); the page states that the
+  revival takes effect at the next fleet start — the file is the truth,
+  the process reads it at build (X7).
+- **Restart closes §11's loop**: written config + restart = enacted, all
+  from one screen, each step deliberate.
