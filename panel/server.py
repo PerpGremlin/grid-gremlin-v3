@@ -122,6 +122,27 @@ so guard-band drops never happen (slightly optimistic, stated per §9).</p>
 <p><a href="/">&larr; fleet</a></p>"""
 
 
+def curve_svg(points, width=600, height=80):
+    """The rehearsal's equity path as inline SVG — server-side, styleable,
+    no scripts, no pan/zoom (§4: that is where the rot lives). The zero
+    line is drawn so a curve below it LOOKS below it."""
+    if not points or len(points) < 2:
+        return ''
+    lo, hi = min(points + [0.0]), max(points + [0.0])
+    span = (hi - lo) or 1.0
+    def y(v):
+        return height - (v - lo) / span * (height - 8) - 4
+    step = width / (len(points) - 1)
+    path = ' '.join(f'{i * step:.1f},{y(v):.1f}'
+                    for i, v in enumerate(points))
+    return (f'<svg width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" preserveAspectRatio="none">'
+            f'<line x1="0" y1="{y(0.0):.1f}" x2="{width}" '
+            f'y2="{y(0.0):.1f}" stroke="var(--line)"/>'
+            f'<polyline points="{path}" fill="none" '
+            f'stroke="var(--accent)" stroke-width="1.5"/></svg>')
+
+
 def verdict(draft, out):
     if 'refused' in out:
         return (f'{FORM}<h1 class="neg">the engine refuses this draft</h1>'
@@ -132,10 +153,12 @@ def verdict(draft, out):
          ('net', out['net']), ('total (incl. open)', out['total']),
          ('hold benchmark', out['hold_benchmark']),
          ('max drawdown', -out['max_drawdown'])])
+    curve = curve_svg(out.get('equity_curve') or [])
     return (f"{FORM}<h1>{draft.get('symbol')} {draft.get('side')} "
             f"{draft.get('lower')}–{draft.get('upper')} x "
             f"{draft.get('rungs')} — {out['bars']} bars</h1>"
-            f"<table>{rows}<tr><td>trips / entry fills</td>"
+            + (f"<p>{curve}</p>" if curve else '')
+            + f"<table>{rows}<tr><td>trips / entry fills</td>"
             f"<td>{out['trips']} / {out['entry_fills']}</td></tr>"
             f"<tr><td>ends holding</td><td>{out['held']:.10g}"
             + (f" @ {out['basis']:,.6g}" if out.get('basis') else '')
