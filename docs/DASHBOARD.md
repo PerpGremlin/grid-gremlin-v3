@@ -327,3 +327,26 @@ phase 2.
   the process reads it at build (X7).
 - **Restart closes §11's loop**: written config + restart = enacted, all
   from one screen, each step deliberate.
+
+## 13. Local-first (the centre case, designed before built)
+
+- **One machine, one terminal, once.** `python3 -m panel.server
+  configs/mine.json --supervise` — init writes the pair, create makes the
+  first bot, and control starts the engine as a detached child process.
+  No systemd, no tunnel, no second terminal. The VPS/systemd shape (§12)
+  stays for ops boxes; `--supervise` is its laptop twin.
+- **The panel spawns, the engine survives it.** The child is fully
+  detached (own session, stdout/stderr to `logs/engine-<name>.log`);
+  closing the panel or the browser does nothing to a running fleet — §6's
+  rule, now with the panel as parent. A pid file beside the logs is the
+  supervisor's bookkeeping; the ENGINE's own lock (F3) remains the only
+  single-instance authority — the pid file is a convenience, never a
+  guard (the OctoBot port-as-mutex lesson, §1).
+- **Stop is SIGTERM, and stop still parks** (E3). Status is pid-alive
+  plus the lock's own say-so. A stale pid file is reported as exactly
+  that, never as a running engine.
+- **No auto-restart, ever** (§6: restarting into an unknown order state
+  can double-place). Start, stop, restart are typed decisions on the
+  control page, same shape as §12.
+- **Refusals pass through verbatim**: a second start while the lock is
+  held shows the engine's own F3 refusal, not a supervisor paraphrase.
