@@ -282,3 +282,23 @@ phase 2.
    deliberate apply.
 5. **Control** — start/stop/revive; engine remains sole author of venue
    writes.
+
+## 11. The create flow (configure, designed before built)
+
+- **A proposal is one JSON object**: the bot entry AND its watchdog line
+  (§8, one act), drafted in the form or pasted by an agent — same shape.
+- **Four gates, in order, none skippable:** (1) the engine's validator on
+  the WHOLE resulting fleet — not the new bot alone; coverage (F1/F2) runs
+  against the merged result, so an unwatchable addition is refused before
+  anything else happens. (2) The diff: old fleet file vs new, shown as
+  text. (3) The dry-run: the ladder the new bot would place at the current
+  mark, priced from PUBLIC endpoints (the panel stays keyless). (4) The
+  deliberate apply: the operator types the botid to confirm — a click is
+  not a decision.
+- **Apply writes files, never processes.** tempfile + os.replace + a kept
+  .bak (OctoBot's safe_dump lesson: "safe" needs an atomic rename, not an
+  exception handler). The page then says, honestly: "written; the fleet
+  trades the old config until you restart it." Enacting is phase 3's job —
+  configure ends at the file.
+- **Remove/edit follow the same gates**; a removed bot's watchdog line goes
+  with it in the same write (coverage would refuse the orphan anyway).
