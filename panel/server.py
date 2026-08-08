@@ -403,8 +403,26 @@ def main(argv):
     Handler.fleet = argv[0]
     if '--hours' in argv:
         Handler.hours = float(argv[argv.index('--hours') + 1])
-    Handler.token = secrets.token_urlsafe(16)
-    srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Handler)
+    port = 0
+    if '--port' in argv:
+        port = int(argv[argv.index('--port') + 1])
+    if '--token-file' in argv:
+        # the persistent-session variant: token survives restarts, stored
+        # like a key (0600, refuse looser — the engine's own rule)
+        tf = Path(argv[argv.index('--token-file') + 1])
+        if tf.exists():
+            mode = tf.stat().st_mode & 0o077
+            if mode:
+                print(f'refusing {tf}: group/other-readable', flush=True)
+                return 1
+            Handler.token = tf.read_text().strip()
+        else:
+            Handler.token = secrets.token_urlsafe(16)
+            tf.touch(mode=0o600)
+            tf.write_text(Handler.token)
+    else:
+        Handler.token = secrets.token_urlsafe(16)
+    srv = http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler)
     Handler.host_ok = f'127.0.0.1:{srv.server_port}'
     print(f'panel: http://{Handler.host_ok}/?t={Handler.token}',
           flush=True)   # journald/pipes: the URL must not sit in a buffer
