@@ -71,6 +71,15 @@ def settle(b, floor):
     return f'~{quote:,.2f} quote'
 
 
+def sweep_note(contract):
+    wd = contract.get('watchdog') or {}
+    ago = wd.get('swept_s_ago')
+    if ago is None:
+        return '<span class="neg">watchdog: never swept / unreadable</span>'
+    cls = 'neg' if ago > 900 else 'dim'
+    return f'<span class="{cls}">watchdog swept {ago}s ago</span>'
+
+
 def render(contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
@@ -83,6 +92,14 @@ def render(contract):
         note = ' *' if b['truncated'] else ''
         rng = contract.get('ranges', {}).get(botid)
         floor = contract.get('fee_floors', {}).get(botid)
+        wd = contract.get('watchdog') or {}
+        ceil = (wd.get('ceilings') or {}).get(botid)
+        if ceil:
+            used = abs(b['position']) / ceil * 100
+            wcls = ' class="neg"' if used >= 100 else ''
+            watch = f'<td{wcls}>{used:.0f}% of {ceil:,.4g}</td>'
+        else:
+            watch = '<td class="neg">UNWATCHED</td>'
         edge = ''
         if rng and b['mark']:
             edge = (f"<td>{strip(rng, b['mark'])}</td>"
@@ -96,18 +113,18 @@ def render(contract):
             f"{money(b['fees'], cls=False)}<td>{openat}</td>"
             f"{money(b['unreal_at_mark'])}{money(total)}"
             f"<td>{b['bought']:,.4g}</td><td>{b['sold']:,.4g}</td>"
-            f"{edge}<td>{settle(b, floor)}</td></tr>")
+            f"{edge}<td>{settle(b, floor)}</td>{watch}</tr>")
     return f"""<!doctype html><meta charset="utf-8">
 <title>grid-gremlin</title><style>{CSS}</style>
 <meta http-equiv="refresh" content="{REFRESH_S}">
 <button onclick="document.documentElement.classList.toggle('light')">
 theme</button>
-<h1>grid-gremlin — last {contract['window_hours']:g}h
+<h1>grid-gremlin — last {contract['window_hours']:g}h {sweep_note(contract)}
 <span class="dim">(read {age}s ago; refreshes every {REFRESH_S}s)</span></h1>
 <table><tr><th>bot</th><th>state</th><th>fills</th><th>realized</th>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
-<th>stop-now est.</th></tr>{''.join(rows)}</table>
+<th>stop-now est.</th><th>watcher</th></tr>{''.join(rows)}</table>
 <p class="dim">stop-now est. = position at mark less the venue fee floor —
 an estimate, not a promise; the venue settles what it settles.<br>
 * window opened mid-round: partial numbers (R7).
