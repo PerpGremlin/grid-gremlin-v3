@@ -146,7 +146,33 @@ def verdict(draft, out):
 def section(label, contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
+    belief = ((contract.get('watchdog') or {}).get('belief')
+              or {}).get('bots', {})
     for botid, b in contract['bots'].items():
+        if b is None:
+            # no fills in the window — the engine's own belief fills in,
+            # and says so (the snapshot is the bot's belief, not the venue)
+            bl = belief.get(botid, {})
+            alive = bl.get('alive')
+            pos = bl.get('position') or 0.0
+            state = ('DEAD' if alive is False else
+                     'HOLDING' if abs(pos) > 1e-12 else 'RESTING')
+            cls = 'neg' if state == 'DEAD' else 'dim'
+            wd0 = contract.get('watchdog') or {}
+            ceil0 = (wd0.get('ceilings') or {}).get(botid)
+            watch0 = (f'<td class="dim">{abs(pos) / ceil0 * 100:.0f}% of '
+                      f'{ceil0:,.4g}</td>' if ceil0
+                      else '<td class="neg">UNWATCHED</td>')
+            rows.append(
+                f'<tr><td>{botid}</td><td class="{cls}">{state}</td>'
+                f'<td class="dim">0</td><td class="dim" colspan="2">no '
+                f'fills in window</td><td class="dim">'
+                + (f'{pos:.10g} (belief)' if abs(pos) > 1e-12 else '—')
+                + '</td><td class="dim">—</td><td class="dim">—</td>'
+                  '<td class="dim">—</td><td class="dim">—</td>'
+                  '<td class="dim">—</td><td class="dim">—</td>'
+                + watch0 + '</tr>')
+            continue
         state = ('HOLDING' if abs(b['position']) > 1e-12 else 'FLAT')
         openat = (f"{b['position']:.10g} @ {b['avg_cost']:.6g}"
                   if abs(b['position']) > 1e-12 else '—')

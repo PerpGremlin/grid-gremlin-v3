@@ -22,11 +22,16 @@ def _serve(contract):
 
 
 CONTRACT = {'window_hours': 6.0, 'generated_ms': 0, 'unowned': {},
+            
             'ranges': {'spoADAUSDTl': {'lower': 0.155, 'upper': 0.23,
                                        'rungs': 16}},
             'fee_floors': {'spoADAUSDTl': 0.0025},
-            'watchdog': {'ceilings': {'spoADAUSDTl': 9700.0},
-                         'swept_s_ago': 41},
+            'watchdog': {'ceilings': {'spoADAUSDTl': 9700.0,
+                                      'linDOGEs': 8000.0},
+                         'swept_s_ago': 41,
+                         'belief': {'age_s': 3, 'bots': {
+                             'linDOGEs': {'alive': True,
+                                          'position': 730.0}}}},
             'bots': {'spoADAUSDTl': {
                 'fills': 3, 'realized': 5.04, 'fees': 2.07, 'bought': 910.0,
                 'sold': 0.0, 'position': 910.57, 'avg_cost': 0.207,
@@ -235,3 +240,17 @@ def spec_X7_revive_removes_exactly_the_typed_entry_atomically():
     atomic_write(tp, json.dumps(tombs))
     assert json.loads(tp.read_text()) == {'b': {'reason': 'y'}}
     assert 'a' in json.loads((d / 'tombstones.json.bak').read_text())
+
+
+def spec_V7_a_quiet_bot_is_shown_not_omitted():
+    """No fills in the window must never mean no row: the page renders the
+    engine's belief (labelled as belief) — HOLDING, RESTING, or DEAD.
+    Live 2026-08-08: three HL bots vanished from the panel for being
+    quiet, and quiet is exactly when you want to see them."""
+    c = json.loads(json.dumps(CONTRACT))
+    c['bots']['linDOGEs'] = None                  # configured, no fills
+    html = __import__('panel.server', fromlist=['render']).render(
+        [('hl', c)])
+    assert 'linDOGEs' in html
+    assert 'HOLDING' in html and '730 (belief)' in html
+    assert 'no fills in window' in html
