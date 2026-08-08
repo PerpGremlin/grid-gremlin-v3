@@ -31,6 +31,60 @@ both cited here when they happen. Nothing on this list blocks the current soak.
   incl. v2 decommission). What remains is the owner working the checklist
   when the soak's evidence gate is met.
 
+## 4. The panel — where it stands (2026-08-08) and what remains
+
+**Built, specced, live** (PRs #88-#104): the data contract (`report --json`,
+one shape for every renderer) · phase View complete (per-bot state, money
+columns, bought/sold, range strips, edge distances, stop-now estimate,
+watcher health, quiet bots rendered from belief, venue sections, aligned
+grid) · rehearse (engine-validated drafts over real candles, hold benchmark,
+equity curve) · create/edit/remove for linear grids (four gates: merged-fleet
+validation, diff, keyless dry-run, typed confirm; atomic apply, .bak kept) ·
+control (start/stop/restart both units + tombstone revival with evidence,
+opt-in per launch) · export snapshot · stable tunnel session (pinned port,
+0600 token). 320 specs.
+
+**Remaining, in tackle order:**
+
+1. **Martingale + spot create/edit forms** — the fields exist in the
+   validator; the form needs the deviation-ladder preview (prices + cum
+   capital per rung), tranches, reinvest toggle, cooldown. §9 boundary
+   stands: no rehearsal for martingales, say so on the page. Needs the
+   owner's eye on which knobs are screen-worthy vs file-only.
+2. **First-run `init`** — the panel can only merge into an existing
+   fleet+watchdog pair; a no-agent user hits a cliff at clone. A guided
+   flow (or CLI) writing a minimal valid pair from a template, refusals
+   guiding each field. Cheap, unblocks strangers.
+3. **Keys recipe in README** — the deliberate one technical step for
+   everyone (§8: keys never enter the panel); five copy-pasteable lines
+   incl. the chmod, plus the engine's refusal-on-loose-file behaviour.
+4. **Quickstart + "when something red appears"** — one page: what to open
+   first, what each red state asks of a human, when to trust a tombstone.
+   The test of every name we settled: if a message needs an AI to explain
+   it, the name failed.
+5. **Local-first packaging** — the real project: engine + panel on a
+   stranger's PC, no VPS, no tunnel, one command to a bookmark. Promoted
+   by the no-agent question (2026-08-08); everything built transfers, the
+   plumbing around it changes. Design §4's centre case, finally built.
+
+## 5. Engine queue (from audit 2026-08-07, unchanged by panel work)
+
+- **MED/LOW burn-down** — the queued list in `docs/AUDIT-2026-08-07.md`:
+  sign-only truncation detection, RO match with no re-size, per-venue
+  wallet-read isolation, cwd-relative locks/tombstones, probe stranding,
+  partially-resting remainder close, M15 deepest-round fallback, grid E9
+  cancel-vs-fill blind side, multi-quote TOTAL, ≥100% cumdev refusal,
+  backtester bid/ask.
+- **Prior-art adoption trio** — deterministic clientOrderIds on
+  market/seed writes; netted sells in the G15 coverage walk (passivbot's
+  arithmetic, our refusal); Nautilus-style temporal deadband before
+  believing venue discrepancies.
+- **`ceiling_loose: true`** — designed (DASHBOARD §8), not implemented:
+  the coverage check accepts >1.5x cap only with the named switch.
+- **Fee-economics verdict** — the wide-window readout on the demo BTC and
+  ETH longs (flagged 2026-08-07): is the ETH long genuinely trading
+  inside its fees? An evening's readout, not code.
+
 ## Non-gaps — absent by decision, do not re-invent
 
 Trail/SMA machinery (D10 — range edits do it) · deadband keys (D6 — emergent
