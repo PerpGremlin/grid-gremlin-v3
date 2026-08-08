@@ -53,10 +53,12 @@ init + the on-page key left via PR #109 — README §11.)*
    deviation-ladder preview, ceiling from full depth, spot grids in the
    create form; tranches/trailing stay file-only). Edit for
    martingale/spot rows remains grids-only.
-2. **Local-first packaging** — the real project: engine + panel on a
-   stranger's PC, no VPS, no tunnel, one command to a bookmark. Promoted
-   by the no-agent question (2026-08-08); everything built transfers, the
-   plumbing around it changes. Design §4's centre case, finally built.
+2. **Local-first: DONE for the core** (PR #113 — `--supervise`: control
+   spawns/stops the engine as a detached child, pid bookkeeping, F3
+   lock stays the only mutex; README quickstart is one terminal, once).
+   Remaining under this heading: Windows signal semantics unverified
+   (SIGTERM vs terminate()), and a packaging pass (pip/zipapp) if the
+   stress-testing group wants installs rather than clones.
 
 ## 5. Engine queue (from audit 2026-08-07, unchanged by panel work)
 

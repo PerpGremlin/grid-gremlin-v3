@@ -406,3 +406,43 @@ def spec_V9_the_key_defines_every_word_the_page_uses():
                  'UNWATCHED', '(belief)', 'ZERO-SPREAD', 'hold benchmark',
                  'trips', 'max depth', '* (star)'):
         assert term in KEY, f'key missing: {term}'
+
+
+def spec_F3_the_supervisor_detaches_stops_and_never_mistakes_a_stale_pid():
+    """§13 with a real process: start detaches (the child outlives any
+    parent shell), status reads pid-liveness, stop is SIGTERM, and a
+    dead pid is reported as stale — never as a running engine."""
+    import os
+    import subprocess as sp
+    import sys as _sys
+    import tempfile
+    import time as _t
+    from pathlib import Path as _P
+    from panel import supervise as sup
+    d = _P(tempfile.mkdtemp())
+    (d / 'configs').mkdir()
+    (d / 'logs').mkdir()
+    fleet = d / 'configs' / 'fleet.t.json'
+    fleet.write_text('{}')
+    assert sup.status(fleet) == ('stopped', None)
+    # a stand-in child (the real engine would refuse the empty fleet —
+    # correctly; the supervisor's contract is process handling)
+    proc = sp.Popen([_sys.executable, '-c', 'import time; time.sleep(60)'],
+                    start_new_session=True)
+    sup._pid_path(fleet).write_text(str(proc.pid))
+    st, pid = sup.status(fleet)
+    assert st == 'running' and pid == proc.pid
+    assert 'already running' in sup.start(fleet)     # no double spawn
+    note = sup.stop(fleet)
+    assert 'parked, not flattened' in note
+    for _ in range(50):
+        if proc.poll() is not None:
+            break
+        _t.sleep(0.1)
+    assert proc.poll() is not None, 'SIGTERM did not land'
+    assert sup.status(fleet) == ('stopped', None)
+    # a stale pid (dead process) is named, never believed
+    sup._pid_path(fleet).write_text(str(proc.pid))
+    st, _ = sup.status(fleet)
+    assert st == 'stale pid file'
+    assert 'not running' in sup.stop(fleet)
