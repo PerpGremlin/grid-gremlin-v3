@@ -37,6 +37,39 @@ def merge_proposal(fleet_raw, wd_raw, proposal):
     return botid, fleet, wd
 
 
+def edit_proposal(fleet_raw, wd_raw, botid, bot, wmax):
+    """§11 for a changed bot: the entry and its watcher move together —
+    identity is fixed (market, symbol, side never change in an edit;
+    that is a remove plus a create, deliberately)."""
+    new_id = make_botid(bot['market_type'], bot['symbol'], bot['side'])
+    if new_id != botid:
+        raise ConfigError(f'{botid}: an edit cannot change identity '
+                          f'(-> {new_id}) — remove and create instead')
+    fleet = json.loads(json.dumps(fleet_raw))
+    wd = json.loads(json.dumps(wd_raw))
+    for i, b in enumerate(fleet.get('bots', [])):
+        if make_botid(b['market_type'], b['symbol'], b['side']) == botid:
+            fleet['bots'][i] = bot
+            wd.setdefault('positions', {})[botid] = {'min': 0, 'max': wmax}
+            return botid, fleet, wd
+    raise ConfigError(f'{botid}: not in this fleet')
+
+
+def remove_proposal(fleet_raw, wd_raw, botid):
+    """The bot and its watchdog line leave together — coverage would
+    refuse an orphan in either direction (F1)."""
+    fleet = json.loads(json.dumps(fleet_raw))
+    wd = json.loads(json.dumps(wd_raw))
+    before = len(fleet.get('bots', []))
+    fleet['bots'] = [b for b in fleet.get('bots', [])
+                     if make_botid(b['market_type'], b['symbol'],
+                                   b['side']) != botid]
+    if len(fleet['bots']) == before:
+        raise ConfigError(f'{botid}: not in this fleet')
+    (wd.get('positions') or {}).pop(botid, None)
+    return botid, fleet, wd
+
+
 def validate_whole(fleet, wd, adapter_of):
     """Gate 1: the engine's own loaders over the MERGED result — a new bot
     is judged as part of its fleet, never alone. Returns the refusal text
