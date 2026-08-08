@@ -75,8 +75,13 @@ init + the on-page key left via PR #109 — README §11.)*
   remainder close places only the uncovered gap and ro_capacity warns
   once; deepest-round restarts hold instead of re-anchoring; per-quote
   totals; the backtest replays against a synthetic 1bp spread.)*
-  Remaining: the prior-art adoption trio (clientOrderIds on market
-  writes, netted sells in the coverage walk, the temporal deadband).
+  Remaining, the adoption pair: query-by-clientOrderId resolution
+  of ambiguous market writes, and the Nautilus temporal deadband
+  on E9 — each needs plumbing (client endpoint; clock injection
+  through the stand-down specs): one focused session, not an
+  end-of-day patch. Item 2 of the trio (netted sells in the
+  coverage walk) was already satisfied by PR #82's deficit
+  arithmetic; PR #121 pins it with the feared interleave case.
 - **Prior-art adoption trio** — deterministic clientOrderIds on
   market/seed writes; netted sells in the G15 coverage walk (passivbot's
   arithmetic, our refusal); Nautilus-style temporal deadband before
