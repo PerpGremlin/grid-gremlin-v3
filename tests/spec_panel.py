@@ -130,3 +130,66 @@ def spec_T3_the_rehearsal_reports_the_hold_benchmark():
     out = rehearse(draft, bars, a)
     assert abs(out['hold_benchmark'] - 100.0) < 1e-9   # 1000 * (0.22/0.20-1)
     assert out['bars'] == 2
+
+
+def _fake_adapter():
+    from gridgremlin.adapters import LinearAdapter
+    return LinearAdapter({'symbol': 'ADAUSDT', 'qty_step': 1.0,
+                          'min_qty': 1.0, 'price_tick': 0.0001,
+                          'min_notional': 1.0})
+
+
+_FLEET = {'bots': [], 'watchdog': 'wd.json'}
+_WD = {'tag': 't', 'snapshot': 's', 'state': 'st',
+       'staleness_seconds': 600, 'mm_rate_max': 0.5,
+       'equity_min': 100, 're_alert_seconds': 900,
+       'assumes_sole_actor': True,
+       'positions': {}}
+_BOT = {'market_type': 'linear', 'venue': 'bybit', 'symbol': 'ADAUSDT',
+        'side': 'long', 'capital': 1500, 'lower': 0.155, 'upper': 0.23,
+        'rungs': 16, 'stop': {'watch': 'mark_price', 'level': 0.148}}
+
+
+def spec_F1_the_create_flow_judges_the_merged_fleet_not_the_bot_alone():
+    """§11 gate 1: an unwatchable addition is refused by the engine's own
+    coverage check, in the engine's own words — and a well-watched one
+    passes. Bot and watcher land together or not at all."""
+    from panel.create import merge_proposal, validate_whole
+    from gridgremlin.config import validate_grid
+    from gridgremlin.ladder import grid_rungs, position_cap
+    adapter = _fake_adapter()
+    vbot = validate_grid(dict(_BOT))    # the same normalisation the flow does
+    cap = position_cap(vbot, adapter, grid_rungs(vbot, adapter))
+    # ceiling inside the band: the merged fleet validates
+    botid, fleet, wd = merge_proposal(
+        _FLEET, _WD, {'bot': dict(_BOT), 'watchdog': {'max': cap * 1.2}})
+    assert botid == 'linADAUSDTl'
+    assert validate_whole(fleet, wd, lambda c: adapter) is None
+    assert wd['positions']['linADAUSDTl']['max'] == cap * 1.2
+    # ceiling beyond 1.5x cap: refused, engine's words (F2)
+    _, fleet2, wd2 = merge_proposal(
+        _FLEET, _WD, {'bot': dict(_BOT), 'watchdog': {'max': cap * 3.0}})
+    why = validate_whole(fleet2, wd2, lambda c: adapter)
+    assert why and 'ceiling' in why
+    # duplicate identity: refused before validation
+    try:
+        merge_proposal(fleet, wd, {'bot': dict(_BOT),
+                                   'watchdog': {'max': cap}})
+        assert False, 'identity reused'
+    except Exception as e:
+        assert 'already in this fleet' in str(e)
+
+
+def spec_X8_atomic_write_replaces_whole_and_keeps_the_bak():
+    """§11: 'safe' means an atomic rename with a kept .bak — the OctoBot
+    safe_dump lesson. The old content survives beside the new."""
+    import tempfile
+    from pathlib import Path as _P
+    from panel.create import atomic_write
+    d = _P(tempfile.mkdtemp())
+    p = d / 'fleet.json'
+    p.write_text('{"old": true}')
+    atomic_write(p, '{"new": true}')
+    assert p.read_text() == '{"new": true}'
+    assert (d / 'fleet.json.bak').read_text() == '{"old": true}'
+    assert not list(d.glob('fleet.json?*[!k]'))       # no temp litter

@@ -11,6 +11,7 @@ Data is the engine's own contract (report --json). One shape, every
 renderer: this page can never disagree with the terminal readout.
 """
 import http.server
+from pathlib import Path
 import urllib.parse
 import json
 import secrets
@@ -79,6 +80,25 @@ def sweep_note(contract):
         return '<span class="neg">watchdog: never swept / unreadable</span>'
     cls = 'neg' if ago > 900 else 'dim'
     return f'<span class="{cls}">watchdog swept {ago}s ago</span>'
+
+
+CREATE_FORM = """<h1>create a grid <span class="dim">— bot and watcher,
+one act (§8). Four gates; nothing is written until you type the botid.
+</span></h1><form method="post" action="/create">
+<table><tr><th>symbol</th><th>side</th><th>lower</th><th>upper</th>
+<th>rungs</th><th>capital</th><th>ceiling</th><th></th></tr>
+<tr><td><input name="symbol" value="ADAUSDT" size="9"></td>
+<td><select name="side"><option>long</option><option>short</option>
+</select></td><td><input name="lower" size="8"></td>
+<td><input name="upper" size="8"></td>
+<td><input name="rungs" value="16" size="4"></td>
+<td><input name="capital" value="1500" size="7"></td>
+<td><input name="ceiling" size="8" placeholder="blank = cap x1.2"></td>
+<td><button>run the gates</button></td></tr></table>
+<input type="hidden" name="gg" value="1"></form>
+<p class="dim">linear Bybit grids in this slice. The stop defaults to
+mark_price 2% below the lower rung; edit the file for anything fancier —
+same contract, other door.</p><p><a href="/">&larr; fleet</a></p>"""
 
 
 FORM = """<h1>rehearse a grid <span class="dim">— a draft, validated by
@@ -168,7 +188,8 @@ theme</button>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
 <th>stop-now est.</th><th>watcher</th></tr>{''.join(rows)}</table>
-<p><a href="/rehearse">rehearse a draft grid &rarr;</a></p>
+<p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·
+<a href="/create">create a grid &rarr;</a></p>
 <p class="dim">stop-now est. = position at mark less the venue fee floor —
 an estimate, not a promise; the venue settles what it settles.<br>
 * window opened mid-round: partial numbers (R7).
@@ -222,6 +243,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._deny(403, 'bad token')
         if not self._authed():
             return self._deny(401, 'open the tokened URL from the terminal')
+        if self.path == '/create':
+            return self._page(CREATE_FORM)
         if self.path == '/rehearse':
             body = (f'<!doctype html><meta charset="utf-8">'
                     f'<title>rehearse</title><style>{CSS}</style>{FORM}')
@@ -248,13 +271,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         origin = self.headers.get('Origin', '')
         if origin and origin != f'http://{self.host_ok}':
             return self._deny(403, 'wrong Origin')     # cross-site write
-        if self.path != '/rehearse':
-            return self._deny(404, 'no such action')
         raw = self.rfile.read(min(int(self.headers.get(
-            'Content-Length') or 0), 4096)).decode()
+            'Content-Length') or 0), 16384)).decode()
         form = dict(urllib.parse.parse_qsl(raw))
         if form.pop('gg', None) != '1':
             return self._deny(403, 'missing form token')
+        if self.path in ('/create', '/apply'):
+            return self._create_flow(form, apply=self.path == '/apply')
+        if self.path != '/rehearse':
+            return self._deny(404, 'no such action')
         draft = {'market_type': 'linear', 'venue': 'bybit',
                  'symbol': form.get('symbol', '').upper(),
                  'side': form.get('side', 'long'),
@@ -275,6 +300,93 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header('Content-Type', 'text/html; charset=utf-8')
         self.end_headers()
         self.wfile.write(body.encode())
+
+
+    def _page(self, body):
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.end_headers()
+        self.wfile.write((f'<!doctype html><meta charset="utf-8">'
+                          f'<title>create</title><style>{CSS}</style>'
+                          + body).encode())
+
+    def _create_flow(self, form, apply=False):
+        from panel.create import (CEILING_PREFILL, atomic_write, dry_ladder,
+                                  merge_proposal, public_adapter,
+                                  public_mark, unified_diff, validate_whole)
+        from gridgremlin.ladder import grid_rungs, position_cap
+        fleet_p = Path(self.fleet)
+        fleet_raw = json.loads(fleet_p.read_text())
+        wd_p = Path(fleet_raw['watchdog'])
+        wd_raw = json.loads(wd_p.read_text())
+        if apply:
+            proposal = json.loads(form.get('proposal', '{}'))
+        else:
+            lo = _f(form.get('lower'))
+            bot = {'market_type': 'linear', 'venue': 'bybit',
+                   'symbol': form.get('symbol', '').upper(),
+                   'side': form.get('side', 'long'),
+                   'capital': _f(form.get('capital')),
+                   'lower': lo, 'upper': _f(form.get('upper')),
+                   'rungs': int(_f(form.get('rungs')) or 0),
+                   'stop': {'watch': 'mark_price',
+                            'level': round((lo or 0) * 0.98, 10)}}
+            proposal = {'bot': bot, 'watchdog': {'max': _f(form.get('ceiling'))}}
+        try:
+            from gridgremlin.config import validate_grid
+            vbot = validate_grid(dict(proposal['bot']))   # raw dicts lack
+            adapter = public_adapter(vbot)                # defaults (A1)
+            if proposal['watchdog'].get('max') is None:
+                cap = position_cap(vbot, adapter, grid_rungs(vbot, adapter))
+                proposal['watchdog']['max'] = round(cap * CEILING_PREFILL, 6)
+            botid, fleet, wd = merge_proposal(fleet_raw, wd_raw, proposal)
+            refusal = validate_whole(fleet, wd, lambda cfg: adapter
+                                     if cfg is proposal['bot']
+                                     else public_adapter(cfg))
+        except Exception as e:                              # noqa: BLE001
+            return self._page(f'{CREATE_FORM}<h1 class="neg">refused</h1>'
+                              f'<p class="neg">{e}</p>')
+        if refusal:
+            return self._page(f'{CREATE_FORM}<h1 class="neg">the engine '
+                              f'refuses this fleet</h1>'
+                              f'<p class="neg">{refusal}</p>')
+        new_fleet = json.dumps(fleet, indent=1) + '\n'
+        new_wd = json.dumps(wd, indent=1) + '\n'
+        if apply:
+            if form.get('confirm', '') != botid:
+                return self._page('<h1 class="neg">not applied</h1><p>the '
+                                  f'typed confirmation must be exactly '
+                                  f'<b>{botid}</b> — a click is not a '
+                                  'decision (§11). <a href="/create">back'
+                                  '</a></p>')
+            atomic_write(fleet_p, new_fleet)
+            atomic_write(wd_p, new_wd)
+            return self._page(f'<h1>{botid}: written</h1><p>bot and watcher '
+                              'landed together; .bak kept beside each file. '
+                              '<b>The fleet trades the old config until you '
+                              'restart it</b> — enacting is phase 3\'s job '
+                              '(§11).</p><p><a href="/">fleet</a></p>')
+        mark = public_mark(vbot)
+        ladder = dry_ladder(vbot, adapter, mark)
+        rows = ''.join(f"<tr><td>{o['side']}</td><td>{o['price']:,.6g}</td>"
+                       f"<td>{o['qty']:,.6g}</td></tr>" for o in ladder)
+        diffs = (unified_diff(fleet_p.read_text(), new_fleet, fleet_p.name)
+                 + unified_diff(wd_p.read_text(), new_wd, wd_p.name))
+        pj = json.dumps(proposal).replace('"', '&quot;')
+        return self._page(
+            f'<h1>{botid} — gates 1-3 passed</h1>'
+            f'<h1 class="dim">the diff</h1><pre class="dim">{diffs}</pre>'
+            f'<h1 class="dim">the ladder at mark {mark:,.6g} (dry-run — '
+            f'nothing placed)</h1><table><tr><th>side</th><th>price</th>'
+            f'<th>qty</th></tr>{rows}</table>'
+            f'<form method="post" action="/apply">'
+            f'<input type="hidden" name="gg" value="1">'
+            f'<input type="hidden" name="proposal" value="{pj}">'
+            f'type the botid to write the files: '
+            f'<input name="confirm" size="16" placeholder="{botid}">'
+            f'<button>apply</button></form>'
+            f'<p class="dim">apply writes files only; the running fleet is '
+            f'untouched until restarted (§11).</p>')
 
 
 def _f(v):
