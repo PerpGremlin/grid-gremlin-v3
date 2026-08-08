@@ -10,9 +10,11 @@ def _serve(contract):
     from panel.server import Handler
 
     class H(Handler):
-        def _contract(self):
+        def _contract(self, fleet):
             return contract
     H.token = 'tok123'
+    H.fleets = ('f.json',)
+    H.labels = ('demo',)
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', 0), H)
     H.host_ok = f'127.0.0.1:{srv.server_port}'
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -72,7 +74,7 @@ def spec_P2_the_token_becomes_a_cookie_and_the_page_renders_the_contract():
         req = urllib.request.Request(f'{base}/data',
                                      headers={'Cookie': 'gg=tok123'})
         data = json.loads(op.open(req).read())
-        assert data == CONTRACT              # the same shape, unmangled
+        assert data == {'demo': CONTRACT}    # labelled by fleet, unmangled
     finally:
         srv.shutdown()
 

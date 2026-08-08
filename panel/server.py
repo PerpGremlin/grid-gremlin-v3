@@ -143,7 +143,7 @@ def verdict(draft, out):
             "benchmark or hold.</p>")
 
 
-def render(contract):
+def section(label, contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
     for botid, b in contract['bots'].items():
@@ -177,50 +177,62 @@ def render(contract):
             f"{money(b['unreal_at_mark'])}{money(total)}"
             f"<td>{b['bought']:,.4g}</td><td>{b['sold']:,.4g}</td>"
             f"{edge}<td>{settle(b, floor)}</td>{watch}</tr>")
-    return f"""<!doctype html><meta charset="utf-8">
-<title>grid-gremlin</title><style>{CSS}</style>
-<meta http-equiv="refresh" content="{REFRESH_S}">
-<button onclick="document.documentElement.classList.toggle('light')">
-theme</button>
-<h1>grid-gremlin — last {contract['window_hours']:g}h {sweep_note(contract)}
+    return f"""
+<h1>{label} — last {contract['window_hours']:g}h {sweep_note(contract)}
 <span class="dim">(read {age}s ago; refreshes every {REFRESH_S}s)</span></h1>
 <table><tr><th>bot</th><th>state</th><th>fills</th><th>realized</th>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
 <th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
 <th>stop-now est.</th><th>watcher</th></tr>{''.join(rows)}</table>
+<p class="dim">stop-now est. = position at mark less the venue fee floor —
+an estimate, not a promise; the venue settles what it settles.<br>
+* window opened mid-round: partial numbers (R7).</p>"""
+
+
+def render(labelled):
+    body = ''.join(section(lb, c) for lb, c in labelled)
+    return f"""<!doctype html><meta charset="utf-8">
+<title>grid-gremlin</title><style>{CSS}</style>
+<meta http-equiv="refresh" content="{REFRESH_S}">
+<button onclick="document.documentElement.classList.toggle('light')">
+theme</button>{body}
 <p><a href="/rehearse">rehearse a draft grid &rarr;</a> ·
 <a href="/create">create a grid &rarr;</a> ·
 <a href="/control">control &rarr;</a></p>
-<p class="dim">stop-now est. = position at mark less the venue fee floor —
-an estimate, not a promise; the venue settles what it settles.<br>
-* window opened mid-round: partial numbers (R7).
-This page renders the engine's own readout contract — it cannot disagree
-with the terminal. It holds no keys and can write nothing.</p>"""
+<p class="dim">this page renders the engine's own readout contract — it
+cannot disagree with the terminal. It holds no keys; venue writes are the
+engine's alone.</p>"""
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     server_version = 'gg-panel'
     token = ''
-    unit = None            # §12: control is opt-in per launch (--unit)
+    fleets = ()            # venue sections: one per fleet file
+    units = ()             # §12: control is opt-in per launch (--units)
+    labels = ()
     host_ok = ''
     fleet = ''
     hours = 24.0
-    _cache = (0.0, None)
+    _cache = {}
 
     def log_message(self, *a):
         pass
 
-    def _contract(self):
-        t, data = Handler._cache
+    def _contract(self, fleet):
+        t, data = Handler._cache.get(fleet, (0.0, None))
         if data is not None and time.time() - t < CACHE_TTL_S:
             return data
         out = subprocess.run(
-            [sys.executable, '-m', 'gridgremlin.report', self.fleet,
+            [sys.executable, '-m', 'gridgremlin.report', fleet,
              '--hours', str(self.hours), '--json'],
             capture_output=True, text=True, timeout=60)
         data = json.loads(out.stdout)
-        Handler._cache = (time.time(), data)
+        Handler._cache[fleet] = (time.time(), data)
         return data
+
+    def _labelled(self):
+        return [(lb, self._contract(f))
+                for lb, f in zip(self.labels, self.fleets)]
 
     def _authed(self):
         return f'gg={self.token}' in (self.headers.get('Cookie') or '')
@@ -257,8 +269,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body.encode())
             return
-        body = (json.dumps(self._contract()) if self.path == '/data'
-                else render(self._contract()))
+        body = (json.dumps({lb: c for lb, c in self._labelled()})
+                if self.path == '/data' else render(self._labelled()))
         self.send_response(200)
         self.send_header('Content-Type',
                          'application/json' if self.path == '/data'
@@ -321,7 +333,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                   merge_proposal, public_adapter,
                                   public_mark, unified_diff, validate_whole)
         from gridgremlin.ladder import grid_rungs, position_cap
-        fleet_p = Path(self.fleet)
+        fi = int(_f(form.get('fleet')) or 0)
+        fleet_p = Path(self.fleets[min(fi, len(self.fleets) - 1)])
         fleet_raw = json.loads(fleet_p.read_text())
         wd_p = Path(fleet_raw['watchdog'])
         wd_raw = json.loads(wd_p.read_text())
@@ -396,16 +409,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
     def _tombs_path(self):
-        return Path(self.fleet).parent.parent / 'logs' / 'tombstones.json'
+        return Path(self.fleets[0]).parent.parent / 'logs' / 'tombstones.json'
 
     def _control_page(self):
-        if not self.unit:
+        if not self.units:
             return self._deny(404, 'control is not armed on this panel '
-                                   '(start it with --unit) — §12')
-        state = subprocess.run(['systemctl', '--user', 'is-active',
-                                self.unit], capture_output=True,
-                               text=True).stdout.strip()
-        cls = 'pos' if state == 'active' else 'neg'
+                                   '(start it with --units) — §12')
+        rows = []
+        for u in self.units:
+            state = subprocess.run(['systemctl', '--user', 'is-active', u],
+                                   capture_output=True, text=True
+                                   ).stdout.strip()
+            cls = 'pos' if state == 'active' else 'neg'
+            rows.append(f'<p>unit <b>{u}</b>: <span class="{cls}">{state}'
+                        '</span></p>')
+        units_html = ''.join(rows)
         tombs = {}
         tp = self._tombs_path()
         if tp.exists():
@@ -419,13 +437,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             for b, v in tombs.items()) or             '<tr><td class="dim" colspan="3">no tombstones</td></tr>'
         body = f"""<h1>control <span class="dim">— processes and files,
 never the venue (§12)</span></h1>
-<p>fleet unit <b>{self.unit}</b>: <span class="{cls}">{state}</span></p>
+{units_html}
 <form method="post" action="/unit">
 <input type="hidden" name="gg" value="1">
 <select name="action"><option>restart</option><option>stop</option>
 <option>start</option></select>
-type the unit name to confirm: <input name="confirm" size="22"
-placeholder="{self.unit}"><button>do it</button></form>
+type a unit name to confirm: <input name="confirm" size="22">
+<button>do it</button></form>
 <p class="dim">stop PARKS, never flattens: positions and their
 venue-resting orders survive a stopped engine (E3) — but stops go
 unevaluated and nothing replenishes until start. restart enacts any
@@ -439,21 +457,22 @@ file is the truth; the process reads it at build.</p>
         return self._page(body)
 
     def _control_act(self, form, path):
-        if not self.unit:
+        if not self.units:
             return self._deny(404, 'control is not armed on this panel')
         if path == '/unit':
-            if form.get('confirm', '') != self.unit:
-                return self._page('<h1 class="neg">not done</h1><p>type the '
-                                  f'unit name <b>{self.unit}</b> exactly — '
-                                  'a click is not a decision (§12). '
+            unit = form.get('confirm', '')
+            if unit not in self.units:
+                return self._page('<h1 class="neg">not done</h1><p>type one '
+                                  'of the armed unit names exactly — a '
+                                  'click is not a decision (§12). '
                                   '<a href="/control">back</a></p>')
             act = form.get('action', '')
             if act not in ('start', 'stop', 'restart'):
                 return self._deny(403, 'unknown action')
-            r = subprocess.run(['systemctl', '--user', act, self.unit],
+            r = subprocess.run(['systemctl', '--user', act, unit],
                                capture_output=True, text=True, timeout=60)
             note = r.stderr.strip() or f'{act}: done'
-            return self._page(f'<h1>{self.unit}: {act}</h1><p>{note}</p>'
+            return self._page(f'<h1>{unit}: {act}</h1><p>{note}</p>'
                               '<p><a href="/control">control</a> · '
                               '<a href="/">fleet</a></p>')
         # /revive
@@ -482,17 +501,17 @@ def _f(v):
 
 
 def main(argv):
-    if not argv:
-        print('usage: python3 -m panel.server <fleet.json> [--hours N]')
-        return 2
-    Handler.fleet = argv[0]
     if '--hours' in argv:
-        Handler.hours = float(argv[argv.index('--hours') + 1])
+        i = argv.index('--hours')
+        Handler.hours = float(argv[i + 1])
+        del argv[i:i + 2]
+    if '--units' in argv:
+        i = argv.index('--units')
+        Handler.units = tuple(argv[i + 1].split(','))
+        del argv[i:i + 2]
     port = 0
     if '--port' in argv:
         port = int(argv[argv.index('--port') + 1])
-    if '--unit' in argv:
-        Handler.unit = argv[argv.index('--unit') + 1]
     if '--token-file' in argv:
         # the persistent-session variant: token survives restarts, stored
         # like a key (0600, refuse looser — the engine's own rule)
@@ -509,6 +528,13 @@ def main(argv):
             tf.write_text(Handler.token)
     else:
         Handler.token = secrets.token_urlsafe(16)
+    Handler.fleets = tuple(a for a in argv if a.endswith('.json'))
+    Handler.labels = tuple(Path(f).stem.replace('fleet.', '')
+                           for f in Handler.fleets)
+    if not Handler.fleets:
+        print('usage: python3 -m panel.server <fleet.json>... '
+              '[--hours N] [--port P] [--token-file F] [--units a,b]')
+        return 2
     srv = http.server.ThreadingHTTPServer(('127.0.0.1', port), Handler)
     Handler.host_ok = f'127.0.0.1:{srv.server_port}'
     print(f'panel: http://{Handler.host_ok}/?t={Handler.token}',
