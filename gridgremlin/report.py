@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .apply import make_botid, rung_of
 from .config import validate_fleet
+from .ladder import fee_floor_for
 from .exchange.env import load_env
 from .exchange.errors import VenueError
 
@@ -261,6 +262,7 @@ def main(argv):
     since_ms = now_ms - int(hours * 3600 * 1000)
     by_venue, key_of, inverse_ids = {}, {}, set()
     strat_of, entry_sides, closers, side_of = {}, {}, {}, {}
+    range_of = {}
     for cfg in fleet['bots']:
         by_venue.setdefault(cfg['venue'], []).append(cfg)
         botid = make_botid(cfg['market_type'], cfg['symbol'], cfg['side'])
@@ -268,6 +270,9 @@ def main(argv):
         strat_of[botid] = cfg.get('strategy', 'grid')
         entry_sides[botid] = 'buy' if cfg['side'] == 'long' else 'sell'
         side_of[botid] = cfg['side']
+        if cfg.get('lower') and cfg.get('upper'):
+            range_of[botid] = {'lower': cfg['lower'], 'upper': cfg['upper'],
+                               'rungs': cfg.get('rungs')}
         exit_side = 'sell' if cfg['side'] == 'long' else 'buy'
         closers[(cfg['market_type'], cfg['symbol'], exit_side)] = botid
         if cfg['market_type'] == 'inverse':
@@ -293,6 +298,8 @@ def main(argv):
             'bots': {b: public_book(books[b], marks.get(key_of[b]),
                                     side_of.get(b), strat_of.get(b))
                      for b in botids if b in books},
+            'ranges': range_of,
+            'fee_floors': {b: fee_floor_for(key_of[b][0]) for b in botids},
             'unowned': {k[1]: public_book(books[k])
                         for k in books if isinstance(k, tuple)
                         and k[0] == 'unowned'}}

@@ -42,6 +42,35 @@ def money(v, cls=True):
     return f'<td{c}>{v:,.2f}</td>'
 
 
+def strip(rng, mark):
+    """The range as a picture: bar, rung ticks, mark dot. Inline SVG,
+    server-side, no scripts — a glance instead of arithmetic."""
+    if not rng or not mark:
+        return ''
+    lo, hi = rng['lower'], rng['upper']
+    span = hi - lo or 1.0
+    x = max(0.0, min(1.0, (mark - lo) / span)) * 100
+    ticks = ''.join(
+        f'<line x1="{lo_x:.1f}" y1="3" x2="{lo_x:.1f}" y2="9" '
+        'stroke="var(--line)"/>'
+        for i in range(rng.get('rungs') or 0)
+        for lo_x in [i / max(1, (rng['rungs'] - 1)) * 100])
+    return (f'<svg width="120" height="12" viewBox="0 0 100 12" '
+            f'preserveAspectRatio="none"><rect x="0" y="4" width="100" '
+            f'height="4" fill="var(--line)"/>{ticks}'
+            f'<circle cx="{x:.1f}" cy="6" r="3" fill="var(--accent)"/></svg>')
+
+
+def settle(b, floor):
+    """Stop now and you receive: the number every user reaches for and
+    nobody ships. Position sold at mark, less the venue-shaped fee —
+    an estimate and labelled as one."""
+    if abs(b['position']) < 1e-12 or not b['mark'] or b.get('inverse'):
+        return '<span class="dim">flat</span>'
+    quote = abs(b['position']) * b['mark'] * (1.0 - (floor or 0.0))
+    return f'~{quote:,.2f} quote'
+
+
 def render(contract):
     age = max(0, int(time.time() - contract['generated_ms'] / 1000))
     rows = []
@@ -52,12 +81,22 @@ def render(contract):
         total = (b['realized'] - b['fees']
                  + (b['unreal_at_mark'] or 0.0))
         note = ' *' if b['truncated'] else ''
+        rng = contract.get('ranges', {}).get(botid)
+        floor = contract.get('fee_floors', {}).get(botid)
+        edge = ''
+        if rng and b['mark']:
+            edge = (f"<td>{strip(rng, b['mark'])}</td>"
+                    f"<td class='dim'>{(b['mark'] - rng['lower']) / b['mark'] * 100:.1f}%"
+                    f" / {(rng['upper'] - b['mark']) / b['mark'] * 100:.1f}%</td>")
+        else:
+            edge = '<td class="dim">—</td><td class="dim">—</td>'
         rows.append(
             f'<tr><td>{botid}{note}</td><td class="dim">{state}</td>'
             f"<td>{b['fills']}</td>{money(b['realized'])}"
             f"{money(b['fees'], cls=False)}<td>{openat}</td>"
             f"{money(b['unreal_at_mark'])}{money(total)}"
-            f"<td>{b['bought']:,.4g}</td><td>{b['sold']:,.4g}</td></tr>")
+            f"<td>{b['bought']:,.4g}</td><td>{b['sold']:,.4g}</td>"
+            f"{edge}<td>{settle(b, floor)}</td></tr>")
     return f"""<!doctype html><meta charset="utf-8">
 <title>grid-gremlin</title><style>{CSS}</style>
 <meta http-equiv="refresh" content="{REFRESH_S}">
@@ -67,8 +106,11 @@ theme</button>
 <span class="dim">(read {age}s ago; refreshes every {REFRESH_S}s)</span></h1>
 <table><tr><th>bot</th><th>state</th><th>fills</th><th>realized</th>
 <th>fees</th><th>open@avg</th><th>unreal</th><th>total</th>
-<th>bought</th><th>sold</th></tr>{''.join(rows)}</table>
-<p class="dim">* window opened mid-round: partial numbers (R7).
+<th>bought</th><th>sold</th><th>range</th><th>edge lo/hi</th>
+<th>stop-now est.</th></tr>{''.join(rows)}</table>
+<p class="dim">stop-now est. = position at mark less the venue fee floor —
+an estimate, not a promise; the venue settles what it settles.<br>
+* window opened mid-round: partial numbers (R7).
 This page renders the engine's own readout contract — it cannot disagree
 with the terminal. It holds no keys and can write nothing.</p>"""
 
