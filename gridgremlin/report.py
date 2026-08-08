@@ -221,14 +221,39 @@ def _row(name, book, mark, side=None):
             f"{_n(total_pnl(book, mark)):>12}")
 
 
+def public_book(book, mark=None, side=None, strategy=None):
+    """The data contract, one book: every public field of the ledger, plus
+    what a renderer needs and nothing it must compute. Private working
+    state (underscore keys, sets) never leaves this module — the panel and
+    the terminal table read THIS, so they can never disagree (D8/R7)."""
+    out = {k: v for k, v in book.items()
+           if not k.startswith('_') and not isinstance(v, set)}
+    out['mark'] = mark
+    out['side'] = side
+    out['strategy'] = strategy
+    out['truncated'] = window_truncated(book, side)
+    if out['truncated']:
+        out['same_rung'] = None    # a margin against a partial average is
+                                   # not a verdict (R9 honours R7)
+    unreal = None
+    if mark is not None and abs(book['position']) > 1e-12 \
+            and book['avg_cost'] > 0 and not book.get('inverse'):
+        unreal = (mark - book['avg_cost']) * book['position']
+    out['unreal_at_mark'] = unreal
+    return out
+
+
 def main(argv):
     hours = 24.0
+    as_json = '--json' in argv
+    if as_json:
+        argv = [a for a in argv if a != '--json']
     if '--hours' in argv:
         i = argv.index('--hours')
         hours = float(argv[i + 1])
         argv = argv[:i] + argv[i + 2:]
     if len(argv) != 1:
-        print('usage: python3 -m gridgremlin.report <fleet.json> [--hours N]')
+        print('usage: python3 -m gridgremlin.report <fleet.json> [--hours N] [--json]')
         return 2
     load_env()
     fleet = validate_fleet(json.loads(Path(argv[0]).read_text()))
@@ -261,6 +286,18 @@ def main(argv):
         fills += got
         marks.update(m)
     books = ledger(fills, botids, inverse_ids, entry_sides, closers)
+    if as_json:
+        contract = {
+            'window_hours': hours,
+            'generated_ms': now_ms,
+            'bots': {b: public_book(books[b], marks.get(key_of[b]),
+                                    side_of.get(b), strat_of.get(b))
+                     for b in botids if b in books},
+            'unowned': {k[1]: public_book(books[k])
+                        for k in books if isinstance(k, tuple)
+                        and k[0] == 'unowned'}}
+        print(json.dumps(contract))
+        return 0
     print(f'last {hours:g}h · grid profit = realized − fees (D8) · '
           f'total adds mark-to-average on the open remainder')
     print(f"{'bot':<18}{'fills':>6}{'realized':>12}{'fees':>10}"
@@ -294,7 +331,7 @@ def main(argv):
               f'{_n(realized - fees):>12}')
     print()
     print(f"{'— activity —':<18}{'trips':>7}{'per-trip':>10}"
-          f"{'rounds':>8}{'avg/round':>11}{'SO fills':>10}{'max depth':>11}")
+          f"{'rounds':>8}{'avg/round':>11}{'SO fills':>10}{'max depth':>11}{'bought':>12}{'sold':>12}")
     for botid in botids:
         b = books.get(botid)
         if b is None or b['fills'] == 0:
@@ -302,15 +339,19 @@ def main(argv):
         if strat_of.get(botid) == 'martingale':
             avg = (b['round_pnl_sum'] / b['rounds']) if b['rounds'] else None
             wash = (f"  <- {b['same_rung']} ZERO-SPREAD exit(s) (R9)"
-                    if b['same_rung'] else '')
+                    if b['same_rung']
+                    and not window_truncated(b, side_of.get(botid)) else '')
             print(f"{botid:<18}{'—':>7}{'—':>10}{b['rounds']:>8}"
-                  f"{_n(avg):>11}{b['so_fills']:>10}{b['max_depth']:>11}{wash}")
+                  f"{_n(avg):>11}{b['so_fills']:>10}{b['max_depth']:>11}"
+                  f"{_n(b['bought']):>12}{_n(b['sold']):>12}{wash}")
         else:
             per = (b['realized'] / b['trips']) if b['trips'] else None
             wash = (f"  <- {b['same_rung']} ZERO-SPREAD exit(s) (R9)"
-                    if b['same_rung'] else '')
+                    if b['same_rung']
+                    and not window_truncated(b, side_of.get(botid)) else '')
             print(f"{botid:<18}{b['trips']:>7}{_n(per):>10}"
-                  f"{'—':>8}{'—':>11}{'—':>10}{'—':>11}{wash}")
+                  f"{'—':>8}{'—':>11}{'—':>10}{'—':>11}"
+                  f"{_n(b['bought']):>12}{_n(b['sold']):>12}{wash}")
     return 0
 
 

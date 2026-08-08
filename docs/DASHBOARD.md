@@ -132,6 +132,8 @@ local. No SSH, no VPS. A remote box is a variant, not the design centre.
   case (end-of-session report, something to attach to a bug report).
 - **An ANSI terminal view** as the no-browser fallback. Note `curses` is *not*
   stdlib on Windows and is therefore disqualified as the cross-platform answer.
+- **Dark by default** (owner, 2026-08-08), with a light toggle; every colour
+  is a CSS custom property in one block, so palettes are one edit.
 - Charts are **server-side inline SVG**: a range is a rectangle, rungs are
   lines, an equity curve is a path. Styleable (so dark mode is free), tooltips
   via `<title>` with no JavaScript, diffable in review. Refuse pan and zoom —
