@@ -59,7 +59,8 @@ eventually pin (T1).
 ## G — the grid
 
 - **G1** The lattice is computed once from `{lower, upper, rungs}`, tick-rounded; price
-  never moves it. *(v1's central bug; §5d)*
+  never moves it. A slide (G17–G19) moves the *window* over the unchanged lattice by
+  whole rungs, on a trigger, never continuously. *(v1's central bug; §5d; D28)*
 - **G2** Exactly one of {count, spacing} is given, the other derives, and the stored pair
   is reconciled — the config never carries a spacing the lattice doesn't have. *(config
   study M9)*
@@ -84,7 +85,10 @@ eventually pin (T1).
 - **G10** Entry headroom is whole lots under the cap; zero headroom stops entries and
   nothing else.
 - **G11** Out of range the grid idles — it never chases; it ends only when its stop
-  fires or the position is closed from outside (S7). *(§5d; field consensus; D1)*
+  fires or the position is closed from outside (S7). With `slide` configured, "out of
+  range" in the favourable direction is the G18 trigger and the window follows; the
+  adverse direction still idles (the stop is the off button, D1). *(§5d; field
+  consensus; D1; D28)*
 - **G12** The engine is netted (Camp B): the ladder re-derives from the net position;
   no per-rung paired state exists anywhere. *(decided 2026-07-20; ALIGNMENT §1)*
 - **G13** No planned order is ever marketable — in any position state, including every
@@ -103,6 +107,28 @@ eventually pin (T1).
 - **G16** A grid whose rung gap cannot clear the venue's own round-trip fee loses on
   every completed trip by construction — the build asks the venue what it charges and
   says so, before a single order rests. *(the spot fee lesson, 2026-08-06)*
+- **G17** One lattice, many windows: the home range defines an unbounded lattice
+  (geometric or arithmetic, extended past both ends by the same rule); a window is N
+  consecutive absolute indices starting at an `offset` (home: 0). Rung ids in plans and
+  order links are absolute indices, so a slid window's overlap keeps every resting
+  order's identity — only the rungs that left the window are cancelled, only the new
+  ones placed. Endpoint N−1 is `upper` exactly in every window. *(D28; the 48-day
+  post-mortem)*
+- **G18** The slide is a ratchet: the window moves only when the split ref sits
+  `trigger_rungs` whole rungs beyond its far edge in the FAVOURABLE direction (long:
+  above the top; short: below the bottom), then by whole rungs so the ref lands at
+  `ref_position` of the range (0.5 default; 1.0 = the whole ladder on the entry side).
+  It never retreats — a long window never slides down, a short one never up; the
+  adverse side belongs to the stop (D1). No band, no SMA, no snap home: the trigger
+  count is the only hysteresis, and a ratchet cannot flap. Pinned by sabotage: with
+  `slide` absent the same trend leaves the grid idle. *(D28; v2's trail retired by D10)*
+- **G19** `max_rungs` clamps the window's offset from home in either direction; the
+  clamp is required, never defaulted — an unbounded follower is a decision, not an
+  omission. *(D28)*
+- **G20** A slide touches no inventory: held lots keep their basis, the exit ladder
+  re-derives over the new window under G6/G8, and nothing is sold to make room. In the
+  favourable direction the trigger price lies beyond the old top, so the position is
+  normally already exited when the window moves. *(D28)*
 
 ## W — the window
 
@@ -115,8 +141,9 @@ eventually pin (T1).
 
 - **B1** One mechanism per boundary, one name each; "deadband" and "hysteresis" appear
   unqualified nowhere. The only banded mechanism is the split hysteresis (B2): the
-  no-trade behaviour is emergent (B9) and trail is retired (D10). *(ALIGNMENT §13.6; D6,
-  D10)*
+  no-trade behaviour is emergent (B9); trail is retired (D10) and its successor, the
+  slide, is a ratchet with a rung-count trigger, not a band (G18, D28). *(ALIGNMENT
+  §13.6; D6, D10, D28)*
 - **B2** Split hysteresis: the split ref moves only when price has moved more than the
   band (a fraction of the *narrowest* rung gap), and then snaps to current.
 - **B3** The cross guard — nothing rests within `max(spread, guard-bps of mid)` of the
@@ -396,3 +423,9 @@ eventually pin (T1).
   single live order. *(the v1→v2 method)*
 - **T5** Docs cite spec IDs; no doc asserts behaviour a spec doesn't pin. *("prose rots;
   an assertion fails loudly")*
+- **T6** The backtester rests only what the live bot would rest: the placement window
+  (W1) filters each bar's plan before fills are judged, and the window offset (G17)
+  is carried bar to bar. Entries stay optimistic on coarse bars — every rung a bar
+  trades through fills, where a live fast move skips rungs — so a replay is run on
+  bars no coarser than the move it asks about, and says which. *(the 48-day
+  post-mortem: an hourly replay carried 3× the live short inventory)*

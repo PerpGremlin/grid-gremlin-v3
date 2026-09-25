@@ -5,6 +5,74 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-09-25 (evening) — D28: the slide, built pure and replayed twice
+
+**Decided (owner).** Re-anchoring is trailing; v3 had deleted it (D10). The
+owner chose the **slide** — drop rungs at the near end, add the same number at
+the far end, spacing and lot unchanged — with a rung-count trigger, favourable
+direction only, inventory untouched, a required clamp. Recorded as D28;
+G17–G20 and T6 in SPEC. On the owner's hysteresis worry: a ratchet needs none,
+it never returns; the trigger count is the only band. That turned out to be
+half right — see the control window below.
+
+**Built.** `ladder.py` gains one lattice with many windows: absolute rung
+indices (a slid window's overlap keeps every order's identity), `lattice_price`
+/ `lattice_index`, and `slide_offset`, the pure ratchet. `config.py` validates
+`slide: {trigger_rungs, max_rungs, ref_position}`. The backtester carries the
+offset bar to bar and now rests only the placement window (T6). **The live bot
+refuses the key** until it carries the offset (the wiring is PR B). 349 specs.
+
+**Backtester fidelity (T6).** Applying the window and dropping from hourly to
+five-minute bars halved the replayed ETH short's phantom inventory and cut the
+BTC long's frozen income from 10.6k to 4.8k against a live 2.6k — closer, still
+optimistic: a live fast move skips rungs the replay fills. The short-side gap
+is fidelity, not a bug; replays are read as an upper bound.
+
+**Replay 1 — the 48-day rally, real rule, 5-minute bars, maker fee, ratios of
+each bot's own capital:**
+
+| long grid (demo leverage) | frozen net | slide net | frozen maxDD | slide maxDD | ladder used |
+|---|---|---|---|---|---|
+| BTC (75×) | +10% | +140% | 26% | **179%** | 13% → 37% |
+| ETH (55×) | +14% | +172% | 11% | 89% | 11% → 44% |
+| SOL (10×) | +2% | +43% | 4% | 24% | 10% → 48% |
+
+The slide multiplies a long grid's income by ten in a trend, and deploys three
+to four times as much of the ladder doing it — so the drawdown scales with it.
+At the demo's 75× the BTC slide would have been liquidated on the 15 September
+dip. At 10× (SOL) the ratio is healthy. K = 1, 2 or 4 barely matters;
+`ref_position` 1.0 slides more often for a little more income; 0.25 trims
+drawdown. The shorts never slid — a short slides down only and the market went
+up — and lost on inventory as before. Correct, and useless in a rally.
+
+**Replay 2 — the control: the flattest 48 days in the last year (2025-08-15 →
+2025-10-01, BTC drifted +0.7%), same three grids re-centred, leverage 10:**
+
+| symbol (drift / range) | frozen net | slide net | frozen maxDD | slide maxDD | slides |
+|---|---|---|---|---|---|
+| BTC (+0.7% / 10%) | +1.3% | +1.3% | 6% | 6% | 0 |
+| ETH (−4% / 25%) | +12.9% | **+5.1%** | 23% | **55%** | 1 |
+| SOL (+15% / 40%) | +12.3% | +26.1% | 7% | 42% | 3 |
+
+Flat: the ratchet does nothing, as designed. ETH is the lesson: one early
+spike two rungs past the top slid the window up, the spike reversed, and a
+window that never retreats bought the whole way down from the higher
+perch — half the income, twice the drawdown. That is the owner's hysteresis
+worry, real, in a different shape: a ratchet cannot flap, but it can be
+**fooled once**, and two rungs of a 0.24% lattice is a 0.5% excursion.
+
+**What this says.** The slide converts a range strategy into a trend strategy:
+it earns in trends, idles in flat markets, and pays in spike-and-reverse
+regimes with the drawdown of a full ladder bought high. Three things bound
+that, none built yet: the **stop must follow the window** (an absolute stop
+level below the home range is meaningless once the window has left it — the
+level should be rungs below the window), a **confirmation** before a slide
+(time or bars beyond the trigger, so a wick does not move the house), and
+**leverage sanity** in the config (a slide at 75× is a liquidation with extra
+steps). All three go into PR B's wiring list. The replay-only refusal stands
+until then.
+
+
 ## 2026-09-25 (later) — post-mortem: what a fixed-range fleet did in a 31–62% rally
 
 Measured, not recalled: venue fills with their type, closed-P&L records,

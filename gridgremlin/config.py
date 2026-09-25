@@ -24,7 +24,7 @@ GRID_KEYS = COMMON_KEYS + (
     'upper', 'lower', 'rungs', 'spacing_pct', 'spacing_type', 'rung_sizing',
     'rung_weights', 'place_within_pct', 'split_hysteresis_rungs',
     'assumed_avg_entry', 'min_position_base', 'max_position_base',
-    'spot_borrow', 'spot_leverage', 'seed')
+    'spot_borrow', 'spot_leverage', 'seed', 'slide')
 MARTINGALE_KEYS = COMMON_KEYS + (
     'take_profit_tranches', 'trailing_stop_pct', 'reinvest',
     'repeat_cooldown_seconds',
@@ -32,6 +32,7 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
 STOP_KEYS = ('watch', 'level', 'server_side')
+SLIDE_KEYS = ('trigger_rungs', 'max_rungs', 'ref_position')
 FLEET_KEYS = ('bots', 'poll_seconds', 'allow_mainnet', 'preflight',
               'tombstones',
               'notify_orders', 'watchdog')
@@ -65,9 +66,9 @@ RETIRED = {
                  "with a spec and a user (docs/archive/MIGRATION.md)",
     'trail': "retired: edit 'upper'/'lower' instead — range edits flow through the "
              "normal diff (DECISIONS D10)",
-    'sma_periods': "retired: the trail feature left v3 (DECISIONS D10)",
-    'trail_min': "retired: the trail feature left v3 (DECISIONS D10)",
-    'trail_max': "retired: the trail feature left v3 (DECISIONS D10)",
+    'sma_periods': "retired: the trail feature left v3 (D10); following is 'slide' (D28)",
+    'trail_min': "retired: the trail feature left v3 (D10); the clamp is 'max_rungs' under 'slide' (D28)",
+    'trail_max': "retired: the trail feature left v3 (D10); the clamp is 'max_rungs' under 'slide' (D28)",
     'levels': "martingale is restructured (DECISIONS D11): a base order plus "
               "'max_averaging_orders' safety orders — see docs/archive/MIGRATION.md #3",
     'level_weights': "martingale is restructured (DECISIONS D11): sizing is "
@@ -255,6 +256,19 @@ def validate_grid(row, where='row'):
         if cap <= cfg['min_position_base']:
             _refuse(f"{where}: 'max_position_base' must exceed 'min_position_base'")
         cfg['max_position_base'] = cap
+
+    slide = cfg.get('slide')
+    if slide is not None:
+        # D28: the slide — a ratchet, not a trail; every knob bounded (C3)
+        sw = f'{where}.slide'
+        if not isinstance(slide, dict):
+            _refuse(f"{sw}: must be an object {{trigger_rungs, max_rungs, ref_position}}")
+        _reject_unknown(slide, SLIDE_KEYS, sw)
+        k = _num(slide, 'trigger_rungs', sw, least=1, required=True, integer=True)
+        m = _num(slide, 'max_rungs', sw, least=1, required=True, integer=True)
+        rp = _num(slide, 'ref_position', sw, least=0.0, most=1.0)   # 1.0 = all entries
+        cfg['slide'] = {'trigger_rungs': k, 'max_rungs': m,
+                        'ref_position': 0.5 if rp is None else rp}
 
     if cfg.get('reinvest') is not None:
         _refuse(f"{where}: grids reinvest by EDITING 'capital' — deliberate, "

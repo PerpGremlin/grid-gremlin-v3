@@ -118,13 +118,31 @@ Nothing runs until the owner says so; these are what must be true before it does
   rounds counted for the ADA looper; the round latch or the readout's
   round detection needs a look before the 10-round SOAK minimum means
   anything.
-- **The strategy question — now with evidence** (JOURNAL 2026-09-25
-  post-mortem): fixed ranges were idle from day eleven; weekly re-anchoring
-  would have multiplied the long grids' income ~6–8×; short grids lose on
-  inventory in a rally under every variant. The decision on the table is
-  whether re-anchoring becomes a rule (a new D-number; D10 left it to a
-  human) — and whether shorts belong in a fleet at all outside a range
-  regime.
+- **The slide — PR B, the live wiring** (D28 decided; pure rule, config
+  and backtester shipped, replayed twice — JOURNAL 2026-09-25 evening). The
+  live bot refuses `slide` until this lands. In order:
+  1. **The stop follows the window.** An absolute `stop.level` is meaningless
+     once the window has left home; a slide bot's stop is expressed in rungs
+     below (long) / above (short) the current window and re-armed on every
+     slide (server-side stops re-set). Without it the slide is a full-ladder
+     trend bet with no off button — refuse `slide` with an absolute stop.
+  2. **Confirmation before a slide** — the control replay showed one 0.5%
+     wick sliding an ETH window up for good, halving income and doubling
+     drawdown. `slide.confirm_seconds` (the ref must sit beyond the trigger
+     for that long), state kept in the bot, reset on restart (E3).
+  3. **Offset persistence.** The window offset is the one new durable local
+     fact (like tombstones, X7): written before the orders move, read on
+     restart, missing → home (safe: orders outside home are cancelled and
+     re-planned; a lost ratchet, never lost money). Order links carry the
+     absolute rung index already (G17) so adoption recognises the overlap.
+  4. `check_link_fits` must size for `rungs + max_rungs`; the range review
+     reports the current offset; the README's quickstart row.
+  5. **Leverage sanity** — the 48-day replay at the demo's 75× would have
+     been liquidated on one dip with the slide on. Not a slide rule: a fleet
+     rule (D-number needed) or at least a build warning above N×.
+  Shorts: a short slides down only and never fired in a rally; whether
+  shorts belong in a fleet outside a range regime is still the owner's
+  question, unchanged by the slide.
 - **Snapshot equity is a wallet number.** Seeded demo holdings no bot owns
   moved the curve more than the bots did. Either the snapshot carries the
   readout's D8 split, or the watchdog's equity bounds are known to be
