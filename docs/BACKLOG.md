@@ -14,9 +14,9 @@ both cited here when they happen. Nothing on this list blocks the current soak.
 
 - **`watch: position_sl` and server-side partial SL** (X2/X3) — X1's
   bot-side fire is PROVEN live (the 2026-08-05 deliberate test, incl. the X7
-  tombstone across restarts). Remaining: a server-side SL actually
-  triggering venue-side (the revived XRP short now carries one), and a
-  `position_sl` watch adoption.
+  tombstone across restarts). **X2 PROVEN live 2026-08-20**: the XRP short's
+  server-side stop fired and flattened venue-side (JOURNAL 2026-09-25).
+  Remaining: a `position_sl` watch adoption.
 - **Margin-spot SHORT** (D24) — capability-complete and specced; one config
   row away whenever the owner wants it exercised.
 - **HL tranches live** (D23/M10) — specced both ways; the HL fleet's margin
@@ -61,7 +61,7 @@ init + the on-page key left via PR #109 — README §11.)*
 
 ## 5. Engine queue (from audit 2026-08-07, unchanged by panel work)
 
-- **MED/LOW burn-down** — the queued list in `docs/AUDIT-2026-08-07.md`:
+- **MED/LOW burn-down** — the queued list in `docs/archive/AUDIT-2026-08-07.md`:
   sign-only truncation detection, RO match with no re-size, per-venue
   wallet-read isolation, cwd-relative locks/tombstones, probe stranding,
   partially-resting remainder close, M15 deepest-round fallback, grid E9
@@ -92,6 +92,26 @@ init + the on-page key left via PR #109 — README §11.)*
   runs +128.82/trip with fees at 27% of realized, the ETH long
   +8.79/trip at 17% — both clear their fees comfortably; every earlier
   alarm was a truncated-window artifact, the class R9/R7 now guard.)*
+
+## 6. Found by the 48-day unattended run (JOURNAL 2026-09-25)
+
+Nothing runs until the owner says so; these are what must be true before it does.
+
+- **Dead bots must not report a position.** The snapshot carries a killed
+  bot's last belief; the watchdog and the range review read it as live and
+  paged a phantom breach every re-alert window for 48 days. The snapshot
+  should carry venue truth or nothing for `alive: false`; the watchdog and
+  `ops/range_review.py` skip the dead either way.
+- **Silent death of the ops layer.** Range review and triage depend on a
+  Claude token that expires; when it did, both failed daily with one log
+  line and no page. Anything unattended must page on its OWN failure.
+- **Log rotation** for the fleet logs (systemd append, one-second cycles).
+- **The HL BTC long liquidation (2026-08-19) is unexplained** — a freeze on
+  HL parameter calls until it is.
+- **The strategy question**, older than v3: fixed-range grids idle through a
+  trend; the only bot that traded was a fee-losing martingale. Answer it
+  offline (backtester + the 48-day snapshots) before pointing the engine at
+  a venue again.
 
 ## Non-gaps — absent by decision, do not re-invent
 
