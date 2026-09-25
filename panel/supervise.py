@@ -1,4 +1,4 @@
-"""The supervisor (docs/DASHBOARD.md §13): systemd's laptop twin.
+"""The supervisor (docs/archive/DASHBOARD.md §13): systemd's laptop twin.
 
 Spawns the engine as a fully detached child, stops it with SIGTERM
 (stop parks — E3), and reports status from pid-liveness. The pid file

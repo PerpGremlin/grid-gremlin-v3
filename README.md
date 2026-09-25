@@ -75,7 +75,7 @@ gate, key ceremony, cutover) is [docs/PROMOTION.md](docs/PROMOTION.md).
   behaviour that has bitten this engine — rate budgets, hosted-TP fills with no
   link id, an exchange delisting a symbol mid-run, a coin needing a collateral
   switch — was found by running it, not by reading it.
-- **Read `docs/AUDIT-2026-08-06.md` §ACCEPTED before trusting anything
+- **Read `docs/archive/AUDIT-2026-08-06.md` §ACCEPTED before trusting anything
   unattended.** Three known limitations are listed there rather than fixed.
 - Real funds need the double gate (see Safety) *and* the checklist in
   `docs/PROMOTION.md`. Neither is a formality: the audit above found nine HIGH
@@ -422,7 +422,7 @@ treats an unverifiable or over-privileged key as a refusal, not a warning.
   name carries the SPEC ID it pins (`spec_G7_...`). An error is a failure, never a
   skip. Every invariant has a spec; guards have *sabotage* specs proving the old
   incident returns when the guard is removed.
-- One slice = one PR; `docs/PLAN.md` checkboxes update in the same PR as the work.
+- One change = one PR, and the PR carries its own doc delta (README, JOURNAL, BACKLOG) — the repo is the record.
 - Renames follow the `capital` pattern: old key refused with the migration stated,
   the whole seam changes in one commit (C2).
 
@@ -456,19 +456,13 @@ all: the agent proposes and builds — the human decides, and reads everything.
 | read | to learn |
 |---|---|
 | [docs/SPEC.md](docs/SPEC.md) | every invariant, by stable ID |
-| [docs/JOURNAL.md](docs/JOURNAL.md) | the build, session by session |
-| [docs/DECISIONS.md](docs/DECISIONS.md) | the owner's twenty decisions |
-| [docs/MIGRATION.md](docs/MIGRATION.md) | every v2 name → its v3 fate |
-| [docs/CONCEPTS.md](docs/CONCEPTS.md) | the dissection of v2 that started it all |
-| [docs/PLAN.md](docs/PLAN.md) | every build slice, phases 1 and 2 |
-| [docs/PROMOTION.md](docs/PROMOTION.md) | how v3 reaches real funds — the checklist |
-| [docs/AUDIT-2026-08-06.md](docs/AUDIT-2026-08-06.md) | three independent reviewers: what they found, what changed |
-| [docs/AUDIT-2026-08-07.md](docs/AUDIT-2026-08-07.md) | second audit: ten HIGHs, fix-here-not-there doctrine, prior-art verdicts |
-| [docs/DASHBOARD.md](docs/DASHBOARD.md) | design notes for a companion panel — vocabulary settled before code |
-| [ops/README.md](ops/README.md) | the deploy layer: units, alerts, triage, relay, range review |
+| [docs/DECISIONS.md](docs/DECISIONS.md) | the owner's decisions, frozen — never relitigated |
+| [docs/JOURNAL.md](docs/JOURNAL.md) | the build and the runs, session by session |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | what is not built yet, and why |
 | [docs/SOAK.md](docs/SOAK.md) | the experiment registry and its call conditions |
-| [docs/research/](docs/research/) | the evidence trail |
+| [docs/PROMOTION.md](docs/PROMOTION.md) | how v3 reaches real funds — the checklist |
+| [ops/README.md](ops/README.md) | the deploy layer: units, alerts, triage, relay, range review |
+| [docs/archive/](docs/archive/) | finished records: the v2 dissection, the migration map, the build plan, both audits, the panel design notes, the research notes |
 
 *This repo is public and deliberately carries no account figures, no live position
 data, and no deployment identifiers.*

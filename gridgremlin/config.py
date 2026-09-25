@@ -1,5 +1,5 @@
 # Config doctrine (SPEC C1-C7). The RENAMED/RETIRED tables are
-# docs/MIGRATION.md's refusal column, all of it. The why lives in docs/SPEC.md.
+# docs/archive/MIGRATION.md's refusal column, all of it. The why lives in docs/SPEC.md.
 
 import difflib
 
@@ -49,7 +49,7 @@ RENAMED = {
     'value': ('level', "stop is restructured: 'value' is now 'level'"),
 }
 
-# C2 — retirements. old key -> message. The concept left v3 (docs/MIGRATION.md).
+# C2 — retirements. old key -> message. The concept left v3 (docs/archive/MIGRATION.md).
 RETIRED = {
     'notional': "derived, not configured: the engine computes capital x leverage "
                 "itself — remove it (set 'capital')",
@@ -62,18 +62,18 @@ RETIRED = {
     'exit_against': "retired: the exit floor is unconditional (SPEC G6) — there is "
                     "no 'rung' bypass",
     'arm_order': "retired: entries arm nearest-first; furthest-first returns only "
-                 "with a spec and a user (docs/MIGRATION.md)",
+                 "with a spec and a user (docs/archive/MIGRATION.md)",
     'trail': "retired: edit 'upper'/'lower' instead — range edits flow through the "
              "normal diff (DECISIONS D10)",
     'sma_periods': "retired: the trail feature left v3 (DECISIONS D10)",
     'trail_min': "retired: the trail feature left v3 (DECISIONS D10)",
     'trail_max': "retired: the trail feature left v3 (DECISIONS D10)",
     'levels': "martingale is restructured (DECISIONS D11): a base order plus "
-              "'max_averaging_orders' safety orders — see docs/MIGRATION.md #3",
+              "'max_averaging_orders' safety orders — see docs/archive/MIGRATION.md #3",
     'level_weights': "martingale is restructured (DECISIONS D11): sizing is "
                      "'order_size_multiplier' of the previous order",
     'first_entry': "martingale is restructured (DECISIONS D11): the round starts "
-                   "from a base order — see docs/MIGRATION.md #3",
+                   "from a base order — see docs/archive/MIGRATION.md #3",
     'take_profit_price': "retired: the absolute take-profit left with the "
                          "restructure (DECISIONS D11/D12); targets are relative",
 }

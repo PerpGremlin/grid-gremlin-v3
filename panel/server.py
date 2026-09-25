@@ -1,6 +1,6 @@
 """The panel, phase View — a localhost window onto the readout's contract.
 
-Security floor (docs/DASHBOARD.md §5): binds 127.0.0.1 on a random port;
+Security floor (docs/archive/DASHBOARD.md §5): binds 127.0.0.1 on a random port;
 a per-launch token is exchanged for a cookie on first load; the exact Host
 is allowlisted (defeats DNS rebinding); no CORS headers exist; keys do not
 exist here — this process holds no secrets and can write nothing.

@@ -3,7 +3,7 @@
 **Status: decided, 2026-08-04 — every former ⚠ DECIDE is resolved; the record of who
 decided what is `DECISIONS.md` (D-numbers cited inline). Numbering is stable** — cite
 IDs in reviews, commits, and conversation. Each line is one statement that is true or
-false, with its source (an incident, a decision, or a study — see `research/`). The linkage
+false, with its source (an incident, a decision, or a study — see `archive/research/`). The linkage
 to the suite is the NAME: each spec function carries the ID it pins
 (`spec_G7_...`), greppable in both directions.
 

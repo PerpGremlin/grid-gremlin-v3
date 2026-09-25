@@ -1,4 +1,4 @@
-"""The create flow's gates (docs/DASHBOARD.md §11), pure and testable.
+"""The create flow's gates (docs/archive/DASHBOARD.md §11), pure and testable.
 
 A proposal is one object: {'bot': {...}, 'watchdog': {'max': N}}. The
 gates run in order — whole-fleet validation (the engine's own loaders,

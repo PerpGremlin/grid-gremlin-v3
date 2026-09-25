@@ -5,6 +5,68 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-09-25 — the 48-day readout, then everything off
+
+**Found.** No session between 2026-08-08 and today. Both fleets (Bybit demo,
+HL testnet) ran the whole gap on one process each: no restart, no engine
+traceback. HL's testnet API threw tens of thousands of lost cycles (502s,
+rate-limit streaks); the engine rode them all. That is the first real
+reliability evidence v3 has, and it is clean.
+
+**What the run did NOT deliver.** No experiment reached the SOAK minimum (a
+grid's 50 exit fills, a martingale's 10 rounds), so nothing on the board was
+called. The market trended hard through the window; nine of twelve demo grids
+sat above their fixed ranges for most of it, idle by design (G11) and useless
+in practice. Nearly every fill in the fleet came from one martingale that paid
+more in fees than it realized — 59 same-rung exits flagged by R9. The equity
+curve rose on inventory the grids were holding by accident, not on grid profit
+(D8 separates them; the readout is unambiguous).
+
+**Kills, as the SOAK doctrine requires them explained here.** Demo XRP short:
+server-side stop fired at its level on 2026-08-20 and flattened venue-side
+before the bot's own cycle saw it — **X2 is proven live** (BACKLOG §2 closes).
+HL ETH short: position closed by an outside actor, 2026-08-13 (D1 kill, correct).
+HL AVAX martingale: round complete on TP, repeat off, 2026-08-15 (by design).
+HL DOGE short: stop fired, flattened, 2026-08-20 (correct). **HL BTC long:
+closed by liquidation, 2026-08-19 — unexplained.** The position was tiny and
+the account was far from its maintenance floor; the leading suspicion is the
+venue's testnet margin handling, not the engine, but a liquidation is a
+liquidation. It stays a freeze on any HL parameter call until understood.
+
+**Ops defects the gap exposed** (BACKLOG §6):
+1. Dead bots keep their last believed position in the snapshot. The watchdog
+   read that frozen belief and paged the same breach every re-alert window for
+   the whole 48 days, about a bot that had closed flat. The range review had
+   the same blindness and said so itself on 2026-08-25.
+2. The Claude token the range review and triage depend on expired on
+   2026-08-26. Both failed silently every day after: an "authenticate" line in
+   a log nobody reads. An unattended ops layer that dies quietly is worse than
+   none.
+3. The fleet log has no rotation; 48 days of one-second cycles is a
+   multi-gigabyte file.
+4. The watchdog bound for the AVAX martingale was wrong from the start —
+   the breach pre-dates the gap.
+
+**Decided (owner).** Everything off: every unit and timer stopped and
+disabled, then every order cancelled and every position flattened on both test
+accounts (verified: zero orders in every category, zero positions on either
+venue). The venues confirmed the phantom — the XRP short had been flat since
+its stop. Nothing trading-related runs or rests anywhere. v2 remains parked.
+
+**Then a stock-take.** The engine is the asset: ~5,400 lines, stdlib only,
+335 specs green. The rot is around it: an ops stack that pages on phantoms and
+dies on a token, and a document pile that outweighs the code. So: CLAUDE.md
+(local, gitignored) rewritten to stop claiming this is the dissection phase;
+the eight finished documents and the research notes moved to `docs/archive/`
+with every citation re-pointed; the living seven stay in `docs/`.
+
+**Next.** Not a restart. The unanswered question is older than v3: whether
+fixed-range grids on a trending market are a strategy at all. The backtester
+and 48 days of snapshots can answer it offline before anything is pointed at a
+venue again.
+
+---
+
 ## 2026-08-05 (later) — the unbiased eyes
 
 **Done.** The owner asked for an audit by fresh eyes: two independent agents,

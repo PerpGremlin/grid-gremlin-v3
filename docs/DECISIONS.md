@@ -1,6 +1,6 @@
 # Decisions — frozen 2026-08-04
 
-The owner's answers to every open call from `ALIGNMENT.md` §13, `LEAN.md` §4 and
+The owner's answers to every open call from `archive/ALIGNMENT.md` §13, `archive/LEAN.md` §4 and
 `SPEC.md`'s ⚠ markers, organised from the owner's written response plus a four-question
 follow-up. **From this file on, these are settled — the migration map and the build do
 not relitigate them.** Where I interpreted an answer, the interpretation is flagged and
@@ -108,7 +108,7 @@ stands unless the owner corrects it.
 - **D19 — Bybit first, Hyperliquid second**, once the build's shape is proven.
 - **D20 — Field-note correction from the owner**: Pionex *does* ship a futures
   martingale/DCA product, available only in their mobile/tablet app — recorded against
-  `research/field-martingale-bots.md`'s "not confirmed."
+  `archive/research/field-martingale-bots.md`'s "not confirmed."
 
 - **D21 — HL martingales via the venue-resting exit (2026-08-04).** M3 generalises:
   *a round is never without a venue-resting exit* — a hosted position-TP where the
