@@ -157,6 +157,7 @@ old v2 key names get their migration stated. **One bad row refuses the whole fle
 | `max_position_base` | the cap, in base units; `"unbounded"` to lift; omitted = the full ladder |
 | `assumed_avg_entry` | spot only: your cost basis fallback; venue truth always wins |
 | `seed` | `true`: on a flat first start, market-buy one lot per exit-side rung so the ladder starts covered (D9). A restart never re-fires it — done-ness is read from the venue |
+| `slide` | `{"trigger_rungs": N, "max_rungs": M, "ref_position": 0.5}`: the range follows a trend as a **ratchet** (D28, G17–G20). When the mark sits N whole rungs beyond the range's far edge in the favourable direction (long: above; short: below), the window slides by whole rungs so the mark lands at `ref_position` of the range (1.0 = the whole ladder on the entry side). Spacing, lot and overlapping orders are unchanged. It never slides back; the adverse side is the stop's job. `max_rungs` clamps how far from home it may go and is required. **Replay-only this phase**: the backtester carries it, the live bot refuses the key until wired |
 | `stop` | see §6 |
 
 **What a grid does** (the five ideas, one line each): the exchange is the state — kill
@@ -312,9 +313,13 @@ python3 -m gridgremlin.backtest_cli configs/fleet.demo.json --bot linSOLUSDTl \
 ```
 
 Fetches real venue klines (public data, no keys) and replays the SAME `plan_grid`
-the live engine runs (T3) — fills require trade-through, never touch. Bybit grids
-only; HL bots and martingales are refused by name. Prints grid profit, fees,
-funding, max drawdown, trips, and what the run ends holding.
+the live engine runs (T3) — fills require trade-through, never touch, and only
+rungs inside the placement window rest (T6). A `slide` row replays with its
+window offset carried bar to bar. Bybit grids only; HL bots and martingales are
+refused by name. Prints grid profit, fees, funding, max drawdown, trips, and what
+the run ends holding. Entries are optimistic on coarse bars (every rung a bar
+trades through fills; a live fast move skips rungs) — use `--bar-minutes 5` for
+anything that moved fast.
 
 ## 11. The panel — the fleet on a screen
 

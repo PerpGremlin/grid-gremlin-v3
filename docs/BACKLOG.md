@@ -106,12 +106,47 @@ Nothing runs until the owner says so; these are what must be true before it does
   Claude token that expires; when it did, both failed daily with one log
   line and no page. Anything unattended must page on its OWN failure.
 - **Log rotation** for the fleet logs (systemd append, one-second cycles).
-- **The HL BTC long liquidation (2026-08-19) is unexplained** — a freeze on
-  HL parameter calls until it is.
-- **The strategy question**, older than v3: fixed-range grids idle through a
-  trend; the only bot that traded was a fee-losing martingale. Answer it
-  offline (backtester + the 48-day snapshots) before pointing the engine at
-  a venue again.
+- **HL counterparty liquidations kill healthy bots** (engine defect, found
+  by the post-mortem). `exchange/hyperliquid/truth.py` marks any fill that
+  carries HL's `liquidation` object as a venue liquidation of us; HL stamps
+  it on both sides of the trade. Fix: compare `liquidatedUser` with the
+  account address; a counterparty's liquidation is an ordinary fill. Needs a
+  spec with the real fill shape. Both HL grid deaths in the run were this.
+- **Backtester short-side inventory** ran ~3× the live bot's cap in the
+  replay (T3). Understand before any short-grid replay is believed.
+- **Martingale "rounds" in the readout** — 692 fills and zero completed
+  rounds counted for the ADA looper; the round latch or the readout's
+  round detection needs a look before the 10-round SOAK minimum means
+  anything.
+- **The slide — PR B, the live wiring** (D28 decided; pure rule, config
+  and backtester shipped, replayed twice — JOURNAL 2026-09-25 evening). The
+  live bot refuses `slide` until this lands. In order:
+  1. **The stop follows the window.** An absolute `stop.level` is meaningless
+     once the window has left home; a slide bot's stop is expressed in rungs
+     below (long) / above (short) the current window and re-armed on every
+     slide (server-side stops re-set). Without it the slide is a full-ladder
+     trend bet with no off button — refuse `slide` with an absolute stop.
+  2. **Confirmation before a slide** — the control replay showed one 0.5%
+     wick sliding an ETH window up for good, halving income and doubling
+     drawdown. `slide.confirm_seconds` (the ref must sit beyond the trigger
+     for that long), state kept in the bot, reset on restart (E3).
+  3. **Offset persistence.** The window offset is the one new durable local
+     fact (like tombstones, X7): written before the orders move, read on
+     restart, missing → home (safe: orders outside home are cancelled and
+     re-planned; a lost ratchet, never lost money). Order links carry the
+     absolute rung index already (G17) so adoption recognises the overlap.
+  4. `check_link_fits` must size for `rungs + max_rungs`; the range review
+     reports the current offset; the README's quickstart row.
+  5. **Leverage sanity** — the 48-day replay at the demo's 75× would have
+     been liquidated on one dip with the slide on. Not a slide rule: a fleet
+     rule (D-number needed) or at least a build warning above N×.
+  Shorts: a short slides down only and never fired in a rally; whether
+  shorts belong in a fleet outside a range regime is still the owner's
+  question, unchanged by the slide.
+- **Snapshot equity is a wallet number.** Seeded demo holdings no bot owns
+  moved the curve more than the bots did. Either the snapshot carries the
+  readout's D8 split, or the watchdog's equity bounds are known to be
+  watching the wrong thing.
 
 ## Non-gaps — absent by decision, do not re-invent
 

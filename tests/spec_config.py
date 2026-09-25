@@ -1,6 +1,6 @@
 # Specs for SPEC C1-C7 and G2's config half. Names carry the IDs they pin (T1/T5).
 
-from gridgremlin.config import (ConfigError, RENAMED, RETIRED, GRID_KEYS,
+from gridgremlin.config import (ConfigError, RENAMED, RETIRED, GRID_KEYS, SLIDE_KEYS,
                                 validate_config, validate_fleet, check_placeable)
 
 ROW = {
@@ -177,7 +177,7 @@ def spec_C6_bare_list_gets_the_same_treatment():
 # --- C7: error messages name only keys that exist ----------------------------
 
 def spec_C7_messages_name_only_real_keys():
-    current = set(GRID_KEYS) | {'watch', 'level', 'bots', 'poll_seconds',
+    current = set(GRID_KEYS) | set(SLIDE_KEYS) | {'watch', 'level', 'bots', 'poll_seconds',
                                 'cancel_orders_on_exit', 'notify_orders',
                                 'max_averaging_orders', 'order_size_multiplier'}
     for old, (new, msg) in RENAMED.items():

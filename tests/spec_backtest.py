@@ -210,7 +210,7 @@ def spec_T3_inventory_is_kept_in_integer_steps_not_floats():
                        'min_notional': None, 'settle_coin': 'USDT'})
     assert A.round_qty(0.3 - 0.1) == 0.1        # the hazard, still true
     cfg = _cfg(lower=90.0, upper=110.0, rungs=5, capital=300.0, leverage=1,
-               spacing_type='fixed')
+               spacing_type='fixed', place_within_pct=0.2)   # T6: both rungs resting
     r = backtest(cfg, A, [{'o': 100.0, 'h': 100.2, 'l': 89.0, 'c': 91.0},
                           {'o': 91.0, 'h': 92.0, 'l': 88.0, 'c': 90.0}])
     assert r['entry_fills'] >= 2                # a deep dip, many rungs

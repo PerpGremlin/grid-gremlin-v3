@@ -28,6 +28,13 @@ class Bot:
     def __init__(self, cfg, adapter, client, notifier, gen_seed, clock=None,
                  tombstones=None):
         self.cfg = cfg
+        if cfg.get('slide'):
+            from .config import ConfigError
+            raise ConfigError(
+                f"{cfg.get('symbol')}: 'slide' is replay-only this phase — "
+                'the backtester carries the window offset (G17), the live '
+                'bot does not yet; remove the key or wait for the wiring '
+                '(D28, BACKLOG §6)')
         self.adapter = adapter
         self.client = client
         from .config import VENUE_ICONS

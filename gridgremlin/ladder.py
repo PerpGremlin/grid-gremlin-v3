@@ -11,17 +11,60 @@ CROSS_GUARD_BPS = 5.0    # B3/B8: one definition; the placer imports THIS one
 SPACING_GUARD_MULTIPLE = 3.0   # B8: spacing must clear the guard with margin
 
 
-def grid_rungs(cfg, adapter):
-    """G1/G3: N tick-rounded prices over [lower, upper], N-1 gaps."""
+def lattice_price(cfg, j):
+    """G17: the price of ABSOLUTE lattice index j. The home window is
+    j in [0, N); a slid window reads the same lattice at an offset, so one
+    index has one price whichever window shows it. Endpoint j = N-1 is
+    `upper` exactly (G1's endpoint rule, kept for every window)."""
+    lower, upper, n = cfg['lower'], cfg['upper'], cfg['rungs']
+    if j == n - 1:
+        return upper
+    if cfg['spacing_type'] == 'percent':
+        ratio = (upper / lower) ** (1.0 / (n - 1))
+        return lower * ratio ** j
+    step = (upper - lower) / (n - 1)
+    return lower + step * j
+
+
+def lattice_index(cfg, price):
+    """G17: the real-valued lattice index of a price (inverse of
+    lattice_price), for the slide trigger — never for a rung."""
     lower, upper, n = cfg['lower'], cfg['upper'], cfg['rungs']
     if cfg['spacing_type'] == 'percent':
         ratio = (upper / lower) ** (1.0 / (n - 1))
-        prices = [lower * ratio ** i for i in range(n)]
-    else:
-        step = (upper - lower) / (n - 1)
-        prices = [lower + step * i for i in range(n)]
-    prices[-1] = upper                       # endpoints exact before rounding
-    return [adapter.round_price(p) for p in prices]
+        return math.log(price / lower) / math.log(ratio)
+    return (price - lower) / ((upper - lower) / (n - 1))
+
+
+def grid_rungs(cfg, adapter, offset=0):
+    """G1/G3: N tick-rounded prices over the window at `offset` (home: 0),
+    N-1 gaps. Index i of the result is absolute index offset + i."""
+    n = cfg['rungs']
+    return [adapter.round_price(lattice_price(cfg, offset + i)) for i in range(n)]
+
+
+def slide_offset(cfg, offset, ref):
+    """G18/G19: the ratchet, pure. Unchanged unless the ref sits
+    `trigger_rungs` whole rungs beyond the window's far edge in the
+    FAVOURABLE direction (long: above the top; short: below the bottom).
+    Then the window moves by whole rungs so the ref lands at `ref_position`
+    of the range, clamped to `max_rungs` from home. It never retreats — a
+    long window never slides down, a short one never up (D28)."""
+    s = cfg.get('slide')
+    if not s:
+        return offset
+    n, k = cfg['rungs'], s['trigger_rungs']
+    land = int(round(s['ref_position'] * (n - 1)))
+    x = lattice_index(cfg, ref)
+    if cfg['side'] == 'long':
+        if x < offset + (n - 1) + k:
+            return offset
+        new = int(math.floor(x)) - land
+        return max(offset, min(new, s['max_rungs']))
+    if x > offset - k:
+        return offset
+    new = int(math.ceil(x)) - land
+    return min(offset, max(new, -s['max_rungs']))
 
 
 def rung_notionals(cfg):
@@ -71,11 +114,12 @@ def exit_floor(side, split_ref, basis, market_type=None):
     return min(split_ref, basis * (1.0 - pct))
 
 
-def split(side, rungs, split_ref, basis=None, market_type=None):
+def split(side, rungs, split_ref, basis=None, market_type=None, offset=0):
     """G5: entries strictly one side of the ref, exits strictly beyond the
-    floor, nearest-first. Index 0 = lowest rung."""
+    floor, nearest-first. Indices are ABSOLUTE lattice indices (G17):
+    offset + position in `rungs`; at home, index 0 = lowest rung."""
     floor = exit_floor(side, split_ref, basis, market_type)
-    indexed = list(enumerate(rungs))
+    indexed = [(offset + i, p) for i, p in enumerate(rungs)]
     if side == 'long':
         entries = [(i, p) for i, p in indexed if p < split_ref]
         exits = [(i, p) for i, p in indexed if p > floor]
@@ -194,13 +238,14 @@ def placeable_exits(side, exits, bid, ask, resting_rungs):
 
 
 def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None,
-              bid=None, ask=None, resting_exit_rungs=frozenset()):
+              bid=None, ask=None, resting_exit_rungs=frozenset(), offset=0):
     """G12: the netted plan, pure. G7 suppression, G8 exits, G10 cap, G13
     non-marketable by construction, B4 book-aware exits. Returns {rung, side,
-    price, qty, reduce_only} dicts."""
-    rungs = grid_rungs(cfg, adapter)
+    price, qty, reduce_only} dicts; `rung` is the absolute lattice index
+    (G17) so a slid window's overlap keeps its identity."""
+    rungs = grid_rungs(cfg, adapter, offset)
     parts = split(cfg['side'], rungs, split_ref, basis,
-                  cfg.get('market_type'))
+                  cfg.get('market_type'), offset)
     parts['exits'] = placeable_exits(cfg['side'], parts['exits'], bid, ask,
                                      resting_exit_rungs)
     lot_qty = lot(cfg, adapter, split_ref)
@@ -220,7 +265,8 @@ def plan_grid(cfg, adapter, split_ref, held_base=0.0, basis=None,
     for i, price in parts['entries'][suppressed:]:
         if free is not None and free <= 0:
             break
-        qty = adapter.round_qty(adapter.qty_from_notional(notionals[i], price))
+        qty = adapter.round_qty(adapter.qty_from_notional(notionals[i - offset],
+                                                          price))
         if qty <= 0 or not adapter.meets_minimum(qty, price):
             continue
         orders.append({'rung': i, 'side': entry_side, 'price': price, 'qty': qty,

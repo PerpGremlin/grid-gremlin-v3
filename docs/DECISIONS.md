@@ -1,4 +1,4 @@
-# Decisions — frozen 2026-08-04
+# Decisions — frozen 2026-08-04; D28 added 2026-09-25
 
 The owner's answers to every open call from `archive/ALIGNMENT.md` §13, `archive/LEAN.md` §4 and
 `SPEC.md`'s ⚠ markers, organised from the owner's written response plus a four-question
@@ -166,6 +166,25 @@ stands unless the owner corrects it.
   (default), dead-and-visible bots within tolerance. Born from the 170037
   incident and the owner's read that metadata checks are "ask the exchange for
   truth — asking what we can find."
+
+- **D28 — The slide supersedes D10's "a human moves the range" (2026-09-25).**
+  Evidence first: the 48-day post-mortem (JOURNAL 2026-09-25) — fixed ranges idle
+  from day eleven of a 31–62% rally, and the replay put weekly re-anchoring at ~6–8×
+  the long grids' income. The owner: *"reanchoring is just trailing yes?"* — yes, and
+  v3 had deleted it. Decided, in the owner's words: **the slide** ("i think the slide
+  would work well"): drop rungs at the near end, add the same number at the far end,
+  spacing and lot unchanged, the lattice unchanged (G17). Trigger: "N rungs past"
+  (G18). Direction: favourable only — long slides up, short slides down; *"if i ever
+  want to trail down i can just adjust the settings within the config file"* (the D10
+  path stays for the adverse side). Inventory untouched (G20). Clamp required (G19).
+  On hysteresis — *"we will need some form of hysteresis. but we have had problems
+  with it before"* — the answer is that a ratchet needs none: it never returns, so it
+  cannot flap; the trigger count is the only band. Not built: extend (the infinity
+  grid — capital grows without bound) and widen (every lot changes; the replay says
+  wider earns less). The rule lives in the pure planner, not the ops layer, so the
+  backtester replays the real rule (T3/T6). Wiring order, agreed: decision → spec →
+  backtester fidelity → replay of the real rule → the live bot. Until the live bot
+  carries the offset, a fleet row with `slide` is refused by name.
 
 *Source documents: the owner's response file (local), the 2026-08-04 Q&A, and the
 2026-08-05 morning directives. Scrutiny was invited; scrutiny applied is recorded
