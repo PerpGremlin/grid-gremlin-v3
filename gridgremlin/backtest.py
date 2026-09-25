@@ -5,6 +5,8 @@
 # are OPTIMISTIC on coarse bars: every rung the bar trades through fills,
 # where the live bot rests only the window (W1) and a fast move skips rungs
 # — replay on bars no coarser than the move you are asking about (T6).
+import math
+
 from .ladder import plan_grid, slide_offset
 from .window import window
 
@@ -22,11 +24,21 @@ def backtest(cfg, adapter, bars, fee_rate=0.0002, funding_rate_hourly=0.0,
     equity_curve = []
     offset, slides = 0, 0      # G17/G18: the window over the lattice
     max_held = 0.0             # the deepest inventory the run carried
+    # G21 in whole bars: the trigger must still hold at the open of
+    # ceil(confirm_seconds / bar) FURTHER bars — a one-bar spike never slides
+    s = cfg.get('slide') or {}
+    confirm_bars = math.ceil((s.get('confirm_seconds') or 0.0)
+                             / (bar_hours * 3600.0))
+    beyond = 0
 
     for bar in bars:
         new = slide_offset(cfg, offset, bar['o'])
-        if new != offset:
-            offset, slides = new, slides + 1
+        if new == offset:
+            beyond = 0
+        else:
+            beyond += 1
+            if beyond > confirm_bars:
+                offset, slides, beyond = new, slides + 1, 0
         # a synthetic spread around the open feeds B3/B4: without bid/ask
         # the guard-band drops never happened and near-quote rungs filled
         # that live would skip — optimistic (audit 2026-08-07 LOW)

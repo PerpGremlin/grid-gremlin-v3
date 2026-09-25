@@ -120,6 +120,9 @@ A JSON object (or a bare list of rows, treated as `{"bots": [...]}`):
 `allow_mainnet` (half of the Safety gate, never set in this repo) ·
 `tombstones` (path of the stop-fire tombstone file, default
 `logs/tombstones.json` — see §6) ·
+`slide_state` (path of the slide-window file, default `logs/slide_state.json` —
+G22: written before a window moves, read at build; missing means every window is
+home, corrupt refuses the build) ·
 `preflight` — `{"probe": true, "max_failed_bots": 0}`: the probe places one
 unfillable post-only rehearsal order per bot at build and cancels it, proving
 the whole placement path before any strategy order; a failing bot refuses the
@@ -157,7 +160,7 @@ old v2 key names get their migration stated. **One bad row refuses the whole fle
 | `max_position_base` | the cap, in base units; `"unbounded"` to lift; omitted = the full ladder |
 | `assumed_avg_entry` | spot only: your cost basis fallback; venue truth always wins |
 | `seed` | `true`: on a flat first start, market-buy one lot per exit-side rung so the ladder starts covered (D9). A restart never re-fires it — done-ness is read from the venue |
-| `slide` | `{"trigger_rungs": N, "max_rungs": M, "ref_position": 0.5}`: the range follows a trend as a **ratchet** (D28, G17–G20). When the mark sits N whole rungs beyond the range's far edge in the favourable direction (long: above; short: below), the window slides by whole rungs so the mark lands at `ref_position` of the range (1.0 = the whole ladder on the entry side). Spacing, lot and overlapping orders are unchanged. It never slides back; the adverse side is the stop's job. `max_rungs` clamps how far from home it may go and is required. **Replay-only this phase**: the backtester carries it, the live bot refuses the key until wired |
+| `slide` | `{"trigger_rungs": N, "max_rungs": M, "confirm_seconds": S, "ref_position": 0.5}`: the range follows a trend as a **ratchet** (D28, G17–G22). When the mark sits N whole rungs beyond the range's far edge in the favourable direction (long: above; short: below) and stays there for S seconds (G21 — a wick never moves the house; 0 is a decision, not a default), the window slides by whole rungs so the mark lands at `ref_position` of the range (1.0 = the whole ladder on the entry side). Spacing, lot and overlapping orders are unchanged. It never slides back; the adverse side is the stop's job, and a slide bot's `mark_price` stop is `rungs_beyond` the window, never an absolute level (X8, §6). `max_rungs` clamps how far from home it may go and is required. The window survives a restart through `logs/slide_state.json` (G22; missing = home). Above 20× leverage the build warns: a slide is a full-ladder trend bet |
 | `stop` | see §6 |
 
 **What a grid does** (the five ideas, one line each): the exchange is the state — kill
@@ -230,7 +233,12 @@ HL gets a resting reduce-only limit at the target, adopted by identity.
 "stop": {"watch": "mark_price", "level": 61500, "server_side": true}
 ```
 
-- `watch: mark_price` — fires when mark crosses `level` on the losing side.
+- `watch: mark_price` — fires when mark crosses `level` on the losing side. **With
+  `slide` the key is `rungs_beyond`, not `level`** (X8): the level is re-derived every
+  cycle as that many lattice rungs past the window's near edge (below the bottom for a
+  long, above the top for a short), so it follows every slide and a server-side stop is
+  re-set after each one. An absolute `level` is refused with `slide` — once the window
+  has left home it protects nothing — and `rungs_beyond` is refused without it.
 - `watch: account_equity` — fires when whole-account equity ≤ `level` (absolute, ≥ 1).
 - `watch: position_sl` — no level: the bot reads the stop-loss **you** placed on the
   venue position and honours it. (Inert on HL — the venue has no position SL field.)
@@ -315,7 +323,8 @@ python3 -m gridgremlin.backtest_cli configs/fleet.demo.json --bot linSOLUSDTl \
 Fetches real venue klines (public data, no keys) and replays the SAME `plan_grid`
 the live engine runs (T3) — fills require trade-through, never touch, and only
 rungs inside the placement window rest (T6). A `slide` row replays with its
-window offset carried bar to bar. Bybit grids only; HL bots and martingales are
+window offset carried bar to bar and its `confirm_seconds` honoured in whole bars
+(the trigger must hold at ⌈S / bar⌉ further opens). Bybit grids only; HL bots and martingales are
 refused by name. Prints grid profit, fees, funding, max drawdown, trips, and what
 the run ends holding. Entries are optimistic on coarse bars (every rung a bar
 trades through fills; a live fast move skips rungs) — use `--bar-minutes 5` for

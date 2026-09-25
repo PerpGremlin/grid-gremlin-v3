@@ -63,25 +63,51 @@ def hl_marks():
             for e, c in zip(meta['universe'], ctxs) if c.get('markPx')}
 
 
-def review_row(cfg, mark):
-    """PURE. One grid's facts -> one line."""
+def slide_offsets(fleet_path, fleet):
+    """G22: the engine's persisted window offsets, read-only. Missing or
+    unreadable means home for every bot — the engine itself refuses to
+    build on an unreadable file; the review only reports."""
+    path = fleet.get('slide_state')
+    if not path:
+        parent = Path(fleet_path).resolve().parent
+        root = parent.parent if parent.name == 'configs' else parent
+        path = root / 'logs' / 'slide_state.json'
+    try:
+        rows = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    return rows if isinstance(rows, dict) else {}
+
+
+def review_row(cfg, mark, offset=0):
+    """PURE. One grid's facts -> one line. `offset` is the slide window's
+    distance from home in rungs (G17); the bounds shown are the window's."""
     botid = (f"{cfg['market_type'][:3]}{cfg['symbol']}{cfg['side'][0]}"
              .replace('-', ''))
     lo, hi, rungs = cfg['lower'], cfg['upper'], cfg['rungs']
+    tag = ''
+    if offset:
+        if cfg.get('spacing_type', 'percent') == 'percent':
+            ratio = (hi / lo) ** (1.0 / max(rungs - 1, 1))
+            lo, hi = lo * ratio ** offset, hi * ratio ** offset
+        else:
+            step = (hi - lo) / max(rungs - 1, 1)
+            lo, hi = lo + step * offset, hi + step * offset
+        tag = f'  (slid {offset:+d} rungs from home)'
     width = hi - lo
     rung = width / max(rungs - 1, 1)
     if mark is None:
-        return f'{botid:<14} {lo:g}..{hi:g}  mark UNKNOWN (venue unreadable)'
+        return f'{botid:<14} {lo:g}..{hi:g}  mark UNKNOWN (venue unreadable){tag}'
     if mark < lo:
         return (f'{botid:<14} {lo:g}..{hi:g}  mark {mark:g}  '
-                f'IDLE BELOW range by {(lo - mark) / rung:.1f} rungs')
+                f'IDLE BELOW range by {(lo - mark) / rung:.1f} rungs{tag}')
     if mark > hi:
         return (f'{botid:<14} {lo:g}..{hi:g}  mark {mark:g}  '
-                f'IDLE ABOVE range by {(mark - hi) / rung:.1f} rungs')
+                f'IDLE ABOVE range by {(mark - hi) / rung:.1f} rungs{tag}')
     pos = (mark - lo) / width
     edge = min(mark - lo, hi - mark)
     return (f'{botid:<14} {lo:g}..{hi:g}  mark {mark:g}  {pos:.0%} up-range, '
-            f'{edge / rung:.1f} rungs to the nearer edge')
+            f'{edge / rung:.1f} rungs to the nearer edge{tag}')
 
 
 def collect(fleet_paths):
@@ -89,6 +115,7 @@ def collect(fleet_paths):
     hl = None
     for path in fleet_paths:
         fleet = json.loads(Path(path).read_text())
+        offsets = slide_offsets(path, fleet)
         for cfg in fleet.get('bots', []):
             if cfg.get('strategy') == 'martingale':
                 skipped += 1                      # no range to review (D13)
@@ -103,7 +130,11 @@ def collect(fleet_paths):
                                       cfg['symbol'])
             except Exception:                                    # noqa: BLE001
                 pass                              # UNKNOWN is a fact too
-            lines.append(review_row(cfg, mark))
+            botid = (f"{cfg['market_type'][:3]}{cfg['symbol']}{cfg['side'][0]}"
+                     .replace('-', ''))
+            offset = offsets.get(botid, 0)
+            lines.append(review_row(cfg, mark,
+                                    offset if isinstance(offset, int) else 0))
     if skipped:
         lines.append(f'({skipped} martingale(s) skipped — no range, D13)')
     return '\n'.join(lines)

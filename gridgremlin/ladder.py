@@ -36,6 +36,22 @@ def lattice_index(cfg, price):
     return (price - lower) / ((upper - lower) / (n - 1))
 
 
+def stop_level_for(cfg, offset=0):
+    """X8: the mark_price stop of a window. An absolute `level` is itself;
+    `rungs_beyond` sits that many lattice rungs past the window's near edge
+    (below the bottom for a long, above the top for a short), so the stop
+    follows every slide."""
+    stop = cfg.get('stop') or {}
+    if stop.get('level') is not None:
+        return stop['level']
+    r = stop.get('rungs_beyond')
+    if r is None:
+        return None
+    if cfg['side'] == 'long':
+        return lattice_price(cfg, offset - r)
+    return lattice_price(cfg, offset + cfg['rungs'] - 1 + r)
+
+
 def grid_rungs(cfg, adapter, offset=0):
     """G1/G3: N tick-rounded prices over the window at `offset` (home: 0),
     N-1 gaps. Index i of the result is absolute index offset + i."""

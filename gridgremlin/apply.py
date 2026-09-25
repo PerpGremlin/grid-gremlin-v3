@@ -20,11 +20,28 @@ def rung_of(link_id, botid):
     prefix = botid + '-'
     if not (link_id or '').startswith(prefix):
         return None
-    tail = link_id[len(prefix):].split('-', 1)[0]
+    rest = link_id[len(prefix):]
+    neg = rest.startswith('-')            # G17: a short's slid window sits
+    body = rest[1:] if neg else rest      # below home — negative indices
+    tail = body.split('-', 1)[0]
     try:
-        return int(tail)
+        value = int(tail)
     except ValueError:
         return None
+    return -value if neg else value
+
+
+def widest_rung(cfg):
+    """I3: the rung index whose link PRINTS longest for this row — the last
+    home rung, or with a slide the far edge of the furthest window (a
+    short's is negative: the sign is a character too). Whichever is longer."""
+    n = int(cfg.get('rungs', 99) or 99)
+    edges = [n - 1]
+    s = cfg.get('slide')
+    if s:
+        edges.append(-int(s['max_rungs']) if cfg.get('side') == 'short'
+                     else n - 1 + int(s['max_rungs']))
+    return max(edges, key=lambda r: len(str(r)))
 
 
 def check_link_fits(botid, max_rung, venue_limit, gen_chars=10):
