@@ -5,6 +5,90 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-09-25 (later) — post-mortem: what a fixed-range fleet did in a 31–62% rally
+
+Measured, not recalled: venue fills with their type, closed-P&L records,
+the per-minute snapshots, hourly candles, and the backtester replayed over
+the same 48 days. Test funds throughout; figures are ratios of each bot's
+own capital so the mechanics survive the public-repo rule.
+
+**The market.** Every symbol the fleet traded rose between 31% (BTC, ADA)
+and 62% (SOL) from the 2026-08-08 restart to the 2026-09-25 shutdown, with
+no retrace deep enough to re-enter a range once left.
+
+**The fleet's life was eleven days.** Grid fills per week: ~144, 45, 44,
+then zero for the remaining four weeks. The last grid fill was 2026-08-21.
+Long grids sold their last lot leaving the top of their range and sat flat
+above it; short grids filled to their inventory cap on the way up and sat
+offside below it. Thirty-five of forty-eight days had no grid activity.
+G11 (idle outside the range) worked as designed, and the daily range review
+proposed a wholesale re-anchor from 2026-08-19 on; nobody was there to do it.
+
+**Where the money went.** Grid trips inside the window closed positive —
+about +4% of committed capital, seventy percent of it in the first eleven
+days. Funding netted to zero across the fleet (the BTC long paid what the
+ETH short received). The inventory the grids were CARRYING did the rest:
+the big BTC long leg's held stack gained about +54% of its capital over the
+window, the big ETH short leg's held stack lost about −59% of its capital,
+the small hedge legs moved with their sign. Net for the six fixed grids over
+the window: roughly −8% of committed capital. **The hedge pairs were
+asymmetric by design (experiment 2, big leg + small leg) and the two big
+legs pointed opposite ways — the fleet's P&L was the difference between two
+directional bets, not grid income.**
+
+**The equity curve lied.** Demo equity rose ~16% over the window while the
+bots lost. The unified demo wallet carries seeded spot holdings no bot owns
+(a gold token among them) and they rose with everything else. The snapshot
+equity is a wallet number, not a fleet number; the readout's D8 split is the
+only honest instrument and it said so on 2026-08-25.
+
+**Martingales.** The ADA looper made 692 owned fills plus hosted-TP closes
+and finished slightly negative after fees on its capital — 59 same-rung exits
+(R9) and two-thirds of its fills at taker rate. The DOGE doubler closed its
+rounds positive. Neither reached ten rounds by the SOAK definition because
+rounds never fully re-armed — a readout question queued in BACKLOG §6.
+
+**Fees, live.** Maker ~2.1 bp, taker ~5.5 bp on Bybit demo. 67% of all trade
+fills in the window were taker — nearly all of them the martingales' market
+entries and hosted-TP closes, not the grids.
+
+**The replay** (T3 backtester, hourly bars, maker fee, same window, six
+linear grids):
+
+| variant | BTC long | ETH long | SOL long |
+|---|---|---|---|
+| as configured, grid net | 1× | 1× | 1× |
+| re-anchored weekly to price (approx.) | ~6× | ~7× | ~8× |
+| range 3× wider, same rungs | ~0.9× | ~0.3× | ~0.6× |
+
+Re-anchoring is the lever, by a large margin; wider ranges only thin the
+ladder. For the short grids every variant loses on inventory in a rally and
+re-anchoring loses MORE (each week shorts again, higher). A short grid is
+not a hedge against a trend; it is a short. **Caveat on the shorts: the
+backtester carried three times the short inventory the live bot was capped
+at — its short-side numbers are not usable until that is understood
+(BACKLOG §6).**
+
+**The HL "liquidation" was not one.** Both HL grid deaths trace to one
+misread: HL stamps a `liquidation` object on BOTH sides of a liquidation
+trade, and `exchange/hyperliquid/truth.py` treats any such fill as a venue
+liquidation of *us*. On 2026-08-13 and 2026-08-19 our resting exits filled
+against someone else's liquidation (`liquidatedUser` is a different address
+each time; both closes were tiny and profitable), and the engine killed a
+healthy bot on each — one labelled "liquidation", one "outside close"
+because the disowned fill looked like an outside hand. The SOAK freeze on
+HL calls lifts; the defect is an engine item (BACKLOG §6). The DOGE stop and
+the AVAX TP-and-stop were correct.
+
+**What this says.** A fixed range on a trending market is idle within days,
+and what it holds while idle is a directional position sized by the grid's
+capital — the "hedge pair" experiment turned into two opposite bets of
+different sizes. The one operational change with evidence behind it is
+re-anchoring, which v3 deliberately left to a human (D10). The human was
+away for 48 days. Whether that becomes a rule in the engine is a new
+decision for the owner, not a reinterpretation of D10.
+
+
 ## 2026-09-25 — the 48-day readout, then everything off
 
 **Found.** No session between 2026-08-08 and today. Both fleets (Bybit demo,

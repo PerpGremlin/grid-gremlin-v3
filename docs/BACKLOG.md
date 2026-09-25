@@ -106,12 +106,29 @@ Nothing runs until the owner says so; these are what must be true before it does
   Claude token that expires; when it did, both failed daily with one log
   line and no page. Anything unattended must page on its OWN failure.
 - **Log rotation** for the fleet logs (systemd append, one-second cycles).
-- **The HL BTC long liquidation (2026-08-19) is unexplained** — a freeze on
-  HL parameter calls until it is.
-- **The strategy question**, older than v3: fixed-range grids idle through a
-  trend; the only bot that traded was a fee-losing martingale. Answer it
-  offline (backtester + the 48-day snapshots) before pointing the engine at
-  a venue again.
+- **HL counterparty liquidations kill healthy bots** (engine defect, found
+  by the post-mortem). `exchange/hyperliquid/truth.py` marks any fill that
+  carries HL's `liquidation` object as a venue liquidation of us; HL stamps
+  it on both sides of the trade. Fix: compare `liquidatedUser` with the
+  account address; a counterparty's liquidation is an ordinary fill. Needs a
+  spec with the real fill shape. Both HL grid deaths in the run were this.
+- **Backtester short-side inventory** ran ~3× the live bot's cap in the
+  replay (T3). Understand before any short-grid replay is believed.
+- **Martingale "rounds" in the readout** — 692 fills and zero completed
+  rounds counted for the ADA looper; the round latch or the readout's
+  round detection needs a look before the 10-round SOAK minimum means
+  anything.
+- **The strategy question — now with evidence** (JOURNAL 2026-09-25
+  post-mortem): fixed ranges were idle from day eleven; weekly re-anchoring
+  would have multiplied the long grids' income ~6–8×; short grids lose on
+  inventory in a rally under every variant. The decision on the table is
+  whether re-anchoring becomes a rule (a new D-number; D10 left it to a
+  human) — and whether shorts belong in a fleet at all outside a range
+  regime.
+- **Snapshot equity is a wallet number.** Seeded demo holdings no bot owns
+  moved the curve more than the bots did. Either the snapshot carries the
+  readout's D8 split, or the watchdog's equity bounds are known to be
+  watching the wrong thing.
 
 ## Non-gaps — absent by decision, do not re-invent
 
