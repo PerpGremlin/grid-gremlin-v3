@@ -13,7 +13,7 @@ from gridgremlin.ladder import (grid_rungs, lattice_index, lattice_price,
 ADAPTER = LinearAdapter({'symbol': 'BTCUSDT', 'qty_step': 0.001,
                          'price_tick': 0.1, 'min_qty': 0.001,
                          'min_notional': 5.0, 'settle_coin': 'USDT'})
-SLIDE = {'trigger_rungs': 2, 'max_rungs': 100}
+SLIDE = {'trigger_rungs': 2, 'max_rungs': 100, 'confirm_seconds': 0}
 
 
 def _cfg(**over):
@@ -165,15 +165,18 @@ def spec_T6_a_rung_outside_the_window_never_fills():
     assert wide['entry_fills'] == 4
 
 
-# --- C: the key is bounded; the live bot refuses it this phase ---------------
+# --- C: the key is bounded ----------------------------------------------------
 
 def spec_C3_slide_knobs_are_bounded_and_defaulted():
     cfg = _cfg()
-    assert cfg['slide'] == {'trigger_rungs': 2, 'max_rungs': 100, 'ref_position': 0.5}
-    for bad in ({'trigger_rungs': 0, 'max_rungs': 5}, {'trigger_rungs': 1},
-                {'trigger_rungs': 1.5, 'max_rungs': 5},
-                {'trigger_rungs': 1, 'max_rungs': 5, 'ref_position': 1.5},
-                {'trigger_rungs': 1, 'max_rungs': 5, 'snap_home': True}, 'yes'):
+    assert cfg['slide'] == {'trigger_rungs': 2, 'max_rungs': 100,
+                            'ref_position': 0.5, 'confirm_seconds': 0.0}
+    ok = {'trigger_rungs': 1, 'max_rungs': 5, 'confirm_seconds': 0}
+    for bad in (dict(ok, trigger_rungs=0), {'trigger_rungs': 1},
+                dict(ok, trigger_rungs=1.5), dict(ok, ref_position=1.5),
+                dict(ok, snap_home=True), dict(ok, confirm_seconds=-1),
+                {'trigger_rungs': 1, 'max_rungs': 5},      # G21: never defaulted
+                'yes'):
         try:
             _cfg(slide=bad)
         except ConfigError:
@@ -191,14 +194,3 @@ def spec_C3_slide_knobs_are_bounded_and_defaulted():
         assert 'slide' in str(e)
     else:
         raise AssertionError('a martingale accepted slide')
-
-
-def spec_D28_the_live_bot_refuses_slide_until_wired():
-    from gridgremlin.bot import Bot
-    from gridgremlin.events import Notifier
-    try:
-        Bot(_cfg(), ADAPTER, None, Notifier(sink=lambda *_: None), gen_seed=1)
-    except ConfigError as e:
-        assert 'replay-only' in str(e)
-    else:
-        raise AssertionError('the live bot accepted slide before the wiring')

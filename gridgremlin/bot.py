@@ -5,7 +5,7 @@ from .apply import diff, make_botid, make_link, pair_amends, rung_of
 from .exchange.errors import VenueError
 from .ladder import (anchor_from_rung, grid_rungs, guard_band, lot,
                      min_gap, plan_grid, plan_martingale,
-                     sellable_base, split)
+                     sellable_base, slide_offset, split, stop_level_for)
 from .window import window
 
 FLAT_CONFIRMATIONS = 3  # E9: consecutive flat reads before standing down
@@ -22,19 +22,14 @@ class Bot:
     # E3/S6: the reset-on-restart list, complete and asserted by spec —
     # _last_pos (fill baseline, re-seeded first cycle), _gen (restart-unique),
     # _held_ref (re-anchors), _placed_last/_flap/_cooldown (churn guards),
-    # _backoff*/_exit_links_last/_uncovered_warned/_anomaly_warned (latches).
-    # Everything else the bot knows comes from the venue each cycle.
+    # _backoff*/_exit_links_last/_uncovered_warned/_anomaly_warned (latches),
+    # _slide_since (G21's confirmation clock). Everything else the bot knows
+    # comes from the venue each cycle — except the two stated durable local
+    # facts: `tombs` (X7) and `offset`, the slide window (G22).
 
     def __init__(self, cfg, adapter, client, notifier, gen_seed, clock=None,
-                 tombstones=None):
+                 tombstones=None, slide_state=None):
         self.cfg = cfg
-        if cfg.get('slide'):
-            from .config import ConfigError
-            raise ConfigError(
-                f"{cfg.get('symbol')}: 'slide' is replay-only this phase — "
-                'the backtester carries the window offset (G17), the live '
-                'bot does not yet; remove the key or wait for the wiring '
-                '(D28, BACKLOG §6)')
         self.adapter = adapter
         self.client = client
         from .config import VENUE_ICONS
@@ -54,7 +49,20 @@ class Bot:
         self._entry_side = 'Buy' if cfg['side'] == 'long' else 'Sell'
         self._exit_side = 'Sell' if cfg['side'] == 'long' else 'Buy'
         self._held_ref = None          # B2
-        self._min_gap = (min_gap(grid_rungs(cfg, adapter))
+        self.slide = slide_state       # G22: the second durable local fact
+        self.offset = 0                # G17: the window, restored below
+        self._slide_since = None       # G21: the confirmation clock (E3-reset)
+        if slide_state is not None and cfg.get('slide'):
+            want = slide_state.get(self.botid)
+            m = cfg['slide']['max_rungs']
+            self.offset = (min(max(want, 0), m) if cfg['side'] == 'long'
+                           else max(min(want, 0), -m))      # G19 on restart
+            if self.offset != want:
+                self.notify.event('warn', self.botid,
+                                  f'persisted window offset {want:+d} is '
+                                  'outside this config\'s clamp or side — '
+                                  f'resuming at {self.offset:+d} (G19/G22)')
+        self._min_gap = (min_gap(grid_rungs(cfg, adapter, self.offset))
                          if cfg['strategy'] == 'grid' else 0.0)   # M8: no lattice
         self.alive = True
         self._exit_links_last = set()  # S7: the ownership discriminator
@@ -107,8 +115,14 @@ class Bot:
             return None
         watch, long = stop['watch'], self.cfg['side'] == 'long'
         if watch == 'mark_price':
-            hit = mark <= stop['level'] if long else mark >= stop['level']
-            return f"mark_price {stop['level']:.10g}" if hit else None
+            level = stop_level_for(self.cfg, self.offset)      # X8: follows
+            hit = mark <= level if long else mark >= level     # the window
+            if not hit:
+                return None
+            if stop.get('rungs_beyond') is not None:
+                return (f"mark_price {level:.10g} ({stop['rungs_beyond']} "
+                        f'rungs beyond the window at {self.offset:+d})')
+            return f'mark_price {level:.10g}'
         if watch == 'account_equity':
             if equity is not None and equity <= stop['level']:
                 return f"account_equity {stop['level']:.10g}"
@@ -194,7 +208,8 @@ class Bot:
             return
         idx = self.adapter.position_idx(self._entry_side, False) or 0
         venue_sl = truth['positions'].get(idx, {}).get('stop_loss')
-        want = self.adapter.round_price(stop['level'])
+        want = self.adapter.round_price(      # X8: re-derived every cycle, so
+            stop_level_for(self.cfg, self.offset))   # a slide re-sets it
         partial = self._flatten_scope(held) < abs(held)
         if venue_sl is not None and abs(venue_sl - want) < 1e-9:
             if not partial:
@@ -863,7 +878,7 @@ class Bot:
         if any(rung_of(o['link_id'], self.botid) is not None
                for o in truth['orders']):
             return False
-        rungs = grid_rungs(self.cfg, self.adapter)
+        rungs = grid_rungs(self.cfg, self.adapter, self.offset)
         exit_rungs = split(self.cfg['side'], rungs, ref)['exits']
         qty = self.adapter.round_qty(
             lot(self.cfg, self.adapter, ref) * len(exit_rungs))
@@ -894,6 +909,49 @@ class Bot:
         mk = getattr(self.client, 'make_link', None)
         return mk(self.botid, rung, self._gen) if mk \
             else make_link(self.botid, rung, self._gen)
+
+    def _maybe_slide(self, ref, now):
+        """G18/G21/G22: the ratchet — confirmed, then durable, then moved.
+        The trigger must hold on every cycle for `confirm_seconds`; a ref
+        back inside resets the clock (one wick slid an ETH window for good
+        in the control replay). The offset is written BEFORE any order
+        moves; the planner reads self.offset from here on, so this same
+        cycle cancels what left the window and places what entered it —
+        the overlap keeps its identity (G17)."""
+        cfg = self.cfg
+        if not cfg.get('slide') or cfg['strategy'] != 'grid':
+            return
+        new = slide_offset(cfg, self.offset, ref)
+        if new == self.offset:
+            self._slide_since = None
+            return
+        confirm = cfg['slide']['confirm_seconds']
+        if self._slide_since is None:
+            self._slide_since = now
+            if confirm > 0:
+                self.notify.event('slide', self.botid,
+                                  f'ref {ref:.10g} sits past the trigger — '
+                                  f'confirming for {confirm:.0f}s before the '
+                                  'window moves (G21)')
+        if now - self._slide_since < confirm:
+            return
+        if self.slide is not None:
+            try:
+                self.slide.set(self.botid, new)
+            except OSError as e:
+                self.notify.event('warn', self.botid,
+                                  f'slide state write FAILED ({e}) — sliding '
+                                  'anyway; a restart resumes at home (G22)')
+        old, self.offset, self._slide_since = self.offset, new, None
+        rungs = grid_rungs(cfg, self.adapter, new)
+        self._min_gap = min_gap(rungs)
+        stop = cfg.get('stop') or {}
+        tail = ''
+        if stop.get('rungs_beyond') is not None:
+            tail = f'; stop follows to {stop_level_for(cfg, new):.10g}'
+        self.notify.event('slide', self.botid,
+                          f'window {old:+d} -> {new:+d} rungs from home: '
+                          f'{rungs[0]:.10g}..{rungs[-1]:.10g}{tail}')
 
     def _sticky(self, ref):
         """B2: the split ref moves only past the band, then snaps to current.
@@ -1068,6 +1126,7 @@ class Bot:
                                        # that no longer exists (H2 2026-08-07)
 
         ref = self._sticky(truth['split_ref'])     # W2: the one anchor
+        self._maybe_slide(ref, now)                # G18/G21/G22
         bid, ask = truth['bid'], truth['ask']
         resting_exits = {rung_of(o['link_id'], self.botid)
                          for o in truth['orders']
@@ -1126,7 +1185,7 @@ class Bot:
                            else 1.0))
         else:
             desired = plan_grid(cfg, adapter, ref, held, basis, bid, ask,
-                                resting_exits)
+                                resting_exits, offset=self.offset)
         if defer_exits:
             # freeze the exit side: place nothing new (the plan priced them
             # off a basis we do not have) and cancel nothing resting (they

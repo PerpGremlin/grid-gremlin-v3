@@ -5,11 +5,12 @@ import json
 import time
 from pathlib import Path
 
-from .apply import bot_identity, check_fleet_unique, check_link_fits
+from .apply import (bot_identity, check_fleet_unique, check_link_fits,
+                    widest_rung)
 from .adapters import adapter_for
 from .bot import Bot
 from .config import (ConfigError, VENUE_ICONS, check_placeable,
-                     validate_fleet)
+                     slide_leverage_warning, validate_fleet)
 import os
 
 from .events import Notifier, TelegramNotifier, VenueNotifier
@@ -18,6 +19,7 @@ from .exchange.bybit.truth import parse_instrument, read_wallet
 from .exchange.errors import VenueError
 from .exchange.env import load_env
 from .ladder import grid_rungs, position_cap
+from .slide_state import SlideState, SlideStateError
 from .tombstones import Tombstones, TombstoneError
 from .watchdog import validate_watchdog
 
@@ -90,7 +92,8 @@ def snapshot_row(bots, wallet, now):
     """F4/E3: derived from venue truth only; the DEAD are visible."""
     return {'t': now, 'equity': wallet['equity'], 'mm_rate': wallet['mm_rate'],
             'bots': {b.botid: {'alive': b.alive,
-                               'position': b._last_pos or 0.0}
+                               'position': b._last_pos or 0.0,
+                               **({'offset': b.offset} if getattr(b, 'offset', 0) else {})}
                      for b in bots}}
 
 
@@ -174,6 +177,11 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
                            or str(_logs_dir(fleet_path)
                                   / 'tombstones.json'))
     except TombstoneError as e:
+        raise ConfigError(str(e)) from e
+    try:
+        slide = SlideState(fleet.get('slide_state')
+                           or str(_logs_dir(fleet_path) / 'slide_state.json'))
+    except SlideStateError as e:            # G22: fails CLOSED like X7
         raise ConfigError(str(e)) from e
     clients, bots, identities = {}, [], []
     for cfg in fleet['bots']:
@@ -261,7 +269,15 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
                                       'this coin cannot borrow')
         check_placeable(cfg, adapter)
         bot = Bot(cfg, adapter, client, notifier, gen_seed=int(time.time()),
-                  tombstones=tombs)
+                  tombstones=tombs, slide_state=slide)
+        if bot.offset:
+            # G22: the window survived the process — say so at the start
+            _vn(notifier, venue).event(
+                'slide', bot.botid,
+                f'resuming {bot.offset:+d} rungs from home (G22)')
+        warn = slide_leverage_warning(cfg)
+        if warn:
+            _vn(notifier, venue).event('warn', bot.botid, warn)
         if tombs.has(bot.botid):
             # X7: a fired stop survives the process. Dead AND visible (F4);
             # revival = the operator deletes the tombstone entry, on purpose.
@@ -273,7 +289,7 @@ def build_fleet(fleet_path, notifier, allow_mainnet=False):
                            'to revive, deliberately')
         limit = 16 if venue == 'hyperliquid' else BYBIT_LINK_LIMIT
         chars = 4 if venue == 'hyperliquid' else 10
-        check_link_fits(bot.botid, cfg.get('rungs', 99), limit, gen_chars=chars)
+        check_link_fits(bot.botid, widest_rung(cfg), limit, gen_chars=chars)
         identities.append((bot.botid, bot_identity(cfg, adapter)))
         if venue == 'bybit' and cfg['market_type'] == 'linear':
             client.ensure_hedge_mode(cfg['market_type'], cfg['symbol'])

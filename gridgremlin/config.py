@@ -31,10 +31,10 @@ MARTINGALE_KEYS = COMMON_KEYS + (
     'base_order_size', 'safety_order_size', 'order_size_multiplier',
     'deviation_pct', 'deviation_step_multiplier', 'max_averaging_orders',
     'take_profit_avg_pct', 'repeat', 'place_within_pct')
-STOP_KEYS = ('watch', 'level', 'server_side')
-SLIDE_KEYS = ('trigger_rungs', 'max_rungs', 'ref_position')
+STOP_KEYS = ('watch', 'level', 'rungs_beyond', 'server_side')
+SLIDE_KEYS = ('trigger_rungs', 'max_rungs', 'ref_position', 'confirm_seconds')
 FLEET_KEYS = ('bots', 'poll_seconds', 'allow_mainnet', 'preflight',
-              'tombstones',
+              'tombstones', 'slide_state',
               'notify_orders', 'watchdog')
 
 # C2 — renames. old key -> (new key, message).
@@ -143,8 +143,10 @@ def _flag(row, key):
 
 # --- the validators -----------------------------------------------------------
 
-def _validate_stop(stop, where):
-    """X2's shape. Sub-keys are enumerated — C1 does not stop at the row level."""
+def _validate_stop(stop, where, slide=False):
+    """X2's shape. Sub-keys are enumerated — C1 does not stop at the row level.
+    X8: a slide bot's mark_price stop is `rungs_beyond` the window, never an
+    absolute `level` — the window leaves home, an absolute level does not."""
     if stop is None:
         return None
     if not isinstance(stop, dict):
@@ -161,6 +163,17 @@ def _validate_stop(stop, where):
             _refuse(f"{where}.stop: 'level' does not apply to watch: position_sl — "
                     "the level is the stop-loss you placed on the venue")
         return {'watch': watch, 'server_side': False}
+    if watch == 'mark_price' and slide:
+        if 'level' in stop:
+            _refuse(f"{where}.stop: a slide bot's window leaves home, so an absolute "
+                    "'level' would be meaningless once it has — give 'rungs_beyond' "
+                    '(rungs below the window for a long, above it for a short; X8)')
+        r = _num(stop, 'rungs_beyond', f'{where}.stop', least=1, required=True,
+                 integer=True)
+        return {'watch': watch, 'rungs_beyond': r, 'server_side': server}
+    if 'rungs_beyond' in stop:
+        _refuse(f"{where}.stop: 'rungs_beyond' is the slide bot's stop (X8) — "
+                "without 'slide', give 'level'")
     least = 1.0 if watch == 'account_equity' else 0.0
     level = _num(stop, 'level', f'{where}.stop', least=least, least_open=(least == 0.0),
                  required=True)
@@ -262,13 +275,16 @@ def validate_grid(row, where='row'):
         # D28: the slide — a ratchet, not a trail; every knob bounded (C3)
         sw = f'{where}.slide'
         if not isinstance(slide, dict):
-            _refuse(f"{sw}: must be an object {{trigger_rungs, max_rungs, ref_position}}")
+            _refuse(f"{sw}: must be an object {{trigger_rungs, max_rungs, "
+                    "confirm_seconds, ref_position}}")
         _reject_unknown(slide, SLIDE_KEYS, sw)
         k = _num(slide, 'trigger_rungs', sw, least=1, required=True, integer=True)
         m = _num(slide, 'max_rungs', sw, least=1, required=True, integer=True)
         rp = _num(slide, 'ref_position', sw, least=0.0, most=1.0)   # 1.0 = all entries
+        c = _num(slide, 'confirm_seconds', sw, least=0.0, required=True)
         cfg['slide'] = {'trigger_rungs': k, 'max_rungs': m,
-                        'ref_position': 0.5 if rp is None else rp}
+                        'ref_position': 0.5 if rp is None else rp,
+                        'confirm_seconds': c}
 
     if cfg.get('reinvest') is not None:
         _refuse(f"{where}: grids reinvest by EDITING 'capital' — deliberate, "
@@ -289,7 +305,8 @@ def validate_grid(row, where='row'):
         cfg['spot_leverage'] = sl
         cfg['leverage'] = sl     # D24: sizing flows the one normal path
 
-    cfg['stop'] = _validate_stop(cfg.get('stop'), where)
+    cfg['stop'] = _validate_stop(cfg.get('stop'), where,
+                                 slide=bool(cfg.get('slide')))
     if (cfg['stop'] and cfg['stop']['server_side']
             and (cfg['market_type'] == 'spot'
                  or cfg['venue'] == 'hyperliquid')):
@@ -304,6 +321,24 @@ def validate_grid(row, where='row'):
         eff = cfg.get('spot_leverage', 1.0)
     cfg['ladder_notional'] = capital * eff
     return cfg
+
+
+SLIDE_LEVERAGE_WARN = 20.0   # the 48-day replay: 10x held, 55-75x liquidated
+
+
+def slide_leverage_warning(cfg):
+    """A build WARNING, not a rule — a fleet-level leverage rule needs its
+    own D-number (BACKLOG §6). Pure: the replay's evidence, stated at the
+    build where the row is armed."""
+    if not cfg.get('slide'):
+        return None
+    lev = float(cfg.get('leverage') or 1.0)
+    if lev <= SLIDE_LEVERAGE_WARN:
+        return None
+    return (f'slide at {lev:g}x: a slide deploys 3-4x the ladder in a trend, '
+            'and the 48-day replay at 75x was liquidated on one dip with it '
+            f'on (10x held) — above {SLIDE_LEVERAGE_WARN:g}x this is a '
+            'full-ladder trend bet (JOURNAL 2026-09-25)')
 
 
 def _validate_tranches(v, where):

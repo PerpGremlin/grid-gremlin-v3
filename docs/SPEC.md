@@ -19,7 +19,9 @@ eventually pin (T1).
   *(DESIGN §0; what makes backtest parity and every golden test possible)*
 - **E2** `apply()` is the only writer; cancels run before creates.
 - **E3** The exchange is the only durable state: every in-memory quantity is either
-  derivable from venue + config or explicitly documented as reset-on-restart. *(OPERATING
+  derivable from venue + config or explicitly documented as reset-on-restart. Two
+  narrow local facts are the stated exceptions, each because the exchange cannot
+  express it: the tombstone (X7) and the slide window's offset (G22). *(OPERATING
   idea 1; the restart-resets list in v2-history §2)*
 - **E4** `plan()` is lookahead-free: the same truth prefix produces the same orders
   regardless of what data follows. *(freqtrade study — "the single highest-value steal")*
@@ -129,6 +131,20 @@ eventually pin (T1).
   re-derives over the new window under G6/G8, and nothing is sold to make room. In the
   favourable direction the trigger price lies beyond the old top, so the position is
   normally already exited when the window moves. *(D28)*
+- **G21** A slide is confirmed, never instant: the trigger (G18) must hold on every
+  cycle for `confirm_seconds` before the window moves, and a ref that returns inside
+  resets the clock. Required, never defaulted — zero is a decision. The clock is
+  in-memory and resets on restart (E3); the backtester honours it in whole bars (T6).
+  Pinned by sabotage: at zero, one read past the trigger moves the house. *(the
+  control replay: one 0.5% wick slid an ETH window for good — JOURNAL 2026-09-25)*
+- **G22** The window offset is the second narrow local durable fact E3 permits,
+  beside X7's tombstone: written BEFORE the orders move (a crash mid-slide resumes
+  at the new window, whose orders may already rest), read at build, clamped to G19
+  and the row's side; missing means home — safe, because every link carries its
+  absolute index (G17), so a resting order outside home is cancelled or re-adopted
+  by the same diff as always (a lost ratchet, never lost money). The file fails
+  CLOSED like the tombstone; a failed WRITE never blocks the slide itself. *(D28;
+  BACKLOG §6 PR B)*
 
 ## W — the window
 
@@ -269,7 +285,9 @@ eventually pin (T1).
 - **I2** One bot owns one `(category, symbol, positionIdx)`; the fleet refuses
   collisions at build.
 - **I3** The id fits every venue's link limit, checked at build with a refusal — never a
-  silent row skip.
+  silent row skip. With a slide the check sizes for whichever window edge prints
+  longest: the far edge of the furthest window (a short's is negative, and the sign
+  is a character) or the last home rung. *(D28)*
 - **I4** Fills deduplicate by venue execution id, across reconnects and restarts.
 - **I5** Market-path orders (seed, martingale base, stop-flatten) carry an owned link
   like every other order — I1 has no exceptions; an unattributable own-fill is a
@@ -343,7 +361,14 @@ eventually pin (T1).
   remembering.
   The one narrow local durable fact E3 permits: the exchange cannot express "this
   bot's stop fired". *(the undesigned fifth start state, ALIGNMENT — closed
-  2026-08-05)*
+  2026-08-05)* G22 is the second, by the same argument.
+- **X8** A slide bot's `mark_price` stop follows the window: it is expressed as
+  `rungs_beyond` the window's near edge (below the bottom for a long, above the top
+  for a short) and re-derived from the current offset every cycle, so a server-side
+  stop (X3, level-triggered) is re-set after each slide. An absolute `level` is
+  refused with `slide` — once the window has left home it protects nothing — and
+  `rungs_beyond` is refused without it. `account_equity` stays absolute: a wallet
+  has no window. *(D28's wiring; JOURNAL 2026-09-25 evening)*
 
 ## F — fleet and operations
 
@@ -427,5 +452,7 @@ eventually pin (T1).
   (W1) filters each bar's plan before fills are judged, and the window offset (G17)
   is carried bar to bar. Entries stay optimistic on coarse bars — every rung a bar
   trades through fills, where a live fast move skips rungs — so a replay is run on
-  bars no coarser than the move it asks about, and says which. *(the 48-day
-  post-mortem: an hourly replay carried 3× the live short inventory)*
+  bars no coarser than the move it asks about, and says which. A slide's confirmation
+  (G21) is honoured in whole bars: the trigger must still hold at the open of
+  ⌈confirm_seconds / bar⌉ further bars. *(the 48-day post-mortem: an hourly replay
+  carried 3× the live short inventory)*

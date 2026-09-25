@@ -5,6 +5,50 @@ Newest first. Public repo: no account figures, no holdings, no host identifiers.
 
 ---
 
+## 2026-09-25 (night) — D28 PR B: the slide wired live, with its three bounds
+
+**Built.** The live bot carries the window. `Bot.offset` is the lattice offset
+(G17); `plan_grid` and the seed read it, every link carries the absolute rung
+index (a short's slid window goes negative — `rung_of` parses the sign), so a
+slide is one ordinary diff: the rungs that left the window are cancelled, the
+rungs that entered are placed, the overlap keeps its order ids. Pinned live
+against the fake venue: a one-rung slide of a ten-order ladder is one cancel,
+eleven creates, nine orders untouched.
+
+**The three bounds from the evening's replays, all built:**
+
+- **X8 — the stop follows the window.** A slide row's `mark_price` stop is
+  `rungs_beyond` the window's near edge, re-derived every cycle from the
+  current offset; the server-side stop re-sets itself after a slide because X3
+  is level-triggered. An absolute `level` is refused with `slide`, and
+  `rungs_beyond` without it. `account_equity` stays absolute.
+- **G21 — confirmation.** `confirm_seconds`, required, never defaulted: the
+  trigger must hold on every cycle for that long; a ref back inside resets the
+  clock. The clock is in-memory (E3). The backtester honours it in whole bars.
+  The sabotage spec shows zero confirmation moving the house on one read — the
+  ETH control lesson.
+- **G22 — the persisted offset.** `logs/slide_state.json`, the second narrow
+  local durable fact beside the tombstone and by the same argument (the
+  exchange cannot express it). Written BEFORE the orders move; read at build,
+  clamped to the row's clamp and side; corrupt fails closed, a failed write
+  never blocks the slide. Missing means home — and the spec found the honest
+  shape of "a lost ratchet, never lost money": with the market still past the
+  trigger a fresh bot simply ratchets back to the same window on its first
+  cycle and keeps every order; with the market back inside home, the slid
+  window's entries now sit above the ref and are cancelled as any marketable
+  buy would be.
+
+**Also.** `check_link_fits` sizes for whichever window edge prints longest
+(I3). The build warns above 20× on a slide row — a warning, not a rule; the
+fleet-level rule needs the owner's D-number. The range review shifts each
+row's bounds by the persisted offset and says so; the snapshot carries a
+non-zero offset. 367 specs (18 new, in `tests/spec_slide_live.py`).
+
+**Not done, on purpose.** Nothing has run live — the repo is parked. The
+first demo slide is the evidence this needs: the `slide` events, the re-set
+server stop, a restart mid-window. BACKLOG §6 says so.
+
+
 ## 2026-09-25 (evening) — D28: the slide, built pure and replayed twice
 
 **Decided (owner).** Re-anchoring is trailing; v3 had deleted it (D10). The
